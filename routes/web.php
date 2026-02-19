@@ -41,18 +41,8 @@ Route::get('cek-staging', function () {
             return $table->tablename;
         }, $tables);
         return [
-            'conf' => [
-                'DB_PG_HOST' => env('DB_PG_HOST'),
-                'DB_PG_PORT' => env('DB_PG_PORT'),
-                'DB_PG_DATABASE' => env('DB_PG_DATABASE'),
-                'DB_PG_USERNAME' => env('DB_PG_USERNAME'),
-                'DB_PG_PASSWORD' => env('DB_PG_PASSWORD'),
-            ],
             'connection' => 'success',
             'message' => 'Koneksi ke database PGSQL berhasil.',
-            'tables_loaded' => count($tableNames),
-            'tables' => $tableNames,
-            'sp_branches' => SpBranch::where('book_code', 'F1352111')->take(100)->get(),
         ];
     } catch (\Exception $e) {
         return [

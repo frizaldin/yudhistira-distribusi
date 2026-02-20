@@ -108,7 +108,10 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::controller(RekapController::class)->group(function () {
-        Route::get('/recap', 'index')->name('recap.index');
+        // Route::get('/recap', 'index')->name('recap.index');
+        Route::get('/recap', function () {
+            return 'Pengetesan';
+        })->name('recap.index');
     });
 
     Route::controller(RangkumanController::class)->group(function () {

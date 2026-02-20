@@ -50,13 +50,18 @@ class RekapController extends Controller
 
         // Check if there's an active cutoff_data
         $activeCutoff = CutoffData::where('status', 'active')->first();
-        
+
         // Determine date range: use cutoff_datas if active (hanya end_date required; start_date null = data <= end_date)
         $startDate = null;
         $endDate = null;
         if ($activeCutoff) {
-            $endDate = $activeCutoff->end_date->format('Y-m-d');
-            $startDate = $activeCutoff->start_date ? $activeCutoff->start_date->format('Y-m-d') : null;
+            $endDate = $activeCutoff->end_date
+                ? \Carbon\Carbon::parse($activeCutoff->end_date)->format('Y-m-d')
+                : null;
+
+            $startDate = $activeCutoff->start_date
+                ? \Carbon\Carbon::parse($activeCutoff->start_date)->format('Y-m-d')
+                : null;
         }
 
         // Filter cabang: role 2 = satu cabang, role 3 (ADP) = array cabang dari user->branch
@@ -80,24 +85,24 @@ class RekapController extends Controller
             DB::raw('SUM(targets.exemplar) as total_target'),
         ])
             ->join('periods', 'targets.period_code', '=', 'periods.period_code');
-        
+
         if ($activeCutoff) {
             if ($startDate !== null) {
-                $targetsQuery->where(function($q) use ($startDate, $endDate) {
+                $targetsQuery->where(function ($q) use ($startDate, $endDate) {
                     $q->where('periods.from_date', '<=', $endDate)
-                      ->where('periods.to_date', '>=', $startDate);
+                        ->where('periods.to_date', '>=', $startDate);
                 });
             } else {
                 $targetsQuery->where('periods.to_date', '<=', $endDate);
             }
         } else {
             // Filter by year
-            $targetsQuery->where(function($query) use ($year) {
+            $targetsQuery->where(function ($query) use ($year) {
                 $query->whereYear('periods.from_date', $year)
                     ->orWhereYear('periods.to_date', $year);
             });
         }
-        
+
         $targets = $targetsQuery
             ->when($filterBookCode !== '', function ($q) use ($filterBookCode) {
                 return $q->where('targets.book_code', $filterBookCode);
@@ -117,7 +122,7 @@ class RekapController extends Controller
             DB::raw('SUM(pls) as total_pls'),
             DB::raw('SUM(exp) as total_exp'),
         ]);
-        
+
         if ($activeCutoff) {
             if ($startDate !== null) {
                 $nppbCentralsQuery->whereBetween('date', [$startDate, $endDate]);
@@ -150,7 +155,7 @@ class RekapController extends Controller
             ])
                 ->where('sp_branches.active_data', 'yes')
                 ->where('sp_branches.branch_code', $userBranchCode);
-            
+
             // Filter by cutoff_datas if active
             if ($activeCutoff) {
                 if ($startDate !== null) {
@@ -159,15 +164,15 @@ class RekapController extends Controller
                     $branchBooksQuery->where('sp_branches.trans_date', '<=', $endDate);
                 }
             }
-            
+
             $branchBooks = $branchBooksQuery
                 ->groupBy('sp_branches.book_code')
                 ->orderBy('sp_branches.book_code')
                 ->get();
-            
+
             // Get product info to add book_title
             $products = Product::whereIn('book_code', $branchBooks->pluck('book_code'))->get()->keyBy('book_code');
-            
+
             // Add book_title and realisasi data
             foreach ($branchBooks as $book) {
                 $product = $products->get($book->book_code);
@@ -183,23 +188,23 @@ class RekapController extends Controller
             ])
                 ->join('periods', 'targets.period_code', '=', 'periods.period_code')
                 ->where('targets.branch_code', $userBranchCode);
-            
+
             if ($activeCutoff) {
                 if ($startDate !== null) {
-                    $bookTargetsQuery->where(function($q) use ($startDate, $endDate) {
+                    $bookTargetsQuery->where(function ($q) use ($startDate, $endDate) {
                         $q->where('periods.from_date', '<=', $endDate)
-                          ->where('periods.to_date', '>=', $startDate);
+                            ->where('periods.to_date', '>=', $startDate);
                     });
                 } else {
                     $bookTargetsQuery->where('periods.to_date', '<=', $endDate);
                 }
             } else {
-                $bookTargetsQuery->where(function($query) use ($year) {
+                $bookTargetsQuery->where(function ($query) use ($year) {
                     $query->whereYear('periods.from_date', $year)
                         ->orWhereYear('periods.to_date', $year);
                 });
             }
-            
+
             $bookTargets = $bookTargetsQuery
                 ->whereNotNull('targets.book_code')
                 ->groupBy('targets.book_code')
@@ -215,7 +220,7 @@ class RekapController extends Controller
             ])
                 ->where('branch_code', $userBranchCode)
                 ->whereNotNull('book_code');
-            
+
             // Filter by cutoff_datas if active
             if ($activeCutoff) {
                 if ($startDate !== null) {
@@ -224,7 +229,7 @@ class RekapController extends Controller
                     $bookNppbQuery->where('date', '<=', $endDate);
                 }
             }
-            
+
             $bookNppb = $bookNppbQuery
                 ->groupBy('book_code')
                 ->get()
@@ -237,7 +242,7 @@ class RekapController extends Controller
             foreach ($branchBooks as $book) {
                 $target = $bookTargets->get($book->book_code);
                 $book->target = $target->target ?? 0;
-                
+
                 $nppb = $bookNppb->get($book->book_code);
                 $book->nppb_koli = $nppb->koli ?? 0;
                 $book->nppb_pls = $nppb->pls ?? 0;
@@ -247,7 +252,7 @@ class RekapController extends Controller
                 $diffTarget = $book->stok_cabang - $book->target;
                 $book->stok_thd_target_lebih = $diffTarget > 0 ? $diffTarget : 0;
                 $book->stok_thd_target_kurang = $diffTarget < 0 ? $diffTarget : 0;
-                
+
                 $diffSp = $book->stok_cabang - $book->sp;
                 $book->stok_thd_sp_lebih = $diffSp > 0 ? $diffSp : 0;
                 $book->stok_thd_sp_kurang = $diffSp < 0 ? $diffSp : 0;
@@ -323,7 +328,7 @@ class RekapController extends Controller
         ])
             ->leftJoin('branches', 'sp_branches.branch_code', '=', 'branches.branch_code')
             ->where('sp_branches.active_data', 'yes');
-        
+
         // Filter by cutoff_datas if active
         if ($activeCutoff) {
             if ($startDate !== null) {
@@ -335,12 +340,12 @@ class RekapController extends Controller
         $spBranchesQuery->when($filterBookCode !== '', function ($q) use ($filterBookCode) {
             return $q->where('sp_branches.book_code', $filterBookCode);
         });
-        
+
         $spBranches = $spBranchesQuery
-            ->when($userBranchCode, function($query) use ($userBranchCode) {
+            ->when($userBranchCode, function ($query) use ($userBranchCode) {
                 return $query->where('sp_branches.branch_code', $userBranchCode);
             })
-            ->when($filteredBranchCodes !== null, function($query) use ($filteredBranchCodes) {
+            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
                 return $query->whereIn('sp_branches.branch_code', $filteredBranchCodes);
             })
             ->groupBy('sp_branches.branch_code', 'branches.branch_name')
@@ -355,7 +360,7 @@ class RekapController extends Controller
         ])
             ->where('sp_branches.active_data', 'yes')
             ->whereNotNull('sp_branches.book_code');
-        
+
         if ($activeCutoff) {
             if ($startDate !== null) {
                 $branchBooksQuery->whereBetween('sp_branches.trans_date', [$startDate, $endDate]);
@@ -366,13 +371,13 @@ class RekapController extends Controller
         $branchBooksQuery->when($filterBookCode !== '', function ($q) use ($filterBookCode) {
             return $q->where('sp_branches.book_code', $filterBookCode);
         });
-        $branchBooksQuery->when($userBranchCode, function($q) use ($userBranchCode) {
+        $branchBooksQuery->when($userBranchCode, function ($q) use ($userBranchCode) {
             return $q->where('sp_branches.branch_code', $userBranchCode);
         });
-        $branchBooksQuery->when($filteredBranchCodes !== null, function($q) use ($filteredBranchCodes) {
+        $branchBooksQuery->when($filteredBranchCodes !== null, function ($q) use ($filteredBranchCodes) {
             return $q->whereIn('sp_branches.branch_code', $filteredBranchCodes);
         });
-        
+
         $branchBooks = $branchBooksQuery
             ->groupBy('sp_branches.branch_code', 'sp_branches.book_code')
             ->get();
@@ -385,33 +390,33 @@ class RekapController extends Controller
         ])
             ->join('periods', 'targets.period_code', '=', 'periods.period_code')
             ->whereNotNull('targets.book_code');
-        
+
         if ($activeCutoff) {
             if ($startDate !== null) {
-                $bookTargetsQuery->where(function($q) use ($startDate, $endDate) {
+                $bookTargetsQuery->where(function ($q) use ($startDate, $endDate) {
                     $q->where('periods.from_date', '<=', $endDate)
-                      ->where('periods.to_date', '>=', $startDate);
+                        ->where('periods.to_date', '>=', $startDate);
                 });
             } else {
                 $bookTargetsQuery->where('periods.to_date', '<=', $endDate);
             }
         } else {
-            $bookTargetsQuery->where(function($q) use ($year) {
+            $bookTargetsQuery->where(function ($q) use ($year) {
                 $q->whereYear('periods.from_date', $year)
                     ->orWhereYear('periods.to_date', $year);
             });
         }
-        
+
         $bookTargetsQuery->when($filterBookCode !== '', function ($q) use ($filterBookCode) {
             return $q->where('targets.book_code', $filterBookCode);
         });
-        $bookTargetsQuery->when($userBranchCode, function($q) use ($userBranchCode) {
+        $bookTargetsQuery->when($userBranchCode, function ($q) use ($userBranchCode) {
             return $q->where('targets.branch_code', $userBranchCode);
         });
-        $bookTargetsQuery->when($filteredBranchCodes !== null, function($q) use ($filteredBranchCodes) {
+        $bookTargetsQuery->when($filteredBranchCodes !== null, function ($q) use ($filteredBranchCodes) {
             return $q->whereIn('targets.branch_code', $filteredBranchCodes);
         });
-        
+
         $bookTargets = $bookTargetsQuery
             ->groupBy('targets.branch_code', 'targets.book_code')
             ->get();
@@ -452,7 +457,7 @@ class RekapController extends Controller
         // Merge Target dan NPPB Central ke spBranches
         foreach ($spBranches as $branch) {
             $branch->target = $targets->get($branch->branch_code)->total_target ?? 0;
-            
+
             $nppbData = $nppbCentrals->get($branch->branch_code);
             $branch->nppb_koli = $nppbData->total_koli ?? 0;
             $branch->nppb_pls = $nppbData->total_pls ?? 0;

@@ -70,7 +70,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard', 'index')->name('dashboard');
         Route::post('/dashboard/set-date-range', 'setDateRange')->name('dashboard.set-date-range');
     });
-    
+
     // Branch detail route
     Route::get('/branch/{branchCode}', [DashboardController::class, 'branchDetail'])->name('dashboard.branch-detail');
 

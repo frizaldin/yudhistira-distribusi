@@ -45,6 +45,16 @@ class RekapController extends Controller
     public function index(Request $request)
     {
         try {
+            // Hindari timeout/memory 500 di VPS (batas wajar untuk halaman rekap)
+            @set_time_limit(120);
+            $memoryLimit = ini_get('memory_limit');
+            if ($memoryLimit !== '-1' && (int) $memoryLimit < 256) {
+                @ini_set('memory_limit', '256M');
+            }
+            if (!config('app.debug')) {
+                DB::disableQueryLog();
+            }
+
             // Get year from request or use current year
             $year = $request->input('year', date('Y'));
             $filterBookCode = $request->input('book_code', '');
@@ -73,8 +83,8 @@ class RekapController extends Controller
                 $userBranchCode = Auth::user()->branch_code ?? null;
             }
 
-            // Get branches: untuk ADP/superadmin filter by $filteredBranchCodes
-            $branchesQuery = Branch::orderBy('branch_name');
+            // Get branches: untuk ADP/superadmin filter by $filteredBranchCodes (hanya kolom yang dipakai)
+            $branchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_name');
             if ($filteredBranchCodes !== null) {
                 $branchesQuery->whereIn('branch_code', $filteredBranchCodes);
             }
@@ -175,12 +185,10 @@ class RekapController extends Controller
                 // Get product info to add book_title
                 $products = Product::whereIn('book_code', $branchBooks->pluck('book_code'))->get()->keyBy('book_code');
 
-                // Add book_title and realisasi data
+                // Add book_title
                 foreach ($branchBooks as $book) {
                     $product = $products->get($book->book_code);
                     $book->book_title = $product->book_title ?? '';
-                    $book->realisasi_2024 = 0; // Placeholder - data historis
-                    $book->realisasi_2025 = $book->faktur ?? 0;
                 }
 
                 // Get target per book for this branch
@@ -260,18 +268,12 @@ class RekapController extends Controller
                     $book->stok_thd_sp_kurang = $diffSp < 0 ? $diffSp : 0;
 
                     // Calculate percentages
-                    $book->pct_stok_thd_real = $book->realisasi_2025 > 0 ? round(($book->stok_cabang / $book->realisasi_2025) * 100, 0) : 0;
                     $book->pct_stok_thd_target = $book->target > 0 ? round(($book->stok_cabang / $book->target) * 100, 0) : 0;
                     $book->pct_stok_thd_sp = $book->sp > 0 ? round(($book->stok_cabang / $book->sp) * 100, 0) : 0;
                 }
 
-                // Get product info for grouping
-                $products = Product::whereIn('book_code', $branchBooks->pluck('book_code'))->get()->keyBy('book_code');
-
-                // Calculate totals
+                // Calculate totals (products sudah di-load di atas untuk book_title)
                 $branchTotals = [
-                    'realisasi_2024' => $branchBooks->sum('realisasi_2024'),
-                    'realisasi_2025' => $branchBooks->sum('realisasi_2025'),
                     'target' => $branchBooks->sum('target'),
                     'sp' => $branchBooks->sum('sp'),
                     'faktur' => $branchBooks->sum('faktur'),
@@ -288,7 +290,6 @@ class RekapController extends Controller
                 ];
 
                 // Calculate total percentages
-                $branchTotals['pct_stok_thd_real'] = $branchTotals['realisasi_2025'] > 0 ? round(($branchTotals['stok_cabang'] / $branchTotals['realisasi_2025']) * 100, 0) : 0;
                 $branchTotals['pct_stok_thd_target'] = $branchTotals['target'] > 0 ? round(($branchTotals['stok_cabang'] / $branchTotals['target']) * 100, 0) : 0;
                 $branchTotals['pct_stok_thd_sp'] = $branchTotals['sp'] > 0 ? round(($branchTotals['stok_cabang'] / $branchTotals['sp']) * 100, 0) : 0;
 
@@ -329,7 +330,7 @@ class RekapController extends Controller
                 DB::raw('COALESCE(SUM(sp_branches.ex_rec_gdg), 0) as total_ntb_1'), // Rec Gudang = ex_rec_gdg
             ])
                 ->leftJoin('branches', 'sp_branches.branch_code', '=', 'branches.branch_code')
-                ->where('sp_branches.active_data', 'yes');
+                ->where('sp_branches.active_data', 'yes')->whereNotNull('sp_branches.branch_code');
 
             // Filter by cutoff_datas if active
             if ($activeCutoff) {
@@ -458,12 +459,12 @@ class RekapController extends Controller
 
             // Merge Target dan NPPB Central ke spBranches
             foreach ($spBranches as $branch) {
-                $branch->target = $targets->get($branch->branch_code)->total_target ?? 0;
+                $branch->target = $targets->get($branch->branch_code)?->total_target ?? 0;
 
                 $nppbData = $nppbCentrals->get($branch->branch_code);
-                $branch->nppb_koli = $nppbData->total_koli ?? 0;
-                $branch->nppb_pls = $nppbData->total_pls ?? 0;
-                $branch->nppb_exp = $nppbData->total_exp ?? 0;
+                $branch->nppb_koli = $nppbData?->total_koli ?? 0;
+                $branch->nppb_pls = $nppbData?->total_pls ?? 0;
+                $branch->nppb_exp = $nppbData?->total_exp ?? 0;
 
                 $thdSp = $thdSpByBranch[$branch->branch_code] ?? ['lebih' => 0, 'kurang' => 0];
                 $thdTarget = $thdTargetByBranch[$branch->branch_code] ?? ['lebih' => 0, 'kurang' => 0];
@@ -478,8 +479,6 @@ class RekapController extends Controller
             $totalNkbPusat = $spBranches->sum('total_nkb');
 
             $nasional = [
-                'realisasi_2024' => 0,
-                'realisasi_2025' => 0,
                 'target' => $spBranches->sum('target'),
                 'total_sp' => $spBranches->sum('total_sp'),
                 'total_faktur' => $spBranches->sum('total_faktur'),
@@ -598,12 +597,15 @@ class RekapController extends Controller
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
-            return [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ];
+            $message = config('app.env') === 'production'
+                ? 'Terjadi kesalahan saat memuat rekapitulasi. Silakan coba lagi atau hubungi administrator.'
+                : 'Terjadi kesalahan: ' . $e->getMessage();
+            try {
+                $url = url()->previous() ?: route('recap.index');
+            } catch (\Throwable $routeEx) {
+                $url = url('/recap');
+            }
+            return redirect()->to($url)->with('error', $message);
         }
     }
 

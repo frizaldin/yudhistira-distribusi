@@ -18,16 +18,13 @@
                 <table class="table table-bordered table-sm" style="font-size: 11px;">
                     <thead class="table-secondary">
                         <tr>
-                            <th colspan="2" class="bg-primary text-white text-center">REALISASI SMT 1</th>
                             <th colspan="4" class="bg-success text-white text-center">PENJUALAN SMT 1 {{ $year }} / {{ $year + 1 }}</th>
                             <th class="bg-info text-white text-center">STOCK CABANG</th>
                             <th colspan="4" class="bg-warning text-white text-center">KETERSEDIAAN STOCK</th>
                             <th colspan="3" class="bg-danger text-white text-center">RENCANA NPPB PUSAT CIAWI</th>
-                            <th colspan="3" class="bg-secondary text-white text-center">% STOCK THD</th>
+                            <th colspan="2" class="bg-secondary text-white text-center">% STOCK THD</th>
                         </tr>
                         <tr>
-                            <th class="bg-primary text-white">2024</th>
-                            <th class="bg-primary text-white">2025</th>
                             <th class="bg-success text-white">TARGET</th>
                             <th class="bg-success text-white">SP</th>
                             <th class="bg-success text-white">FAKTUR</th>
@@ -38,13 +35,10 @@
                             <th class="bg-danger text-white">KOLI</th>
                             <th class="bg-danger text-white">PLS</th>
                             <th class="bg-danger text-white">EXP</th>
-                            <th class="bg-secondary text-white">REAL</th>
                             <th class="bg-secondary text-white">TARGET</th>
                             <th class="bg-secondary text-white">SP</th>
                         </tr>
                         <tr>
-                            <th class="bg-primary text-white"></th>
-                            <th class="bg-primary text-white"></th>
                             <th class="bg-success text-white"></th>
                             <th class="bg-success text-white"></th>
                             <th class="bg-success text-white"></th>
@@ -59,13 +53,10 @@
                             <th class="bg-danger text-white"></th>
                             <th class="bg-secondary text-white"></th>
                             <th class="bg-secondary text-white"></th>
-                            <th class="bg-secondary text-white"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr class="table-info fw-bold">
-                            <td class="text-end">{{ number_format($branchTotals['realisasi_2024'] ?? 0, 0, ',', '.') }}</td>
-                            <td class="text-end">{{ number_format($branchTotals['realisasi_2025'] ?? 0, 0, ',', '.') }}</td>
                             <td class="text-end">{{ number_format($branchTotals['target'] ?? 0, 0, ',', '.') }}</td>
                             <td class="text-end">{{ number_format($branchTotals['sp'] ?? 0, 0, ',', '.') }}</td>
                             <td class="text-end">{{ number_format($branchTotals['faktur'] ?? 0, 0, ',', '.') }}</td>
@@ -78,7 +69,6 @@
                             <td class="text-end">{{ number_format($branchTotals['nppb_koli'] ?? 0, 0, ',', '.') }}</td>
                             <td class="text-end">{{ number_format($branchTotals['nppb_pls'] ?? 0, 0, ',', '.') }}</td>
                             <td class="text-end">{{ number_format($branchTotals['nppb_exp'] ?? 0, 0, ',', '.') }}</td>
-                            <td class="text-end">{{ number_format($branchTotals['pct_stok_thd_real'] ?? 0, 0, ',', '.') }}%</td>
                             <td class="text-end">{{ number_format($branchTotals['pct_stok_thd_target'] ?? 0, 0, ',', '.') }}%</td>
                             <td class="text-end">{{ number_format($branchTotals['pct_stok_thd_sp'] ?? 0, 0, ',', '.') }}%</td>
                         </tr>
@@ -94,17 +84,14 @@
                         <tr class="table-secondary">
                             <th rowspan="3" class="text-center align-middle" style="min-width: 50px;">KODE</th>
                             <th rowspan="3" class="text-center align-middle" style="min-width: 300px;">JUDUL BUKU</th>
-                            <th colspan="2" class="text-center bg-primary text-white">REALISASI SMT 1</th>
                             <th colspan="4" class="text-center bg-success text-white">PENJUALAN SMT 1 {{ $year }} / {{ $year + 1 }}</th>
                             <th rowspan="3" class="text-center align-middle bg-info text-white">STOCK CABANG</th>
                             <th colspan="4" class="text-center bg-warning text-white">KETERSEDIAAN STOCK</th>
                             <th colspan="3" class="text-center bg-danger text-white">RENCANA NPPB PUSAT CIAWI</th>
-                            <th colspan="3" class="text-center bg-secondary text-white">% STOCK THD</th>
+                            <th colspan="2" class="text-center bg-secondary text-white">% STOCK THD</th>
                         </tr>
                         <!-- Row 2: Sub Headers -->
                         <tr class="table-secondary">
-                            <th class="bg-primary text-white">2024</th>
-                            <th class="bg-primary text-white">2025</th>
                             <th class="bg-success text-white">TARGET</th>
                             <th class="bg-success text-white">SP</th>
                             <th class="bg-success text-white">FAKTUR</th>
@@ -114,14 +101,11 @@
                             <th class="bg-danger text-white">KOLI</th>
                             <th class="bg-danger text-white">PLS</th>
                             <th class="bg-danger text-white">EXP</th>
-                            <th class="bg-secondary text-white">REAL</th>
                             <th class="bg-secondary text-white">TARGET</th>
                             <th class="bg-secondary text-white">SP</th>
                         </tr>
                         <!-- Row 3: Final Sub Headers -->
                         <tr class="table-secondary">
-                            <th class="bg-primary text-white"></th>
-                            <th class="bg-primary text-white"></th>
                             <th class="bg-success text-white"></th>
                             <th class="bg-success text-white"></th>
                             <th class="bg-success text-white"></th>
@@ -133,7 +117,6 @@
                             <th class="bg-danger text-white"></th>
                             <th class="bg-danger text-white"></th>
                             <th class="bg-danger text-white"></th>
-                            <th class="bg-secondary text-white"></th>
                             <th class="bg-secondary text-white"></th>
                             <th class="bg-secondary text-white"></th>
                         </tr>
@@ -156,8 +139,6 @@
                                     if (!empty($segmentBooks)) {
                                         // Calculate subtotal
                                         $subtotal = [
-                                            'realisasi_2024' => collect($segmentBooks)->sum('realisasi_2024'),
-                                            'realisasi_2025' => collect($segmentBooks)->sum('realisasi_2025'),
                                             'target' => collect($segmentBooks)->sum('target'),
                                             'sp' => collect($segmentBooks)->sum('sp'),
                                             'faktur' => collect($segmentBooks)->sum('faktur'),
@@ -174,8 +155,6 @@
                             @endphp
                                         <tr class="table-warning fw-bold">
                                             <td colspan="2" class="bg-warning-subtle">SUBTOTAL {{ $currentSubject }} {{ $currentSegment }}:</td>
-                                            <td class="text-end">{{ number_format($subtotal['realisasi_2024'], 0, ',', '.') }}</td>
-                                            <td class="text-end">{{ number_format($subtotal['realisasi_2025'], 0, ',', '.') }}</td>
                                             <td class="text-end">{{ number_format($subtotal['target'], 0, ',', '.') }}</td>
                                             <td class="text-end">{{ number_format($subtotal['sp'], 0, ',', '.') }}</td>
                                             <td class="text-end">{{ number_format($subtotal['faktur'], 0, ',', '.') }}</td>
@@ -190,7 +169,6 @@
                                             <td class="text-end">{{ number_format($subtotal['nppb_exp'], 0, ',', '.') }}</td>
                                             <td class="text-end">-</td>
                                             <td class="text-end">-</td>
-                                            <td class="text-end">-</td>
                                         </tr>
                             @php
                                     }
@@ -202,10 +180,10 @@
                                         $segmentBooks = [];
                             @endphp
                                         <tr class="table-primary">
-                                            <td colspan="19" class="bg-primary-subtle fw-bold">JENJANG {{ strtoupper($segment) }}</td>
+                                            <td colspan="16" class="bg-primary-subtle fw-bold">JENJANG {{ strtoupper($segment) }}</td>
                                         </tr>
                                         <tr class="table-info">
-                                            <td colspan="19" class="bg-info-subtle fw-bold">{{ strtoupper($subject) }}</td>
+                                            <td colspan="16" class="bg-info-subtle fw-bold">{{ strtoupper($subject) }}</td>
                                         </tr>
                             @php
                                     }
@@ -216,8 +194,6 @@
                             <tr>
                                 <td>{{ $book->book_code }}</td>
                                 <td>{{ $book->book_title }}</td>
-                                <td class="text-end">{{ number_format($book->realisasi_2024 ?? 0, 0, ',', '.') }}</td>
-                                <td class="text-end">{{ number_format($book->realisasi_2025 ?? 0, 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($book->target ?? 0, 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($book->sp ?? 0, 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($book->faktur ?? 0, 0, ',', '.') }}</td>
@@ -230,13 +206,12 @@
                                 <td class="text-end">{{ number_format($book->nppb_koli ?? 0, 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($book->nppb_pls ?? 0, 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($book->nppb_exp ?? 0, 0, ',', '.') }}</td>
-                                <td class="text-end">{{ number_format($book->pct_stok_thd_real ?? 0, 0, ',', '.') }}%</td>
                                 <td class="text-end">{{ number_format($book->pct_stok_thd_target ?? 0, 0, ',', '.') }}%</td>
                                 <td class="text-end">{{ number_format($book->pct_stok_thd_sp ?? 0, 0, ',', '.') }}%</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="19" class="text-center py-4 text-muted">
+                                <td colspan="16" class="text-center py-4 text-muted">
                                     <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                     Belum ada data
                                 </td>
@@ -245,8 +220,6 @@
                         @if(!empty($segmentBooks))
                             @php
                                 $subtotal = [
-                                    'realisasi_2024' => collect($segmentBooks)->sum('realisasi_2024'),
-                                    'realisasi_2025' => collect($segmentBooks)->sum('realisasi_2025'),
                                     'target' => collect($segmentBooks)->sum('target'),
                                     'sp' => collect($segmentBooks)->sum('sp'),
                                     'faktur' => collect($segmentBooks)->sum('faktur'),
@@ -263,8 +236,6 @@
                             @endphp
                             <tr class="table-warning fw-bold">
                                 <td colspan="2" class="bg-warning-subtle">SUBTOTAL {{ $currentSubject }} {{ $currentSegment }}:</td>
-                                <td class="text-end">{{ number_format($subtotal['realisasi_2024'], 0, ',', '.') }}</td>
-                                <td class="text-end">{{ number_format($subtotal['realisasi_2025'], 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($subtotal['target'], 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($subtotal['sp'], 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($subtotal['faktur'], 0, ',', '.') }}</td>
@@ -277,7 +248,6 @@
                                 <td class="text-end">{{ number_format($subtotal['nppb_koli'], 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($subtotal['nppb_pls'], 0, ',', '.') }}</td>
                                 <td class="text-end">{{ number_format($subtotal['nppb_exp'], 0, ',', '.') }}</td>
-                                <td class="text-end">-</td>
                                 <td class="text-end">-</td>
                                 <td class="text-end">-</td>
                             </tr>

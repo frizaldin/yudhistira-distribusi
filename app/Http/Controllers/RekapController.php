@@ -26,17 +26,8 @@ class RekapController extends Controller
     {
         $this->base_url = url('/recap');
         $this->title = 'Rekapitulasi';
-
-        if (Auth::check()) {
-            $this->role = Auth::user()->authority_id ?? 1;
-            $this->callbackfolder = match ($this->role) {
-                1 => 'superadmin',
-                2 => 'branch',
-                default => 'superadmin',
-            };
-        } else {
-            $this->callbackfolder = 'superadmin';
-        }
+        $this->role = 1;
+        $this->callbackfolder = 'superadmin';
     }
 
     /**
@@ -44,6 +35,11 @@ class RekapController extends Controller
      */
     public function index(Request $request)
     {
+        // Debug: pastikan controller terpanggil di server (cek dengan ?ping=1)
+        if ($request->query('ping') === '1') {
+            return response()->json(['status' => 'ok', 'message' => 'RekapController reached'], 200);
+        }
+
         try {
             // Hindari timeout/memory 500 di VPS (batas wajar untuk halaman rekap)
             @set_time_limit(120);
@@ -53,6 +49,18 @@ class RekapController extends Controller
             }
             if (!config('app.debug')) {
                 DB::disableQueryLog();
+            }
+
+            // Set role & view folder dari Auth (setelah controller aman di-instance)
+            try {
+                if (Auth::check()) {
+                    $user = Auth::user();
+                    $this->role = (int) ($user->authority_id ?? 1);
+                    $this->callbackfolder = ($this->role === 2) ? 'branch' : 'superadmin';
+                }
+            } catch (\Throwable $e) {
+                $this->role = 1;
+                $this->callbackfolder = 'superadmin';
             }
 
             // Get year from request or use current year
@@ -600,12 +608,26 @@ class RekapController extends Controller
             $message = config('app.env') === 'production'
                 ? 'Terjadi kesalahan saat memuat rekapitulasi. Silakan coba lagi atau hubungi administrator.'
                 : 'Terjadi kesalahan: ' . $e->getMessage();
+
+            // Redirect ke /recap tanpa bergantung pada route() atau session (agar tetap dapat response valid di server)
+            $url = '/recap';
             try {
-                $url = url()->previous() ?: route('recap.index');
-            } catch (\Throwable $routeEx) {
-                $url = url('/recap');
+                $prev = url()->previous();
+                if ($prev && $prev !== url()->current()) {
+                    $url = $prev;
+                }
+            } catch (\Throwable $ignored) {
             }
-            return redirect()->to($url)->with('error', $message);
+            try {
+                return redirect()->to($url)->with('error', $message);
+            } catch (\Throwable $redirectEx) {
+                Log::error('RekapController@index redirect failed: ' . $redirectEx->getMessage());
+                return response()->make(
+                    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error</title></head><body><p>Terjadi kesalahan saat memuat rekapitulasi.</p><p><a href="/recap">Kembali ke Rekapitulasi</a></p></body></html>',
+                    500,
+                    ['Content-Type' => 'text/html; charset=utf-8']
+                );
+            }
         }
     }
 

@@ -19,6 +19,22 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Pakai direktori temp aplikasi agar tidak trigger notice "tempnam(): file created in system's temporary directory"
+        $tempDir = storage_path('framework/temp');
+        if (!is_dir($tempDir)) {
+            @mkdir($tempDir, 0755, true);
+        }
+        if (is_dir($tempDir) && is_writable($tempDir)) {
+            @ini_set('upload_tmp_dir', $tempDir);
+        }
+
+        // Suppress hanya notice/warning tempnam system temp (dari PHP/vendor), bukan error lain
+        set_error_handler(function ($severity, $message, $file, $line) {
+            $isTempnamNotice = (strpos($message, 'tempnam():') !== false && strpos($message, "system's temporary directory") !== false);
+            if ($isTempnamNotice && in_array($severity, [E_NOTICE, E_WARNING], true)) {
+                return true; // suppress
+            }
+            return false; // pass to default handler
+        }, E_NOTICE | E_WARNING);
     }
 }

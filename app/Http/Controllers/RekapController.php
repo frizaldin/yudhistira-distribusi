@@ -609,7 +609,18 @@ class RekapController extends Controller
                 ? 'Terjadi kesalahan saat memuat rekapitulasi. Silakan coba lagi atau hubungi administrator.'
                 : 'Terjadi kesalahan: ' . $e->getMessage();
 
-            // Redirect ke /recap tanpa bergantung pada route() atau session (agar tetap dapat response valid di server)
+            // Debug: tampilkan error di response agar bisa dilihat di server (APP_DEBUG atau ?debug=1)
+            $showError = config('app.debug') || $request->query('debug') === '1';
+            if ($showError) {
+                $body = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Error Rekap</title></head><body>';
+                $body .= '<h2>Error RekapController</h2><pre>' . htmlspecialchars($e->getMessage()) . '</pre>';
+                $body .= '<p><strong>File:</strong> ' . htmlspecialchars($e->getFile()) . ' (line ' . $e->getLine() . ')</p>';
+                $body .= '<h3>Trace</h3><pre>' . htmlspecialchars($e->getTraceAsString()) . '</pre>';
+                $body .= '<p><a href="/recap">Kembali ke Rekapitulasi</a></p></body></html>';
+                return response()->make($body, 500, ['Content-Type' => 'text/html; charset=utf-8']);
+            }
+
+            // Redirect ke /recap dengan flash error
             $url = '/recap';
             try {
                 $prev = url()->previous();

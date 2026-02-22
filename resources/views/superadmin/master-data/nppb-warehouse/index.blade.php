@@ -126,6 +126,10 @@
                             data-bs-toggle="modal" data-bs-target="#modalRumusNppb">
                             <i class="bi bi-calculator me-1"></i>Lihat Rumus
                         </button>
+                        <button type="button" id="btn-export-data" class="btn btn-success btn-sm" title="Export data tabel ke CSV"
+                            data-export-prefix="nppb-warehouse">
+                            <i class="bi bi-download me-1"></i>Export Data
+                        </button>
                         <button type="button" id="btn-save" class="btn btn-primary btn-sm">
                             <i class="bi bi-save me-1"></i>Simpan Data
                         </button>
@@ -844,6 +848,114 @@ $('#products-table-body').html(
             function formatNumber(num) {
                 return new Intl.NumberFormat('id-ID').format(num);
             }
+
+            // Export seluruh data (semua halaman) ke CSV
+            function escapeCsvCell(val) {
+                if (val == null) return '';
+                val = String(val).trim();
+                if (/[,"\r\n]/.test(val)) return '"' + val.replace(/"/g, '""') + '"';
+                return val;
+            }
+            function productToCsvRow(product, index, sisaKuota, maksKirim, koli, exp, pls, vol) {
+                return [
+                    index + 1,
+                    product.book_code || '',
+                    product.book_name || '',
+                    product.stock_pusat != null ? product.stock_pusat : 0,
+                    product.stock_nasional != null ? product.stock_nasional : 0,
+                    product.sp_nasional != null ? product.sp_nasional : 0,
+                    (Number(product.pct_stock_pusat_target_nasional) || 0).toFixed(2),
+                    (Number(product.pct_stock_pusat_sp) || 0).toFixed(2),
+                    product.stock_teralokasikan != null ? product.stock_teralokasikan : 0,
+                    product.stock_teralokasikan != null ? product.stock_teralokasikan : 0,
+                    maksKirim,
+                    sisaKuota,
+                    product.sisa_stock_pusat != null ? product.sisa_stock_pusat : 0,
+                    product.sp != null ? product.sp : 0,
+                    product.faktur != null ? product.faktur : 0,
+                    product.stock_cabang != null ? product.stock_cabang : 0,
+                    product.sisa_sp != null ? product.sisa_sp : 0,
+                    vol,
+                    koli,
+                    pls,
+                    exp
+                ].map(escapeCsvCell).join(',');
+            }
+            $(document).on('click', '#btn-export-data', function() {
+                if (!currentWarehouseCode) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Peringatan',
+                        text: 'Pilih warehouse/area terlebih dahulu!',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+                saveCurrentPageData();
+                const $btn = $(this);
+                const originalHtml = $btn.html();
+                $btn.prop('disabled', true).html(
+                    '<span class="spinner-border spinner-border-sm me-1"></span>Mengambil data...');
+                loadAllProducts(currentWarehouseCode, currentSearchBookCode, currentSearchBookName).then(
+                    function(allProducts) {
+                        allProducts.forEach(function(p) {
+                            if (allProductsData[p.book_code]) {
+                                p.koli = allProductsData[p.book_code].koli;
+                                p.exp = allProductsData[p.book_code].exp;
+                                p.pls = allProductsData[p.book_code].pls;
+                                p.volume_used = allProductsData[p.book_code].volume_used ?? p.volume_used;
+                            }
+                        });
+                        const headers = 'NO,Kode Buku,Nama Buku,Stock Pusat,Stock Nasional,SP Nasional,% Stock Pusat thd Target Nasional,% Stock Pusat thd SP,Total Eksemplar Nasional,Stock Teralokasikan,Maks. Kirim,Sisa Kuota,Sisa Stock Pusat,SP,Faktur,Stock Cabang,Kurang SP,Isi,Koli,Eceran,Total';
+                        const csvRows = [headers];
+                        allProducts.forEach(function(product, index) {
+                            const maksKirim = product.maksimal_total_eksemplar_nasional != null ?
+                                product.maksimal_total_eksemplar_nasional : 0;
+                            const sisaKuota = product.sisa_kuota_eksemplar != null ?
+                                product.sisa_kuota_eksemplar : 0;
+                            const koli = product.koli != null ? product.koli : 0;
+                            const exp = product.exp != null ? product.exp : 0;
+                            const pls = product.pls != null ? product.pls : 0;
+                            const vol = parseFloat(product.volume_used) || 0;
+                            csvRows.push(productToCsvRow(product, index, sisaKuota, maksKirim, koli, exp, pls, vol));
+                        });
+                        const csv = '\uFEFF' + csvRows.join('\r\n');
+                        const prefix = $btn.data('export-prefix') || 'nppb-warehouse';
+                        const filename = prefix + '-export-' + new Date().toISOString().slice(0, 10) + '.csv';
+                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(blob);
+                        link.download = filename;
+                        link.click();
+                        URL.revokeObjectURL(link.href);
+                        if (allProducts.length === 0) {
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Tidak ada data',
+                                text: 'Tidak ada data untuk diexport.',
+                                confirmButtonText: 'OK'
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Export selesai',
+                                text: allProducts.length + ' baris berhasil diexport.',
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        }
+                    }
+                ).catch(function(err) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Gagal mengambil data: ' + (err && err.message ? err.message : err),
+                        confirmButtonText: 'OK'
+                    });
+                }).finally(function() {
+                    $btn.prop('disabled', false).html(originalHtml);
+                });
+            });
 
             // Server-side search with debounce (kode buku & nama buku terpisah)
             let searchTimeout;

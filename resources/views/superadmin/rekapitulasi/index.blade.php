@@ -1,4 +1,19 @@
 <x-layouts>
+    @php
+        $queueJalan = isset($recap_from_cache) && $recap_from_cache === true;
+    @endphp
+    <script>
+        (function() {
+            var queueJalan = @json($queueJalan);
+            if (queueJalan) {
+                console.log('[Rekap] Queue jalan: data dilayani dari cache (job queue diproses di server).');
+            } else {
+                console.log(
+                    '[Rekap] Queue tidak dipakai: data dilayani dari proses sync (tanpa queue). Atur cron di server: * * * * * cd /path-project && php artisan schedule:run'
+                    );
+            }
+        })();
+    </script>
     <!-- Cutoff Data Info -->
     @if (isset($activeCutoff) && $activeCutoff)
         <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
@@ -9,7 +24,8 @@
                 ({{ \Carbon\Carbon::parse($activeCutoff->start_date)->format('d/m/Y') }} -
                 {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d/m/Y') }}).
             @else
-                (s.d. {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d/m/Y') }}).
+                (s.d. {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d/m/Y') }})
+                .
             @endif
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -33,6 +49,13 @@
                     @endif
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
+                    @php
+                        $exportQuery = array_filter(['year' => request('year', date('Y')), 'book_code' => request('book_code', $filterBookCode ?? '')]);
+                        $exportRecapUrl = route('recap.export') . ($exportQuery ? '?' . http_build_query($exportQuery) : '');
+                    @endphp
+                    <a href="{{ $exportRecapUrl }}" class="btn btn-success btn-sm rounded-pill">
+                        <i class="bi bi-download me-1"></i>Export Data
+                    </a>
                     <button type="button" class="btn btn-outline-info btn-sm rounded-pill" data-bs-toggle="modal"
                         data-bs-target="#modalRumus">
                         <i class="bi bi-calculator me-1"></i>Lihat Rumus
@@ -45,8 +68,8 @@
                 <div class="col-auto">
                     <label for="filter_book_code" class="form-label small mb-0">Kode Buku</label>
                     <input type="text" id="filter_book_code" name="book_code" class="form-control form-control-sm"
-                        placeholder="Kode buku (kosongkan = semua)" value="{{ request('book_code', $filterBookCode ?? '') }}"
-                        style="min-width: 180px;" />
+                        placeholder="Kode buku (kosongkan = semua)"
+                        value="{{ request('book_code', $filterBookCode ?? '') }}" style="min-width: 180px;" />
                 </div>
                 <div class="col-auto">
                     <button type="submit" class="btn btn-primary btn-sm">
@@ -176,81 +199,15 @@
                         </tr>
 
                         @foreach ($areas as $areaName => $area)
-                            <!-- AREA ROW -->
-                            <tr class="table-warning text-dark fw-bold">
-                                <td class="text-center">{{ $rowNumber++ }}</td>
-                                <td class="fw-bold">{{ $areaName }}</td>
-                                <td class="text-end">{{ number_format($area['totals']['target'] ?? 0) }}
-                                </td>
-                                <td class="text-end">
-                                    {{ number_format($area['totals']['total_sp'] ?? 0) }}</td>
-                                <td class="text-end">
-                                    {{ number_format($area['totals']['total_faktur'] ?? 0) }}</td>
-                                <td class="text-end">
-                                    {{ number_format(($area['totals']['total_sp'] ?? 0) - ($area['totals']['total_faktur'] ?? 0)) }}
-                                </td>
-                                <td class="text-end">
-                                    {{ number_format($area['totals']['total_nkb'] ?? 0) }}</td>
-                                <td class="text-end">
-                                    {{ number_format($area['totals']['total_stok_cabang'] ?? 0) }}</td>
-                                @php
-                                    $areaThdTargetLebih = $area['totals']['thd_target_lebih'] ?? 0;
-                                    $areaThdTargetKurang = $area['totals']['thd_target_kurang'] ?? 0;
-                                    $areaThdSpLebih = $area['totals']['thd_sp_lebih'] ?? 0;
-                                    $areaThdSpKurang = $area['totals']['thd_sp_kurang'] ?? 0;
-                                @endphp
-                                <td class="text-end">
-                                    {{ $areaThdTargetLebih > 0 ? number_format($areaThdTargetLebih) : '-' }}
-                                </td>
-                                <td class="text-end text-danger">
-                                    {{ $areaThdTargetKurang > 0 ? '(' . number_format($areaThdTargetKurang) . ')' : '-' }}
-                                </td>
-                                <td class="text-end">
-                                    {{ $areaThdSpLebih > 0 ? number_format($areaThdSpLebih) : '-' }}</td>
-                                <td class="text-end text-danger">
-                                    {{ $areaThdSpKurang > 0 ? '(' . number_format($areaThdSpKurang) . ')' : '-' }}
-                                </td>
-                                <td class="text-end">{{ number_format($area['totals']['nppb_koli'] ?? 0) }}</td>
-                                <td class="text-end">{{ number_format($area['totals']['nppb_pls'] ?? 0) }}</td>
-                                <td class="text-end">{{ number_format($area['totals']['nppb_exp'] ?? 0) }}</td>
-                                @php
-                                    // % STOCK THD calculations for area
-                                    $areaRealisasiTotal = 0; // Placeholder - data historis belum ada
-                                    $areaPercentReal =
-                                        $areaRealisasiTotal > 0
-                                            ? round(
-                                                (($area['totals']['total_stok_cabang'] ?? 0) / $areaRealisasiTotal) *
-                                                    100,
-                                            )
-                                            : 0;
-                                    $areaPercentTarget =
-                                        ($area['totals']['target'] ?? 0) > 0
-                                            ? round(
-                                                (($area['totals']['total_stok_cabang'] ?? 0) /
-                                                    ($area['totals']['target'] ?? 1)) *
-                                                    100,
-                                            )
-                                            : 0;
-                                    $areaPercentSp =
-                                        ($area['totals']['total_sp'] ?? 0) > 0
-                                            ? round(
-                                                (($area['totals']['total_stok_cabang'] ?? 0) /
-                                                    ($area['totals']['total_sp'] ?? 1)) *
-                                                    100,
-                                            )
-                                            : 0;
-                                @endphp
-                                <td class="text-end">{{ $areaPercentReal > 0 ? $areaPercentReal . '%' : '-' }}</td>
-                                <td class="text-end">{{ $areaPercentTarget > 0 ? $areaPercentTarget . '%' : '-' }}
-                                </td>
-                                <td class="text-end">{{ $areaPercentSp > 0 ? $areaPercentSp . '%' : '-' }}</td>
-                            </tr>
-
                             @foreach ($area['branches'] as $branch)
                                 <!-- BRANCH ROW -->
                                 <tr>
                                     <td class="text-center">{{ $rowNumber++ }}</td>
-                                    <td class="ps-4">{{ $branch->branch_name ?? $branch->branch_code }}</td>
+                                    <td class="ps-4">
+                                        <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">
+                                            {{ $branch->branch_name ?? $branch->branch_code }}
+                                        </a>
+                                    </td>
                                     <td class="text-end">{{ number_format($branch->target ?? 0) }}</td>
                                     <td class="text-end">{{ number_format($branch->total_sp ?? 0) }}</td>
                                     <td class="text-end">{{ number_format($branch->total_faktur ?? 0) }}

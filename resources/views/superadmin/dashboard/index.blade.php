@@ -256,7 +256,7 @@
                     </div>
                 </div>
             </div>
-            <!-- Penentuan Kirim (ADP) (Table) -->
+            <!-- Penentuan Kirim (ADP) (Table) - infinite scroll -->
             <div class="card mb-3 border-0 shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center"
                     style="padding: 0.625rem 1rem; border-bottom: 1px solid #dee2e6;">
@@ -268,9 +268,9 @@
                     @endif
                 </div>
                 <div class="card-body p-1">
-                    <div class="table-responsive">
+                    <div class="table-responsive dashboard-scroll-container" style="max-height: 320px; overflow-y: auto;">
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
-                            <thead class="table-light" style="background-color: #f8f9fa;">
+                            <thead class="table-light" style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
                                 <tr>
                                     <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Cabang</th>
                                     <th class="text-end"
@@ -283,7 +283,7 @@
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="adp-tbody">
                                 @forelse($adpBranches->items() ?? [] as $branch)
                                     <tr>
                                         <td style="padding: 0.5rem 1rem;">
@@ -340,33 +340,16 @@
                                             style="font-size: 0.75rem;">{{ number_format($totalNppbPls ?? 0, 0, ',', '.') }}</span>
                                     </td>
                                 </tr>
+                                @if (isset($adpBranches) && $adpBranches->hasMorePages())
+                                <tr id="adp-sentinel" class="dashboard-infinite-sentinel" data-next-page="2" data-has-more="1" data-url="{{ route('dashboard.adp-more') }}">
+                                    <td colspan="5" class="text-center py-2">
+                                        <small class="text-muted">Scroll untuk memuat lebih banyak...</small>
+                                    </td>
+                                </tr>
+                                @endif
                             </tbody>
                         </table>
                     </div>
-
-                    <!-- Pagination -->
-                    @if (isset($adpBranches) && $adpBranches->total() > 0)
-                        <div class="card-footer bg-white border-top py-2">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap">
-                                <div class="mb-2 mb-md-0 d-none">
-                                    <small class="text-muted">
-                                        @if ($adpBranches->hasPages())
-                                            Menampilkan {{ $adpBranches->firstItem() }} -
-                                            {{ $adpBranches->lastItem() }}
-                                            dari {{ $adpBranches->total() }} cabang
-                                        @else
-                                            Menampilkan semua {{ $adpBranches->total() }} cabang
-                                        @endif
-                                    </small>
-                                </div>
-                                @if ($adpBranches->hasPages())
-                                    <div class="pagination">
-                                        {{ $adpBranches->appends(request()->except('adp_page'))->links('pagination::bootstrap-5') }}
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endif
                 </div>
             </div>
         </div>
@@ -413,7 +396,7 @@
                 </div>
             </div>
 
-            <!-- Kebutuhan Kirim Cabang (Table) -->
+            <!-- Kebutuhan Kirim Cabang (Table) - infinite scroll -->
             <div class="card mb-3 border-0 shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center"
                     style="padding: 0.625rem 1rem; border-bottom: 1px solid #dee2e6;">
@@ -425,9 +408,9 @@
                     @endif
                 </div>
                 <div class="card-body p-1">
-                    <div class="table-responsive">
+                    <div class="table-responsive dashboard-scroll-container" style="max-height: 320px; overflow-y: auto;">
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
-                            <thead class="table-light" style="background-color: #f8f9fa;">
+                            <thead class="table-light" style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
                                 <tr>
                                     <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">
                                         Cabang</th>
@@ -461,7 +444,7 @@
                                         Stock Cabang</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="kebutuhan-tbody">
                                 @forelse($topBranches->items() ?? [] as $branch)
                                     @php
                                         $stokCabang = $branch->total_stok_cabang ?? 0;
@@ -588,6 +571,13 @@
                                         </td>
                                     </tr>
                                 @endforelse
+                                @if (isset($topBranches) && $topBranches->hasMorePages())
+                                <tr id="kebutuhan-sentinel" class="dashboard-infinite-sentinel" data-next-page="2" data-has-more="1" data-url="{{ route('dashboard.kebutuhan-more') }}">
+                                    <td colspan="5" class="text-center py-2">
+                                        <small class="text-muted">Scroll untuk memuat lebih banyak...</small>
+                                    </td>
+                                </tr>
+                                @endif
                                 <tr class="table-light d-none" style="background-color: #f8f9fa;">
                                     <td style="padding: 0.5rem 1rem; font-weight: 600; font-size: 0.75rem;">
                                         <strong>Total</strong>
@@ -611,30 +601,6 @@
                             </tbody>
                         </table>
                     </div>
-
-                    <!-- Pagination -->
-                    @if (isset($topBranches) && $topBranches->total() > 0)
-                        <div class="card-footer bg-white border-top py-2">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap">
-                                <div class="mb-2 mb-md-0 d-none">
-                                    <small class="text-muted">
-                                        @if ($topBranches->hasPages())
-                                            Menampilkan {{ $topBranches->firstItem() }} -
-                                            {{ $topBranches->lastItem() }}
-                                            dari {{ $topBranches->total() }} cabang
-                                        @else
-                                            Menampilkan semua {{ $topBranches->total() }} cabang
-                                        @endif
-                                    </small>
-                                </div>
-                                @if ($topBranches->hasPages())
-                                    <div class="pagination">
-                                        {{ $topBranches->appends(request()->except('kebutuhan_page'))->links('pagination::bootstrap-5') }}
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endif
                 </div>
             </div>
         </div>
@@ -1386,6 +1352,52 @@
                     sulawesiMarker.bindPopup('<strong>Sulawesi</strong><br>556,206');
                 }
             });
+        </script>
+        <script>
+            (function () {
+                function setupInfiniteScroll(sentinelId, tbodyId) {
+                    var sentinel = document.getElementById(sentinelId);
+                    var tbody = document.getElementById(tbodyId);
+                    if (!sentinel || !tbody) return;
+                    var container = tbody.closest('.dashboard-scroll-container');
+                    if (!container) return;
+                    var loading = false;
+                    function loadMore() {
+                        var page = parseInt(sentinel.getAttribute('data-next-page') || '1', 10);
+                        var hasMore = sentinel.getAttribute('data-has-more') === '1';
+                        if (loading || !hasMore) return;
+                        loading = true;
+                        sentinel.querySelector('td').innerHTML = '<small class="text-muted">Memuat...</small>';
+                        fetch(sentinel.getAttribute('data-url') + '?page=' + page)
+                            .then(function (r) { return r.json(); })
+                            .then(function (data) {
+                                var wrap = document.createElement('div');
+                                wrap.innerHTML = '<table><tbody>' + data.html + '</tbody></table>';
+                                var rows = wrap.querySelector('tbody').children;
+                                for (var i = 0; i < rows.length; i++) {
+                                    tbody.insertBefore(rows[i], sentinel);
+                                }
+                                sentinel.setAttribute('data-has-more', data.hasMore ? '1' : '0');
+                                sentinel.setAttribute('data-next-page', String(page + 1));
+                                sentinel.querySelector('td').innerHTML = data.hasMore
+                                    ? '<small class="text-muted">Scroll untuk memuat lebih banyak...</small>'
+                                    : '';
+                                if (!data.hasMore) sentinel.style.display = 'none';
+                            })
+                            .catch(function () {
+                                sentinel.querySelector('td').innerHTML = '<small class="text-danger">Gagal memuat.</small>';
+                            })
+                            .finally(function () { loading = false; });
+                    }
+                    container.addEventListener('scroll', function () {
+                        var rect = sentinel.getBoundingClientRect();
+                        var containerRect = container.getBoundingClientRect();
+                        if (rect.top <= containerRect.bottom + 100) loadMore();
+                    });
+                }
+                setupInfiniteScroll('adp-sentinel', 'adp-tbody');
+                setupInfiniteScroll('kebutuhan-sentinel', 'kebutuhan-tbody');
+            })();
         </script>
     </x-slot>
 </x-layouts>

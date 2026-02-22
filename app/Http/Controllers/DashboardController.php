@@ -195,14 +195,8 @@ class DashboardController extends Controller
             ->groupBy('branches.branch_code', 'branches.branch_name')
             ->orderByDesc(DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0)'));
         
-        // Paginate untuk "Kebutuhan Kirim Cabang" table
-        $perPage = (int) $request->input('per_page_kebutuhan', 10);
-        // Ensure minimum per page is 10
-        if ($perPage < 10) {
-            $perPage = 10;
-        }
-        // Use simplePaginate if you want simpler pagination, or paginate for full pagination
-        // For grouped queries, we need to ensure proper pagination
+        // Paginate untuk "Kebutuhan Kirim Cabang" table (infinite scroll: 15 per load)
+        $perPage = 15;
         $spBranchesPaginated = $spBranchesQuery->paginate($perPage, ['*'], 'kebutuhan_page')->withQueryString();
         
         // Get all data for totals calculation (without pagination)
@@ -339,12 +333,8 @@ class DashboardController extends Controller
             ->groupBy('branches.branch_code', 'branches.branch_name')
             ->orderByDesc(DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0) - COALESCE(SUM(sp_branches.ex_ftr), 0)'));
         
-        // Paginate untuk "Penentuan Kirim (ADP)" table
-        $perPageAdp = (int) $request->input('per_page_adp', 10);
-        // Ensure minimum per page is 10
-        if ($perPageAdp < 10) {
-            $perPageAdp = 10;
-        }
+        // Paginate untuk "Penentuan Kirim (ADP)" table (infinite scroll: 15 per load)
+        $perPageAdp = 15;
         $adpBranchesPaginated = $adpBranchesQuery->paginate($perPageAdp, ['*'], 'adp_page')->withQueryString();
 
         $topProductsQuery = SpBranch::select([
@@ -1046,5 +1036,257 @@ class DashboardController extends Controller
             'message' => 'Range tanggal berhasil disimpan',
             'redirect' => route('dashboard')
         ]);
+    }
+
+    /**
+     * Infinite scroll: load more rows untuk tabel Penentuan Kirim (ADP). Return HTML fragment.
+     */
+    public function adpMore(Request $request)
+    {
+        $ctx = $this->getDashboardScrollContext($request);
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 15;
+
+        $adpBranchesQuery = Branch::select([
+            'branches.branch_code',
+            'branches.branch_name',
+            DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0) - COALESCE(SUM(sp_branches.ex_ftr), 0) as sisa_sp'),
+        ])
+            ->leftJoin('sp_branches', function ($join) use ($ctx) {
+                $join->on('branches.branch_code', '=', 'sp_branches.branch_code')
+                    ->where('sp_branches.active_data', 'yes');
+                if ($ctx['startDate'] !== null) {
+                    $join->whereBetween('sp_branches.trans_date', [$ctx['startDate'], $ctx['endDate']]);
+                } else {
+                    $join->where('sp_branches.trans_date', '<=', $ctx['endDate']);
+                }
+            })
+            ->when($ctx['userBranchCode'], fn ($q) => $q->where('branches.branch_code', $ctx['userBranchCode']))
+            ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branches.branch_code', $ctx['filteredBranchCodes']))
+            ->groupBy('branches.branch_code', 'branches.branch_name')
+            ->orderByDesc(DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0) - COALESCE(SUM(sp_branches.ex_ftr), 0)'));
+
+        $paginator = $adpBranchesQuery->paginate($perPage, ['*'], 'page', $page);
+        $targets = $this->getTargetsKeyedByBranch($ctx);
+        $nppbPerBranch = $this->getNppbPerBranch($ctx);
+        $totalNppbKoli = $this->getTotalNppbKoli($ctx);
+        $totalTarget = $this->getTotalTarget($ctx);
+        $totalSisaSp = $this->getTotalSisaSp($ctx);
+        $totalNppbPls = $this->getTotalNppbPls($ctx);
+
+        $html = view($this->callbackfolder . '.dashboard._adp_rows', [
+            'adpBranches' => $paginator->items(),
+            'targets' => $targets,
+            'nppbPerBranch' => $nppbPerBranch,
+            'totalNppbKoli' => $totalNppbKoli,
+            'totalTarget' => $totalTarget,
+            'totalSisaSp' => $totalSisaSp,
+            'totalNppbPls' => $totalNppbPls,
+            'hasMore' => $paginator->hasMorePages(),
+        ])->render();
+        return response()->json(['html' => $html, 'hasMore' => $paginator->hasMorePages()]);
+    }
+
+    /**
+     * Infinite scroll: load more rows untuk tabel Kebutuhan Kirim Cabang. Return HTML fragment.
+     */
+    public function kebutuhanMore(Request $request)
+    {
+        $ctx = $this->getDashboardScrollContext($request);
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 15;
+
+        $spBranchesQuery = Branch::select([
+            'branches.branch_code',
+            'branches.branch_name',
+            DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0) as total_sp'),
+            DB::raw('COALESCE(SUM(sp_branches.ex_ftr), 0) as total_faktur'),
+            DB::raw('COALESCE(SUM(sp_branches.ex_ret), 0) as total_ret'),
+            DB::raw('COALESCE(SUM(sp_branches.ex_ftr), 0) - COALESCE(SUM(sp_branches.ex_ret), 0) as netto'),
+            DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0) - COALESCE(SUM(sp_branches.ex_ftr), 0) as sisa_sp'),
+            DB::raw('COALESCE(SUM(sp_branches.ex_stock), 0) as total_stok_cabang'),
+            DB::raw('COALESCE(SUM(sp_branches.ex_rec_pst), 0) as total_nkb'),
+        ])
+            ->leftJoin('sp_branches', function ($join) use ($ctx) {
+                $join->on('branches.branch_code', '=', 'sp_branches.branch_code')
+                    ->where('sp_branches.active_data', 'yes');
+                if ($ctx['startDate'] !== null) {
+                    $join->whereBetween('sp_branches.trans_date', [$ctx['startDate'], $ctx['endDate']]);
+                } else {
+                    $join->where('sp_branches.trans_date', '<=', $ctx['endDate']);
+                }
+            })
+            ->when($ctx['userBranchCode'], fn ($q) => $q->where('branches.branch_code', $ctx['userBranchCode']))
+            ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branches.branch_code', $ctx['filteredBranchCodes']))
+            ->groupBy('branches.branch_code', 'branches.branch_name')
+            ->orderByDesc(DB::raw('COALESCE(SUM(sp_branches.ex_sp), 0)'));
+
+        $paginator = $spBranchesQuery->paginate($perPage, ['*'], 'page', $page);
+        $totalSp = $this->getTotalSp($ctx);
+        $totalSisaSp = $this->getTotalSisaSp($ctx);
+        $totalStokCabang = $this->getTotalStokCabang($ctx);
+
+        $html = view($this->callbackfolder . '.dashboard._kebutuhan_rows', [
+            'topBranches' => $paginator->items(),
+            'totalSp' => $totalSp,
+            'totalSisaSp' => $totalSisaSp,
+            'totalStokCabang' => $totalStokCabang,
+            'hasMore' => $paginator->hasMorePages(),
+        ])->render();
+        return response()->json(['html' => $html, 'hasMore' => $paginator->hasMorePages()]);
+    }
+
+    private function getDashboardScrollContext(Request $request): array
+    {
+        $dateRange = session('date_range_global');
+        $activeCutoff = CutoffData::where('status', 'active')->first();
+        if ($dateRange) {
+            $startDate = $dateRange['start_date'];
+            $endDate = $dateRange['end_date'];
+        } elseif ($activeCutoff) {
+            $endDate = $activeCutoff->end_date->format('Y-m-d');
+            $startDate = $activeCutoff->start_date ? $activeCutoff->start_date->format('Y-m-d') : null;
+        } else {
+            $startDate = date('Y-m-01');
+            $endDate = date('Y-m-t');
+        }
+        $userBranchCode = null;
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+        if ($this->role == 3) {
+            $userBranchCode = null;
+        } elseif ($this->role == 2 && Auth::check()) {
+            $userBranchCode = Auth::user()->branch_code ?? null;
+            $filteredBranchCodes = null;
+        } else {
+            $filteredBranchCodes = null;
+        }
+        $selectedBranchCode = $request->input('branch', null);
+        if ($this->role != 3) {
+            if ($selectedBranchCode) {
+                $filteredBranchCodes = [$selectedBranchCode];
+                $userBranchCode = null;
+            } elseif ($userBranchCode) {
+                $filteredBranchCodes = [$userBranchCode];
+            }
+        }
+        return compact('startDate', 'endDate', 'userBranchCode', 'filteredBranchCodes');
+    }
+
+    private function getTargetsKeyedByBranch(array $ctx)
+    {
+        return Branch::select(['branches.branch_code', DB::raw('COALESCE(SUM(targets.exemplar), 0) as total_target')])
+            ->leftJoin('targets', 'branches.branch_code', '=', 'targets.branch_code')
+            ->leftJoin('periods', function ($join) use ($ctx) {
+                $join->on('targets.period_code', '=', 'periods.period_code');
+                if ($ctx['startDate'] !== null) {
+                    $join->where('periods.from_date', '<=', $ctx['endDate'])->where('periods.to_date', '>=', $ctx['startDate']);
+                } else {
+                    $join->where('periods.to_date', '<=', $ctx['endDate']);
+                }
+            })
+            ->when($ctx['userBranchCode'], fn ($q) => $q->where('branches.branch_code', $ctx['userBranchCode']))
+            ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branches.branch_code', $ctx['filteredBranchCodes']))
+            ->groupBy('branches.branch_code')
+            ->get()
+            ->keyBy('branch_code');
+    }
+
+    private function getNppbPerBranch(array $ctx)
+    {
+        return Branch::select(['branches.branch_code', DB::raw('COALESCE(SUM(nppb_centrals.pls), 0) as total_pls')])
+            ->leftJoin('nppb_centrals', function ($join) use ($ctx) {
+                $join->on('branches.branch_code', '=', 'nppb_centrals.branch_code');
+                if ($ctx['startDate'] !== null) {
+                    $join->whereBetween('nppb_centrals.date', [$ctx['startDate'], $ctx['endDate']]);
+                } else {
+                    $join->where('nppb_centrals.date', '<=', $ctx['endDate']);
+                }
+            })
+            ->when($ctx['userBranchCode'], fn ($q) => $q->where('branches.branch_code', $ctx['userBranchCode']))
+            ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branches.branch_code', $ctx['filteredBranchCodes']))
+            ->groupBy('branches.branch_code')
+            ->get()
+            ->keyBy('branch_code');
+    }
+
+    private function getTotalNppbKoli(array $ctx)
+    {
+        $r = NppbCentral::selectRaw('COALESCE(SUM(koli), 0) as total_koli');
+        if ($ctx['startDate'] !== null) {
+            $r->whereBetween('date', [$ctx['startDate'], $ctx['endDate']]);
+        } else {
+            $r->where('date', '<=', $ctx['endDate']);
+        }
+        $r->when($ctx['userBranchCode'], fn ($q) => $q->where('branch_code', $ctx['userBranchCode']))
+          ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branch_code', $ctx['filteredBranchCodes']));
+        return (int) ($r->first()->total_koli ?? 0);
+    }
+
+    private function getTotalTarget(array $ctx)
+    {
+        $q = Target::selectRaw('COALESCE(SUM(targets.exemplar), 0) as total_target')
+            ->join('periods', 'targets.period_code', '=', 'periods.period_code');
+        if ($ctx['startDate'] !== null) {
+            $q->where('periods.from_date', '<=', $ctx['endDate'])->where('periods.to_date', '>=', $ctx['startDate']);
+        } else {
+            $q->where('periods.to_date', '<=', $ctx['endDate']);
+        }
+        $q->when($ctx['userBranchCode'], fn ($q) => $q->where('targets.branch_code', $ctx['userBranchCode']))
+          ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('targets.branch_code', $ctx['filteredBranchCodes']));
+        return (int) ($q->first()->total_target ?? 0);
+    }
+
+    private function getTotalSisaSp(array $ctx)
+    {
+        $q = SpBranch::selectRaw('(COALESCE(SUM(ex_sp), 0) - COALESCE(SUM(ex_ftr), 0)) as sisa')
+            ->where('active_data', 'yes');
+        if ($ctx['startDate'] !== null) {
+            $q->whereBetween('trans_date', [$ctx['startDate'], $ctx['endDate']]);
+        } else {
+            $q->where('trans_date', '<=', $ctx['endDate']);
+        }
+        $q->when($ctx['userBranchCode'], fn ($q) => $q->where('branch_code', $ctx['userBranchCode']))
+          ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branch_code', $ctx['filteredBranchCodes']));
+        $row = $q->first();
+        return (int) ($row->sisa ?? 0);
+    }
+
+    private function getTotalNppbPls(array $ctx)
+    {
+        $r = NppbCentral::selectRaw('COALESCE(SUM(pls), 0) as total_pls');
+        if ($ctx['startDate'] !== null) {
+            $r->whereBetween('date', [$ctx['startDate'], $ctx['endDate']]);
+        } else {
+            $r->where('date', '<=', $ctx['endDate']);
+        }
+        $r->when($ctx['userBranchCode'], fn ($q) => $q->where('branch_code', $ctx['userBranchCode']))
+          ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branch_code', $ctx['filteredBranchCodes']));
+        return (int) ($r->first()->total_pls ?? 0);
+    }
+
+    private function getTotalSp(array $ctx)
+    {
+        $q = SpBranch::selectRaw('COALESCE(SUM(ex_sp), 0) as total_sp')->where('active_data', 'yes');
+        if ($ctx['startDate'] !== null) {
+            $q->whereBetween('trans_date', [$ctx['startDate'], $ctx['endDate']]);
+        } else {
+            $q->where('trans_date', '<=', $ctx['endDate']);
+        }
+        $q->when($ctx['userBranchCode'], fn ($q) => $q->where('branch_code', $ctx['userBranchCode']))
+          ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branch_code', $ctx['filteredBranchCodes']));
+        return (int) ($q->first()->total_sp ?? 0);
+    }
+
+    private function getTotalStokCabang(array $ctx)
+    {
+        $q = SpBranch::selectRaw('COALESCE(SUM(ex_stock), 0) as total_stok')->where('active_data', 'yes');
+        if ($ctx['startDate'] !== null) {
+            $q->whereBetween('trans_date', [$ctx['startDate'], $ctx['endDate']]);
+        } else {
+            $q->where('trans_date', '<=', $ctx['endDate']);
+        }
+        $q->when($ctx['userBranchCode'], fn ($q) => $q->where('branch_code', $ctx['userBranchCode']))
+          ->when($ctx['filteredBranchCodes'] !== null, fn ($q) => $q->whereIn('branch_code', $ctx['filteredBranchCodes']));
+        return (int) ($q->first()->total_stok ?? 0);
     }
 }

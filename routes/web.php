@@ -68,6 +68,8 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(DashboardController::class)->group(function () {
         Route::get('/dashboard', 'index')->name('dashboard');
+        Route::get('/dashboard/adp-more', 'adpMore')->name('dashboard.adp-more');
+        Route::get('/dashboard/kebutuhan-more', 'kebutuhanMore')->name('dashboard.kebutuhan-more');
         Route::post('/dashboard/set-date-range', 'setDateRange')->name('dashboard.set-date-range');
     });
 
@@ -109,9 +111,9 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(RekapController::class)->group(function () {
         Route::get('/recap', 'index')->name('recap.index');
-        // Route::get('/recap', function () {
-        //     return 'Pengetesan';
-        // })->name('recap.index');
+        Route::get('/recap/export', 'export')->name('recap.export');
+        Route::get('/recap/detail/{branch_code}', 'detail')->name('recap.detail');
+        Route::get('/recap/detail/{branch_code}/export', 'detailExport')->name('recap.detail.export');
     });
 
     Route::controller(RangkumanController::class)->group(function () {

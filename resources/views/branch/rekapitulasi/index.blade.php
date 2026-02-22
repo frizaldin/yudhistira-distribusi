@@ -7,6 +7,13 @@
                     <small class="text-muted">{{ $branchInfo->branch_name ?? 'Cabang' }} ({{ $branchInfo->branch_code ?? '' }})</small>
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
+                    @php
+                        $exportQuery = array_filter(['year' => request('year', $year ?? date('Y')), 'book_code' => request('book_code', $filterBookCode ?? '')]);
+                        $exportRecapUrl = route('recap.export') . ($exportQuery ? '?' . http_build_query($exportQuery) : '');
+                    @endphp
+                    <a href="{{ $exportRecapUrl }}" class="btn btn-success btn-sm rounded-pill">
+                        <i class="bi bi-download me-1"></i>Export Data
+                    </a>
                     <button type="button" class="btn btn-outline-info btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalRumus">
                         <i class="bi bi-calculator me-1"></i>Lihat Rumus
                     </button>

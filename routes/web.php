@@ -112,6 +112,9 @@ Route::middleware('auth')->group(function () {
     Route::controller(RekapController::class)->group(function () {
         Route::get('/recap', 'index')->name('recap.index');
         Route::get('/recap/export', 'export')->name('recap.export');
+        Route::get('/recap/api/summary', 'apiSummary')->name('recap.api.summary');
+        Route::get('/recap/api/ketersediaan', 'apiKetersediaan')->name('recap.api.ketersediaan');
+        Route::get('/recap/api/nppb', 'apiNppb')->name('recap.api.nppb');
         Route::get('/recap/detail/{branch_code}', 'detail')->name('recap.detail');
         Route::get('/recap/detail/{branch_code}/export', 'detailExport')->name('recap.detail.export');
     });

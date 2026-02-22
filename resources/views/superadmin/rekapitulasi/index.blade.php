@@ -50,7 +50,7 @@
                 </div>
                 <div class="d-flex flex-wrap gap-2 align-items-center">
                     @php
-                        $exportQuery = array_filter(['year' => request('year', date('Y')), 'book_code' => request('book_code', $filterBookCode ?? '')]);
+                        $exportQuery = array_filter(['year' => request('year', date('Y')), 'book_code' => request('book_code', $filterBookCode ?? ''), 'branch_code' => request('branch_code', $filterBranchCode ?? '')]);
                         $exportRecapUrl = route('recap.export') . ($exportQuery ? '?' . http_build_query($exportQuery) : '');
                     @endphp
                     <a href="{{ $exportRecapUrl }}" class="btn btn-success btn-sm rounded-pill">
@@ -64,7 +64,23 @@
             </div>
 
             {{-- Filter Kode Buku (hanya data sesuai kode buku & cutoff aktif) --}}
-            <form method="GET" action="{{ route('recap.index') }}" class="mb-3 row g-2 align-items-end">
+            <form method="GET" action="{{ route('recap.index') }}" class="mb-3 row g-2 align-items-end" id="recapFilterForm"
+                data-recap-api-summary="{{ route('recap.api.summary') }}"
+                data-recap-api-ketersediaan="{{ route('recap.api.ketersediaan') }}"
+                data-recap-api-nppb="{{ route('recap.api.nppb') }}"
+                data-recap-year="{{ request('year', $year ?? date('Y')) }}"
+                data-recap-book-code="{{ request('book_code', $filterBookCode ?? '') }}"
+                data-recap-branch-code="{{ request('branch_code', $filterBranchCode ?? '') }}">
+                <input type="hidden" name="year" value="{{ request('year', $year ?? date('Y')) }}" />
+                <div class="col-auto">
+                    <label for="filter_branch_code" class="form-label small mb-0">Cabang</label>
+                    <select id="filter_branch_code" name="branch_code" class="form-select form-select-sm" style="min-width: 200px;">
+                        <option value="">Semua Cabang</option>
+                        @foreach (isset($allBranchesForFilter) ? $allBranchesForFilter : [] as $b)
+                            <option value="{{ $b->branch_code }}" {{ request('branch_code', $filterBranchCode ?? '') == $b->branch_code ? 'selected' : '' }}>{{ $b->branch_name }} ({{ $b->branch_code }})</option>
+                        @endforeach
+                    </select>
+                </div>
                 <div class="col-auto">
                     <label for="filter_book_code" class="form-label small mb-0">Kode Buku</label>
                     <input type="text" id="filter_book_code" name="book_code" class="form-control form-control-sm"
@@ -77,11 +93,17 @@
                     </button>
                     <a href="{{ route('recap.index') }}" class="btn btn-outline-secondary btn-sm">Tampilkan Semua</a>
                 </div>
-                @if (!empty($filterBookCode ?? ''))
+                @if (!empty($filterBranchCode ?? '') || !empty($filterBookCode ?? ''))
                     <div class="col-auto">
-                        <span class="badge bg-secondary">Filter: <strong>{{ $filterBookCode }}</strong>
-                            @if (!empty($filterBookTitle ?? ''))
-                                — {{ Str::limit($filterBookTitle, 40) }}
+                        <span class="badge bg-secondary">
+                            @if (!empty($filterBranchCode ?? ''))
+                                Cabang: <strong>{{ $filterBranchCode }}</strong>
+                            @endif
+                            @if (!empty($filterBookCode ?? ''))
+                                {{ !empty($filterBranchCode ?? '') ? ' | ' : 'Filter: ' }}Kode Buku: <strong>{{ $filterBookCode }}</strong>
+                                @if (!empty($filterBookTitle ?? ''))
+                                    — {{ Str::limit($filterBookTitle, 40) }}
+                                @endif
                             @endif
                         </span>
                     </div>
@@ -156,122 +178,101 @@
                             <!-- % sudah rowspan 3, tidak perlu di row 3 -->
                         </tr>
                     </thead>
-                    <tbody>
-                        @php
-                            $rowNumber = 1;
-                        @endphp
-
-                        <!-- NASIONAL ROW -->
-                        <tr class="table-primary text-white fw-bold">
-                            <td class="text-center">{{ $rowNumber++ }}</td>
-                            <td class="fw-bold">NASIONAL</td>
-                            <td class="text-end">{{ number_format($nasional['target'] ?? 0) }}</td>
-                            <td class="text-end">{{ number_format($nasional['total_sp'] ?? 0) }}</td>
-                            <td class="text-end">{{ number_format($nasional['total_faktur'] ?? 0) }}</td>
-                            <td class="text-end">
-                                {{ number_format($nasional['sisa_sp'] ?? 0) }}
-                            </td>
-                            <td class="text-end">{{ number_format($nasional['total_nkb'] ?? 0) }}</td>
-                            <td class="text-end">{{ number_format($nasional['total_stok_cabang'] ?? 0) }}
-                            </td>
-                            @php
-                                $thdTargetLebih = $nasional['thd_target_lebih'] ?? 0;
-                                $thdTargetKurang = $nasional['thd_target_kurang'] ?? 0;
-                                $thdSpLebih = $nasional['thd_sp_lebih'] ?? 0;
-                                $thdSpKurang = $nasional['thd_sp_kurang'] ?? 0;
-                            @endphp
-                            <td class="text-end">
-                                {{ $thdTargetLebih > 0 ? number_format($thdTargetLebih) : '-' }}</td>
-                            <td class="text-end text-danger">
-                                {{ $thdTargetKurang > 0 ? '(' . number_format($thdTargetKurang) . ')' : '-' }}
-                            </td>
-                            <td class="text-end">{{ $thdSpLebih > 0 ? number_format($thdSpLebih) : '-' }}
-                            </td>
-                            <td class="text-end text-danger">
-                                {{ $thdSpKurang > 0 ? '(' . number_format($thdSpKurang) . ')' : '-' }}
-                            </td>
-                            <td class="text-end">{{ number_format($nasional['total_nppb_koli'] ?? 0) }}</td>
-                            <td class="text-end">{{ number_format($nasional['total_nppb_pls'] ?? 0) }}</td>
-                            <td class="text-end">{{ number_format($nasional['total_nppb_exp'] ?? 0) }}</td>
-                            <td class="text-end">-</td>
-                            <td class="text-end">-</td>
-                            <td class="text-end">-</td>
-                        </tr>
-
-                        @foreach ($areas as $areaName => $area)
-                            @foreach ($area['branches'] as $branch)
-                                <!-- BRANCH ROW -->
-                                <tr>
-                                    <td class="text-center">{{ $rowNumber++ }}</td>
+                    <tbody id="rekapTableBody">
+                        @if (isset($use_ajax) && $use_ajax)
+                            {{-- Mode AJAX: baris NASIONAL + tiap cabang, data diisi via JS --}}
+                            <tr class="table-primary text-white fw-bold" data-recap-row="nasional">
+                                <td class="text-center">1</td>
+                                <td class="fw-bold">NASIONAL</td>
+                                <td class="text-end" data-recap-col="target"><span class="recap-loading">...</span></td>
+                                <td class="text-end" data-recap-col="total_sp">...</td>
+                                <td class="text-end" data-recap-col="total_faktur">...</td>
+                                <td class="text-end" data-recap-col="sisa_sp">...</td>
+                                <td class="text-end" data-recap-col="total_nkb">...</td>
+                                <td class="text-end" data-recap-col="total_stok_cabang">...</td>
+                                <td class="text-end" data-recap-col="thd_target_lebih">...</td>
+                                <td class="text-end text-danger" data-recap-col="thd_target_kurang">...</td>
+                                <td class="text-end" data-recap-col="thd_sp_lebih">...</td>
+                                <td class="text-end text-danger" data-recap-col="thd_sp_kurang">...</td>
+                                <td class="text-end" data-recap-col="nppb_koli">...</td>
+                                <td class="text-end" data-recap-col="nppb_pls">...</td>
+                                <td class="text-end" data-recap-col="nppb_exp">...</td>
+                                <td class="text-end" data-recap-col="pct_real">-</td>
+                                <td class="text-end" data-recap-col="pct_target">...</td>
+                                <td class="text-end" data-recap-col="pct_sp">...</td>
+                            </tr>
+                            @foreach (isset($branches) ? $branches : [] as $idx => $branch)
+                                <tr data-recap-row="{{ $branch->branch_code }}">
+                                    <td class="text-center">{{ $idx + 2 }}</td>
                                     <td class="ps-4">
-                                        <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">
-                                            {{ $branch->branch_name ?? $branch->branch_code }}
-                                        </a>
+                                        <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">{{ $branch->branch_name ?? $branch->branch_code }}</a>
                                     </td>
-                                    <td class="text-end">{{ number_format($branch->target ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($branch->total_sp ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($branch->total_faktur ?? 0) }}
-                                    </td>
-                                    <td class="text-end">
-                                        {{ number_format($branch->sisa_sp ?? 0) }}
-                                    </td>
-                                    <td class="text-end">{{ number_format($branch->total_nkb ?? 0) }}
-                                    </td>
-                                    <td class="text-end">
-                                        {{ number_format($branch->total_stok_cabang ?? 0) }}</td>
-                                    @php
-                                        $branchThdTargetLebih = $branch->thd_target_lebih ?? 0;
-                                        $branchThdTargetKurang = $branch->thd_target_kurang ?? 0;
-                                        $branchThdSpLebih = $branch->thd_sp_lebih ?? 0;
-                                        $branchThdSpKurang = $branch->thd_sp_kurang ?? 0;
-                                    @endphp
-                                    <td class="text-end">
-                                        {{ $branchThdTargetLebih > 0 ? number_format($branchThdTargetLebih) : '-' }}
-                                    </td>
-                                    <td class="text-end text-danger">
-                                        {{ $branchThdTargetKurang > 0 ? '(' . number_format($branchThdTargetKurang) . ')' : '-' }}
-                                    </td>
-                                    <td class="text-end">
-                                        {{ $branchThdSpLebih > 0 ? number_format($branchThdSpLebih) : '-' }}
-                                    </td>
-                                    <td class="text-end text-danger">
-                                        {{ $branchThdSpKurang > 0 ? '(' . number_format($branchThdSpKurang) . ')' : '-' }}
-                                    </td>
-                                    <td class="text-end">{{ number_format($branch->nppb_koli ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($branch->nppb_pls ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($branch->nppb_exp ?? 0) }}</td>
-                                    @php
-                                        // % STOCK THD calculations for branch
-                                        $branchRealisasiTotal = 0; // Placeholder - data historis belum ada
-                                        $branchPercentReal =
-                                            $branchRealisasiTotal > 0
-                                                ? round(
-                                                    (($branch->total_stok_cabang ?? 0) / $branchRealisasiTotal) * 100,
-                                                )
-                                                : 0;
-                                        $branchPercentTarget =
-                                            ($branch->target ?? 0) > 0
-                                                ? round(
-                                                    (($branch->total_stok_cabang ?? 0) / ($branch->target ?? 1)) * 100,
-                                                )
-                                                : 0;
-                                        $branchPercentSp =
-                                            ($branch->total_sp ?? 0) > 0
-                                                ? round(
-                                                    (($branch->total_stok_cabang ?? 0) / ($branch->total_sp ?? 1)) *
-                                                        100,
-                                                )
-                                                : 0;
-                                    @endphp
-                                    <td class="text-end">{{ $branchPercentReal > 0 ? $branchPercentReal . '%' : '-' }}
-                                    </td>
-                                    <td class="text-end">
-                                        {{ $branchPercentTarget > 0 ? $branchPercentTarget . '%' : '-' }}</td>
-                                    <td class="text-end">{{ $branchPercentSp > 0 ? $branchPercentSp . '%' : '-' }}
-                                    </td>
+                                    <td class="text-end" data-recap-col="target">...</td>
+                                    <td class="text-end" data-recap-col="total_sp">...</td>
+                                    <td class="text-end" data-recap-col="total_faktur">...</td>
+                                    <td class="text-end" data-recap-col="sisa_sp">...</td>
+                                    <td class="text-end" data-recap-col="total_nkb">...</td>
+                                    <td class="text-end" data-recap-col="total_stok_cabang">...</td>
+                                    <td class="text-end" data-recap-col="thd_target_lebih">...</td>
+                                    <td class="text-end text-danger" data-recap-col="thd_target_kurang">...</td>
+                                    <td class="text-end" data-recap-col="thd_sp_lebih">...</td>
+                                    <td class="text-end text-danger" data-recap-col="thd_sp_kurang">...</td>
+                                    <td class="text-end" data-recap-col="nppb_koli">...</td>
+                                    <td class="text-end" data-recap-col="nppb_pls">...</td>
+                                    <td class="text-end" data-recap-col="nppb_exp">...</td>
+                                    <td class="text-end" data-recap-col="pct_real">-</td>
+                                    <td class="text-end" data-recap-col="pct_target">...</td>
+                                    <td class="text-end" data-recap-col="pct_sp">...</td>
                                 </tr>
                             @endforeach
-                        @endforeach
+                        @else
+                            @php $rowNumber = 1; @endphp
+                            <tr class="table-primary text-white fw-bold">
+                                <td class="text-center">{{ $rowNumber++ }}</td>
+                                <td class="fw-bold">NASIONAL</td>
+                                <td class="text-end">{{ number_format($nasional['target'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_sp'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_faktur'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['sisa_sp'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_nkb'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_stok_cabang'] ?? 0) }}</td>
+                                @php $thdTargetLebih = $nasional['thd_target_lebih'] ?? 0; $thdTargetKurang = $nasional['thd_target_kurang'] ?? 0; $thdSpLebih = $nasional['thd_sp_lebih'] ?? 0; $thdSpKurang = $nasional['thd_sp_kurang'] ?? 0; @endphp
+                                <td class="text-end">{{ $thdTargetLebih > 0 ? number_format($thdTargetLebih) : '-' }}</td>
+                                <td class="text-end text-danger">{{ $thdTargetKurang > 0 ? '(' . number_format($thdTargetKurang) . ')' : '-' }}</td>
+                                <td class="text-end">{{ $thdSpLebih > 0 ? number_format($thdSpLebih) : '-' }}</td>
+                                <td class="text-end text-danger">{{ $thdSpKurang > 0 ? '(' . number_format($thdSpKurang) . ')' : '-' }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_nppb_koli'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_nppb_pls'] ?? 0) }}</td>
+                                <td class="text-end">{{ number_format($nasional['total_nppb_exp'] ?? 0) }}</td>
+                                <td class="text-end">-</td><td class="text-end">-</td><td class="text-end">-</td>
+                            </tr>
+                            @foreach (isset($areas) ? $areas : [] as $areaName => $area)
+                                @foreach ($area['branches'] as $branch)
+                                    <tr>
+                                        <td class="text-center">{{ $rowNumber++ }}</td>
+                                        <td class="ps-4"><a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">{{ $branch->branch_name ?? $branch->branch_code }}</a></td>
+                                        <td class="text-end">{{ number_format($branch->target ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->total_sp ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->total_faktur ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->sisa_sp ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->total_nkb ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->total_stok_cabang ?? 0) }}</td>
+                                        @php $bt = $branch->thd_target_lebih ?? 0; $bk = $branch->thd_target_kurang ?? 0; $sl = $branch->thd_sp_lebih ?? 0; $sk = $branch->thd_sp_kurang ?? 0; @endphp
+                                        <td class="text-end">{{ $bt > 0 ? number_format($bt) : '-' }}</td>
+                                        <td class="text-end text-danger">{{ $bk > 0 ? '(' . number_format($bk) . ')' : '-' }}</td>
+                                        <td class="text-end">{{ $sl > 0 ? number_format($sl) : '-' }}</td>
+                                        <td class="text-end text-danger">{{ $sk > 0 ? '(' . number_format($sk) . ')' : '-' }}</td>
+                                        <td class="text-end">{{ number_format($branch->nppb_koli ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->nppb_pls ?? 0) }}</td>
+                                        <td class="text-end">{{ number_format($branch->nppb_exp ?? 0) }}</td>
+                                        @php $pt = ($branch->target ?? 0) > 0 ? round((($branch->total_stok_cabang ?? 0) / ($branch->target ?? 1)) * 100) : 0; $ps = ($branch->total_sp ?? 0) > 0 ? round((($branch->total_stok_cabang ?? 0) / ($branch->total_sp ?? 1)) * 100) : 0; @endphp
+                                        <td class="text-end">-</td>
+                                        <td class="text-end">{{ $pt > 0 ? $pt . '%' : '-' }}</td>
+                                        <td class="text-end">{{ $ps > 0 ? $ps . '%' : '-' }}</td>
+                                    </tr>
+                                @endforeach
+                            @endforeach
+                        @endif
                     </tbody>
                 </table>
             </div>
@@ -366,4 +367,149 @@
             </div>
         </div>
     </div>
+
+    @if (isset($use_ajax) && $use_ajax)
+        <script>
+            (function() {
+                var form = document.getElementById('recapFilterForm');
+                if (!form) return;
+                var q = {
+                    year: form.dataset.recapYear || new Date().getFullYear(),
+                    book_code: form.dataset.recapBookCode || '',
+                    branch_code: form.dataset.recapBranchCode || ''
+                };
+                var qs = new URLSearchParams(q).toString();
+                function addQs(url) { return (url || '') + (url.indexOf('?') !== -1 ? '&' : '?') + qs; }
+                var summaryUrl = addQs(form.dataset.recapApiSummary);
+                var ketersediaanUrl = addQs(form.dataset.recapApiKetersediaan);
+                var nppbUrl = addQs(form.dataset.recapApiNppb);
+
+                function fmt(n) {
+                    if (n == null || n === '') return '-';
+                    var x = Number(n);
+                    if (isNaN(x)) return '-';
+                    return x.toLocaleString('id-ID');
+                }
+
+                function setCell(rowKey, col, value, isPct, isKurang) {
+                    var row = document.querySelector('#rekapTableBody tr[data-recap-row="' + rowKey + '"]');
+                    if (!row) return;
+                    var cell = row.querySelector('td[data-recap-col="' + col + '"]');
+                    if (!cell) return;
+                    if (isPct && value != null && value !== '' && value !== '-') {
+                        var v = Number(value);
+                        cell.textContent = !isNaN(v) && v > 0 ? v + '%' : '-';
+                    } else if (isKurang && value != null && value !== '' && Number(value) > 0) {
+                        cell.textContent = '(' + fmt(value) + ')';
+                        cell.classList.add('text-danger');
+                    } else if (value != null && value !== '' && value !== '-') {
+                        var num = Number(value);
+                        cell.textContent = fmt(value);
+                    } else {
+                        cell.textContent = value === 0 || value === '0' ? '0' : (value || '-');
+                    }
+                }
+
+                function runFills() {
+                    fetch(summaryUrl)
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data.error) { console.error('Recap summary:', data.error); return; }
+                            var n = data.nasional || {};
+                            setCell('nasional', 'target', n.target);
+                            setCell('nasional', 'total_sp', n.total_sp);
+                            setCell('nasional', 'total_faktur', n.total_faktur);
+                            setCell('nasional', 'sisa_sp', n.sisa_sp);
+                            setCell('nasional', 'total_nkb', n.total_nkb);
+                            setCell('nasional', 'total_stok_cabang', n.total_stok_cabang);
+                            var branches = data.branches || {};
+                            for (var code in branches) {
+                                var b = branches[code];
+                                setCell(code, 'target', b.target);
+                                setCell(code, 'total_sp', b.total_sp);
+                                setCell(code, 'total_faktur', b.total_faktur);
+                                setCell(code, 'sisa_sp', b.sisa_sp);
+                                setCell(code, 'total_nkb', b.total_nkb);
+                                setCell(code, 'total_stok_cabang', b.total_stok_cabang);
+                                var target = Number(b.target) || 0;
+                                var sp = Number(b.total_sp) || 0;
+                                var stock = Number(b.total_stok_cabang) || 0;
+                                setCell(code, 'pct_target', target > 0 ? Math.round(stock / target * 100) : null, true);
+                                setCell(code, 'pct_sp', sp > 0 ? Math.round(stock / sp * 100) : null, true);
+                            }
+                            setCell('nasional', 'pct_target', '-');
+                            setCell('nasional', 'pct_sp', '-');
+                            var rows = document.querySelectorAll('#rekapTableBody tr[data-recap-row]');
+                            rows.forEach(function(tr) {
+                                var code = tr.getAttribute('data-recap-row');
+                                if (code === 'nasional') return;
+                                if (!branches[code]) {
+                                    setCell(code, 'target', 0); setCell(code, 'total_sp', 0); setCell(code, 'total_faktur', 0);
+                                    setCell(code, 'sisa_sp', 0); setCell(code, 'total_nkb', 0); setCell(code, 'total_stok_cabang', 0);
+                                    setCell(code, 'pct_target', '-'); setCell(code, 'pct_sp', '-');
+                                }
+                            });
+                        })
+                        .catch(function(e) { console.error('Recap summary fetch:', e); });
+
+                    fetch(ketersediaanUrl)
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data.error) { console.error('Recap ketersediaan:', data.error); return; }
+                            var n = data.nasional || {};
+                            setCell('nasional', 'thd_target_lebih', n.thd_target_lebih);
+                            setCell('nasional', 'thd_target_kurang', n.thd_target_kurang, false, true);
+                            setCell('nasional', 'thd_sp_lebih', n.thd_sp_lebih);
+                            setCell('nasional', 'thd_sp_kurang', n.thd_sp_kurang, false, true);
+                            var branches = data.branches || {};
+                            for (var code in branches) {
+                                var b = branches[code];
+                                setCell(code, 'thd_target_lebih', b.thd_target_lebih);
+                                setCell(code, 'thd_target_kurang', b.thd_target_kurang, false, true);
+                                setCell(code, 'thd_sp_lebih', b.thd_sp_lebih);
+                                setCell(code, 'thd_sp_kurang', b.thd_sp_kurang, false, true);
+                            }
+                            var rows = document.querySelectorAll('#rekapTableBody tr[data-recap-row]');
+                            rows.forEach(function(tr) {
+                                var code = tr.getAttribute('data-recap-row');
+                                if (code === 'nasional') return;
+                                if (!branches[code]) {
+                                    setCell(code, 'thd_target_lebih', 0); setCell(code, 'thd_target_kurang', 0);
+                                    setCell(code, 'thd_sp_lebih', 0); setCell(code, 'thd_sp_kurang', 0);
+                                }
+                            });
+                        })
+                        .catch(function(e) { console.error('Recap ketersediaan fetch:', e); });
+
+                    fetch(nppbUrl)
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (data.error) { console.error('Recap nppb:', data.error); return; }
+                            var n = data.nasional || {};
+                            setCell('nasional', 'nppb_koli', n.total_nppb_koli);
+                            setCell('nasional', 'nppb_pls', n.total_nppb_pls);
+                            setCell('nasional', 'nppb_exp', n.total_nppb_exp);
+                            var branches = data.branches || {};
+                            for (var code in branches) {
+                                var b = branches[code];
+                                setCell(code, 'nppb_koli', b.nppb_koli);
+                                setCell(code, 'nppb_pls', b.nppb_pls);
+                                setCell(code, 'nppb_exp', b.nppb_exp);
+                            }
+                            var rows = document.querySelectorAll('#rekapTableBody tr[data-recap-row]');
+                            rows.forEach(function(tr) {
+                                var code = tr.getAttribute('data-recap-row');
+                                if (code === 'nasional') return;
+                                if (!branches[code]) {
+                                    setCell(code, 'nppb_koli', 0); setCell(code, 'nppb_pls', 0); setCell(code, 'nppb_exp', 0);
+                                }
+                            });
+                        })
+                        .catch(function(e) { console.error('Recap nppb fetch:', e); });
+                }
+
+                runFills();
+            })();
+        </script>
+    @endif
 </x-layouts>

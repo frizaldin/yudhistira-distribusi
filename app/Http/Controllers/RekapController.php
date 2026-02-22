@@ -76,25 +76,49 @@ class RekapController extends Controller
                 $userBranchCode = Auth::user()->branch_code ?? null;
             }
 
-            $cacheKey = BuildRekapJob::cacheKey(
-                Auth::id() ?? 0,
-                $year,
-                $filterBookCode,
-                $this->role,
-                $userBranchCode,
-                $filteredBranchCodes
-            );
-
-            if (Cache::has($cacheKey)) {
-                $cached = Cache::get($cacheKey);
-                return view($cached['view'], array_merge($cached['data'], ['recap_from_cache' => true]));
+            // Mode AJAX: load halaman ringan, data diisi per bagian via API (menghindari 500/timeout)
+            $filterBranchCode = trim((string) $request->input('branch_code', ''));
+            $activeCutoff = CutoffData::where('status', 'active')->first();
+            $allBranchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_name');
+            if ($filteredBranchCodes !== null) {
+                $allBranchesQuery->whereIn('branch_code', $filteredBranchCodes);
             }
+            $allBranchesForFilter = $allBranchesQuery->get();
 
-            // Tanpa queue: proses langsung di request, simpan ke cache untuk kunjungan berikutnya
-            $result = $this->buildRecapDataForCache($year, $filterBookCode, $this->role, $userBranchCode, $filteredBranchCodes, $this->callbackfolder);
-            Cache::put($cacheKey, $result, now()->addMinutes(15));
-            return view($result['view'], array_merge($result['data'], ['recap_from_cache' => false]));
-        } catch (\Throwable $e) {
+            $branchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_name');
+            if ($filterBranchCode !== '') {
+                $allowed = $filteredBranchCodes === null || in_array($filterBranchCode, $filteredBranchCodes);
+                if ($allowed) {
+                    $branchesQuery->where('branch_code', $filterBranchCode);
+                } else {
+                    $branchesQuery->whereRaw('1 = 0');
+                }
+            } elseif ($filteredBranchCodes !== null) {
+                $branchesQuery->whereIn('branch_code', $filteredBranchCodes);
+            }
+            $branches = $branchesQuery->get();
+
+            $filterBookTitle = '';
+            if ($filterBookCode !== '') {
+                $product = Product::where('book_code', $filterBookCode)->first();
+                $filterBookTitle = $product->book_title ?? '';
+            }
+            return view($this->callbackfolder . '.rekapitulasi.index', [
+                'title' => $this->title,
+                'base_url' => $this->base_url,
+                'year' => $year,
+                'use_ajax' => true,
+                'branches' => $branches,
+                'allBranchesForFilter' => $allBranchesForFilter,
+                'nasional' => null,
+                'areas' => [],
+                'activeCutoff' => $activeCutoff,
+                'filterBookCode' => $filterBookCode,
+                'filterBookTitle' => $filterBookTitle,
+                'filterBranchCode' => $filterBranchCode,
+            ]);
+
+            } catch (\Throwable $e) {
             Log::error('RekapController@index: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'file' => $e->getFile(),
@@ -157,6 +181,12 @@ class RekapController extends Controller
             $filterBookCode = trim((string) $request->input('book_code', ''));
             $userBranchCode = $this->role == 2 && Auth::check() ? (Auth::user()->branch_code ?? null) : null;
             $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+            $filterBranchCode = trim((string) $request->input('branch_code', ''));
+            if ($filterBranchCode !== '') {
+                $filteredBranchCodes = $filteredBranchCodes !== null
+                    ? array_values(array_intersect([$filterBranchCode], $filteredBranchCodes))
+                    : [$filterBranchCode];
+            }
 
             $result = $this->buildRecapDataForCache($year, $filterBookCode, $this->role, $userBranchCode, $filteredBranchCodes, $this->callbackfolder);
             $data = $result['data'];
@@ -256,6 +286,224 @@ class RekapController extends Controller
         } catch (\Throwable $e) {
             Log::error('RekapController@export: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return redirect()->route('recap.index')->with('error', 'Gagal mengekspor data rekap.');
+        }
+    }
+
+    /**
+     * API: Summary (penjualan SMT + NKB + stock cabang) per cabang.
+     */
+    public function apiSummary(Request $request)
+    {
+        try {
+            $ctx = $this->getRecapApiContext($request);
+            if ($ctx instanceof \Illuminate\Http\JsonResponse) {
+                return $ctx;
+            }
+            ['startDate' => $startDate, 'endDate' => $endDate, 'filterBookCode' => $filterBookCode, 'userBranchCode' => $userBranchCode, 'filteredBranchCodes' => $filteredBranchCodes, 'activeCutoff' => $activeCutoff] = $ctx;
+
+            $targetsQuery = Target::select(['targets.branch_code', DB::raw('SUM(targets.exemplar) as total_target')])
+                ->join('periods', 'targets.period_code', '=', 'periods.period_code');
+            $this->applyRecapDateFilter($targetsQuery, $activeCutoff, $startDate, $endDate, $ctx['year']);
+            $targets = $targetsQuery->when($filterBookCode !== '', fn($q) => $q->where('targets.book_code', $filterBookCode))
+                ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('targets.branch_code', $filteredBranchCodes))
+                ->groupBy('targets.branch_code')->get()->keyBy('branch_code');
+
+            $spQuery = SpBranch::select([
+                'sp_branches.branch_code',
+                DB::raw('SUM(sp_branches.ex_sp) as total_sp'),
+                DB::raw('SUM(sp_branches.ex_ftr) as total_faktur'),
+                DB::raw('SUM(sp_branches.ex_sp) - SUM(sp_branches.ex_ftr) as sisa_sp'),
+                DB::raw('COALESCE(SUM(sp_branches.ex_rec_pst), 0) as total_nkb'),
+                DB::raw('SUM(sp_branches.ex_stock) as total_stok_cabang'),
+            ])->where('sp_branches.active_data', 'yes')->whereNotNull('sp_branches.branch_code');
+            $this->applyRecapSpDateFilter($spQuery, $activeCutoff, $startDate, $endDate);
+            $spQuery->when($filterBookCode !== '', fn($q) => $q->where('sp_branches.book_code', $filterBookCode))
+                ->when($userBranchCode, fn($q) => $q->where('sp_branches.branch_code', $userBranchCode))
+                ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('sp_branches.branch_code', $filteredBranchCodes));
+            $spRows = $spQuery->groupBy('sp_branches.branch_code')->get();
+
+            $nasional = ['target' => 0, 'total_sp' => 0, 'total_faktur' => 0, 'sisa_sp' => 0, 'total_nkb' => 0, 'total_stok_cabang' => 0];
+            $branches = [];
+            foreach ($spRows as $row) {
+                $target = (float) ($targets->get($row->branch_code)?->total_target ?? 0);
+                $nasional['target'] += $target;
+                $nasional['total_sp'] += (float) $row->total_sp;
+                $nasional['total_faktur'] += (float) $row->total_faktur;
+                $nasional['sisa_sp'] += (float) $row->sisa_sp;
+                $nasional['total_nkb'] += (float) $row->total_nkb;
+                $nasional['total_stok_cabang'] += (float) $row->total_stok_cabang;
+                $branches[$row->branch_code] = [
+                    'target' => $target,
+                    'total_sp' => (float) $row->total_sp,
+                    'total_faktur' => (float) $row->total_faktur,
+                    'sisa_sp' => (float) $row->sisa_sp,
+                    'total_nkb' => (float) $row->total_nkb,
+                    'total_stok_cabang' => (float) $row->total_stok_cabang,
+                ];
+            }
+            return response()->json(['nasional' => $nasional, 'branches' => $branches]);
+        } catch (\Throwable $e) {
+            Log::error('RekapController@apiSummary: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * API: Ketersediaan stock (THD target & THD SP lebih/kurang).
+     */
+    public function apiKetersediaan(Request $request)
+    {
+        try {
+            $ctx = $this->getRecapApiContext($request);
+            if ($ctx instanceof \Illuminate\Http\JsonResponse) {
+                return $ctx;
+            }
+            ['startDate' => $startDate, 'endDate' => $endDate, 'filterBookCode' => $filterBookCode, 'userBranchCode' => $userBranchCode, 'filteredBranchCodes' => $filteredBranchCodes] = $ctx;
+
+            $branchBooksQuery = SpBranch::select(['sp_branches.branch_code', 'sp_branches.book_code', DB::raw('SUM(sp_branches.ex_stock) as stok'), DB::raw('SUM(sp_branches.ex_sp) as sp')])
+                ->where('sp_branches.active_data', 'yes')->whereNotNull('sp_branches.book_code');
+            $this->applyRecapSpDateFilter($branchBooksQuery, $ctx['activeCutoff'], $startDate, $endDate);
+            $branchBooks = $branchBooksQuery->when($filterBookCode !== '', fn($q) => $q->where('sp_branches.book_code', $filterBookCode))
+                ->when($userBranchCode, fn($q) => $q->where('sp_branches.branch_code', $userBranchCode))
+                ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('sp_branches.branch_code', $filteredBranchCodes))
+                ->groupBy('sp_branches.branch_code', 'sp_branches.book_code')->get();
+
+            $bookTargetsQuery = Target::select(['targets.branch_code', 'targets.book_code', DB::raw('SUM(targets.exemplar) as target')])
+                ->join('periods', 'targets.period_code', '=', 'periods.period_code')->whereNotNull('targets.book_code');
+            $this->applyRecapDateFilter($bookTargetsQuery, $ctx['activeCutoff'], $startDate, $endDate, $ctx['year']);
+            $bookTargets = $bookTargetsQuery->when($filterBookCode !== '', fn($q) => $q->where('targets.book_code', $filterBookCode))
+                ->when($userBranchCode, fn($q) => $q->where('targets.branch_code', $userBranchCode))
+                ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('targets.branch_code', $filteredBranchCodes))
+                ->groupBy('targets.branch_code', 'targets.book_code')->get();
+            $targetByBranchBook = $bookTargets->groupBy('branch_code')->map(fn($items) => $items->keyBy('book_code'));
+
+            $thdByBranch = [];
+            foreach ($branchBooks->groupBy('branch_code') as $branchCode => $books) {
+                $thdSpLebih = $thdSpKurang = $thdTargetLebih = $thdTargetKurang = 0;
+                foreach ($books as $b) {
+                    $stok = (float) ($b->stok ?? 0);
+                    $sp = (float) ($b->sp ?? 0);
+                    $diffSp = $stok - $sp;
+                    $thdSpLebih += $diffSp > 0 ? $diffSp : 0;
+                    $thdSpKurang += $diffSp < 0 ? abs($diffSp) : 0;
+                    $target = (float) ($targetByBranchBook->get($branchCode)?->get($b->book_code)?->target ?? 0);
+                    $diffTarget = $stok - $target;
+                    $thdTargetLebih += $diffTarget > 0 ? $diffTarget : 0;
+                    $thdTargetKurang += $diffTarget < 0 ? abs($diffTarget) : 0;
+                }
+                $thdByBranch[$branchCode] = ['thd_target_lebih' => $thdTargetLebih, 'thd_target_kurang' => $thdTargetKurang, 'thd_sp_lebih' => $thdSpLebih, 'thd_sp_kurang' => $thdSpKurang];
+            }
+
+            $nasional = ['thd_target_lebih' => 0, 'thd_target_kurang' => 0, 'thd_sp_lebih' => 0, 'thd_sp_kurang' => 0];
+            foreach ($thdByBranch as $bc => $v) {
+                $nasional['thd_target_lebih'] += $v['thd_target_lebih'];
+                $nasional['thd_target_kurang'] += $v['thd_target_kurang'];
+                $nasional['thd_sp_lebih'] += $v['thd_sp_lebih'];
+                $nasional['thd_sp_kurang'] += $v['thd_sp_kurang'];
+            }
+            return response()->json(['nasional' => $nasional, 'branches' => $thdByBranch]);
+        } catch (\Throwable $e) {
+            Log::error('RekapController@apiKetersediaan: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * API: Rencana NPPB (koli, pls, exp) per cabang.
+     */
+    public function apiNppb(Request $request)
+    {
+        try {
+            $ctx = $this->getRecapApiContext($request);
+            if ($ctx instanceof \Illuminate\Http\JsonResponse) {
+                return $ctx;
+            }
+            ['startDate' => $startDate, 'endDate' => $endDate, 'filterBookCode' => $filterBookCode, 'userBranchCode' => $userBranchCode, 'filteredBranchCodes' => $filteredBranchCodes] = $ctx;
+
+            $nppbQuery = NppbCentral::select(['branch_code', DB::raw('SUM(koli) as total_koli'), DB::raw('SUM(pls) as total_pls'), DB::raw('SUM(exp) as total_exp')]);
+            if ($ctx['activeCutoff']) {
+                $startDate !== null ? $nppbQuery->whereBetween('date', [$startDate, $endDate]) : $nppbQuery->where('date', '<=', $endDate);
+            }
+            $nppbRows = $nppbQuery->when($filterBookCode !== '', fn($q) => $q->where('book_code', $filterBookCode))
+                ->when($userBranchCode, fn($q) => $q->where('branch_code', $userBranchCode))
+                ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+                ->groupBy('branch_code')->get();
+
+            $nasional = ['total_nppb_koli' => 0, 'total_nppb_pls' => 0, 'total_nppb_exp' => 0];
+            $branches = [];
+            foreach ($nppbRows as $row) {
+                $nasional['total_nppb_koli'] += (float) $row->total_koli;
+                $nasional['total_nppb_pls'] += (float) $row->total_pls;
+                $nasional['total_nppb_exp'] += (float) $row->total_exp;
+                $branches[$row->branch_code] = ['nppb_koli' => (float) $row->total_koli, 'nppb_pls' => (float) $row->total_pls, 'nppb_exp' => (float) $row->total_exp];
+            }
+            return response()->json(['nasional' => $nasional, 'branches' => $branches]);
+        } catch (\Throwable $e) {
+            Log::error('RekapController@apiNppb: ' . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function getRecapApiContext(Request $request): array|\Illuminate\Http\JsonResponse
+    {
+        try {
+            if (Auth::check()) {
+                $user = Auth::user();
+                $this->role = (int) ($user->authority_id ?? 1);
+            } else {
+                $this->role = 1;
+            }
+            $userBranchCode = $this->role == 2 && Auth::check() ? (Auth::user()->branch_code ?? null) : null;
+            $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+            $filterBranchCode = trim((string) $request->input('branch_code', ''));
+            if ($filterBranchCode !== '') {
+                $filteredBranchCodes = $filteredBranchCodes !== null
+                    ? array_values(array_intersect([$filterBranchCode], $filteredBranchCodes))
+                    : [$filterBranchCode];
+            }
+            $year = $request->input('year', date('Y'));
+            $filterBookCode = trim((string) $request->input('book_code', ''));
+            $activeCutoff = CutoffData::where('status', 'active')->first();
+            $startDate = $endDate = null;
+            if ($activeCutoff) {
+                $endDate = $activeCutoff->end_date ? \Carbon\Carbon::parse($activeCutoff->end_date)->format('Y-m-d') : null;
+                $startDate = $activeCutoff->start_date ? \Carbon\Carbon::parse($activeCutoff->start_date)->format('Y-m-d') : null;
+            }
+            return [
+                'year' => $year,
+                'filterBookCode' => $filterBookCode,
+                'userBranchCode' => $userBranchCode,
+                'filteredBranchCodes' => $filteredBranchCodes,
+                'activeCutoff' => $activeCutoff,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+            ];
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function applyRecapDateFilter($query, $activeCutoff, $startDate, $endDate, $year): void
+    {
+        if ($activeCutoff) {
+            if ($startDate !== null) {
+                $query->where(function ($q) use ($startDate, $endDate) {
+                    $q->where('periods.from_date', '<=', $endDate)->where('periods.to_date', '>=', $startDate);
+                });
+            } else {
+                $query->where('periods.to_date', '<=', $endDate);
+            }
+        } else {
+            $query->where(function ($q) use ($year) {
+                $q->whereYear('periods.from_date', $year)->orWhereYear('periods.to_date', $year);
+            });
+        }
+    }
+
+    private function applyRecapSpDateFilter($query, $activeCutoff, $startDate, $endDate): void
+    {
+        if ($activeCutoff) {
+            $startDate !== null ? $query->whereBetween('sp_branches.trans_date', [$startDate, $endDate]) : $query->where('sp_branches.trans_date', '<=', $endDate);
         }
     }
 

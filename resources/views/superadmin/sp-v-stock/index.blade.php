@@ -4,7 +4,7 @@
             <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
                 <div>
                     <strong>Sp Terhadap Stok</strong><br />
-                    <small class="text-muted">Analisis persentase SP terhadap Stock Pusat</small>
+                    <small class="text-muted">Stock Pusat + Stock Nasional + Faktur vs SP — persentase lebih/kurang</small>
                 </div>
             </div>
 
@@ -39,10 +39,14 @@
                         <tr>
                             <th class="text-center" style="width: 50px;">NO</th>
                             <th class="text-left">Nama Produk</th>
-                            <th class="text-center" style="width: 120px;">Stock Pusat</th>
-                            <th class="text-center" style="width: 120px;">SP</th>
-                            <th class="text-center" style="width: 120px;">Persentase</th>
-                            <th class="text-center" style="width: 120px;">Status</th>
+                            <th class="text-center" style="width: 100px;">Stock Pusat</th>
+                            <th class="text-center" style="width: 100px;">Stock Nasional</th>
+                            <th class="text-center" style="width: 100px;">Faktur</th>
+                            <th class="text-center" style="width: 120px;">Total (Pusat+Nas+Ftr)</th>
+                            <th class="text-center" style="width: 100px;">SP</th>
+                            <th class="text-center" style="width: 130px;">Persentase terpenuhi</th>
+                            <th class="text-center" style="width: 130px;">Persentase belum terpenuhi</th>
+                            <th class="text-center" style="width: 100px;">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -53,14 +57,20 @@
                                     <code>{{ $item['book_code'] }}</code><br>
                                     <small class="text-muted">{{ $item['book_name'] }}</small>
                                 </td>
+                                <td class="text-center">{{ number_format($item['stock_pusat'], 0, ',', '.') }}</td>
+                                <td class="text-center">{{ number_format($item['stock_nasional'], 0, ',', '.') }}</td>
+                                <td class="text-center">{{ number_format($item['faktur'], 0, ',', '.') }}</td>
+                                <td class="text-center"><strong>{{ number_format($item['total_stock_faktur'], 0, ',', '.') }}</strong></td>
+                                <td class="text-center">{{ number_format($item['sp'], 0, ',', '.') }}</td>
                                 <td class="text-center">
-                                    {{ number_format($item['stock_pusat'], 0, ',', '.') }}
+                                    <strong class="{{ $item['persentase_terpenuhi'] >= 100 ? 'text-success' : ($item['persentase_terpenuhi'] < 100 ? 'text-warning' : '') }}">
+                                        {{ number_format($item['persentase_terpenuhi'], 2, ',', '.') }}%
+                                    </strong>
                                 </td>
                                 <td class="text-center">
-                                    {{ number_format($item['sp'], 0, ',', '.') }}
-                                </td>
-                                <td class="text-center">
-                                    <strong>{{ number_format($item['persentase'], 2, ',', '.') }}%</strong>
+                                    <strong class="{{ $item['persentase_belum_terpenuhi'] > 0 ? 'text-danger' : 'text-muted' }}">
+                                        {{ number_format($item['persentase_belum_terpenuhi'], 2, ',', '.') }}%
+                                    </strong>
                                 </td>
                                 <td class="text-center">
                                     @if ($item['status'] == 'kurang')
@@ -74,7 +84,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center py-4">
+                                <td colspan="10" class="text-center py-4">
                                     <div class="text-muted">
                                         <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                         Tidak ada data ditemukan.
@@ -96,11 +106,12 @@
             <!-- Legend -->
             <div class="mt-3">
                 <small class="text-muted">
-                    <strong>Rumus Persentase:</strong> (Stock Pusat − SP) / SP × 100. Jika Stock &lt; SP → minus.<br>
-                    <strong>Keterangan Status:</strong><br>
-                    <span class="badge bg-danger">Kurang</span> = Persentase &lt; 70% (stock kurang dari SP)<br>
-                    <span class="badge bg-warning text-dark">Cukup</span> = Persentase = 70%<br>
-                    <span class="badge bg-success">Lebih</span> = Persentase &gt; 70% (stock lebih dari SP)
+                    <strong>Rumus:</strong> Total = Stock Pusat + Stock Nasional + Faktur. Terpenuhi = (Total / SP) × 100%. Belum terpenuhi = 100% − Terpenuhi (min 0).<br>
+                    <strong>Contoh:</strong> Total 80 vs SP 100 → Terpenuhi 80%, Belum terpenuhi 20%. Total 120 vs SP 100 → Terpenuhi 120%, Belum terpenuhi 0%.<br>
+                    <strong>Status:</strong>
+                    <span class="badge bg-danger">Kurang</span> = terpenuhi &lt; 100%,
+                    <span class="badge bg-warning text-dark">Cukup</span> = terpenuhi = 100%,
+                    <span class="badge bg-success">Lebih</span> = terpenuhi &gt; 100%.
                 </small>
             </div>
         </div>

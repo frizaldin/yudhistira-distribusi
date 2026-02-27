@@ -25,6 +25,8 @@ class Product extends Model
         'category',
         'category_manual',
         'serial',
+        'warehouse',
+        'is_marketing_list',
     ];
 
     public $timestamps = false;

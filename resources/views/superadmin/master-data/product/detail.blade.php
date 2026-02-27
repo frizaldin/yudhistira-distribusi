@@ -30,9 +30,19 @@
                         <span class="badge bg-light text-dark mt-1">{{ $product->jenjang ?? '-' }}</span>
                     @endif
                 </div>
-                <a href="{{ route('product.index') }}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i>Kembali ke Daftar Produk
-                </a>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <form class="d-flex gap-1 align-items-center" id="formCariKodeBuku" style="min-width: 200px;">
+                        <input type="text" id="inputKodeBuku" class="form-control form-control-sm"
+                            placeholder="Cari kode buku..." autocomplete="off"
+                            style="width: 140px;">
+                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </form>
+                    <a href="{{ route('product.index') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-left me-1"></i>Kembali ke Daftar Produk
+                    </a>
+                </div>
             </div>
 
             <form method="GET" action="{{ route('product.detail', ['book_code' => $product->book_code]) }}"
@@ -182,4 +192,16 @@
             </div>
         </div>
     </div>
+
+    @push('js')
+        <script>
+            document.getElementById('formCariKodeBuku').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var kode = document.getElementById('inputKodeBuku').value.trim();
+                if (!kode) return;
+                var url = '{{ url("/product") }}/' + encodeURIComponent(kode) + '/detail';
+                window.location.href = url;
+            });
+        </script>
+    @endpush
 </x-layouts>

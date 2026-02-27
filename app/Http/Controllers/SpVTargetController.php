@@ -78,20 +78,25 @@ class SpVTargetController extends Controller
             $target = $targetData->get($product->book_code)?->total_target ?? 0;
             $sp = $spData->get($product->book_code)?->total_sp ?? 0;
 
-            $persentase = 0;
+            // SP vs Target: terpenuhi = (SP/Target)*100%, belum terpenuhi = 100% - terpenuhi (min 0)
+            $persentaseTerpenuhi = 0;
+            $persentaseBelumTerpenuhi = 0;
             if ($target > 0) {
-                $persentase = (($sp - $target) / $target) * 100;
+                $persentaseTerpenuhi = ($sp / $target) * 100;
+                $persentaseBelumTerpenuhi = max(0, 100 - $persentaseTerpenuhi);
             } else {
-                $persentase = $sp > 0 ? -100 : 0;
+                $persentaseTerpenuhi = $sp > 0 ? 100 : 0;
             }
 
-            // Hanya Kurang dan Lebih (tidak ada Cukup)
-            if ($persentase < 70) {
+            if ($persentaseTerpenuhi < 100) {
                 $status = 'kurang';
                 $statusClass = 'danger';
-            } else {
+            } elseif ($persentaseTerpenuhi > 100) {
                 $status = 'lebih';
                 $statusClass = 'success';
+            } else {
+                $status = 'cukup';
+                $statusClass = 'warning';
             }
 
             $data[] = [
@@ -99,7 +104,8 @@ class SpVTargetController extends Controller
                 'book_name' => $product->book_title,
                 'target' => $target,
                 'sp' => $sp,
-                'persentase' => round($persentase, 2),
+                'persentase_terpenuhi' => round($persentaseTerpenuhi, 2),
+                'persentase_belum_terpenuhi' => round($persentaseBelumTerpenuhi, 2),
                 'status' => $status,
                 'status_class' => $statusClass,
             ];

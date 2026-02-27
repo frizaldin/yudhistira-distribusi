@@ -19,12 +19,12 @@
     <style>
         /* Ensure Select2 containers have the same height as form controls (auto) */
         .select2-container--bootstrap-5 {
-            height: auto !important;
+            height: 38px !important;
             line-height: auto !important;
         }
 
         .select2-container--bootstrap-5 .select2-selection {
-            height: auto !important;
+            height: 38px !important;
             min-height: auto !important;
             max-height: auto !important;
             border: 1px solid #ced4da !important;
@@ -37,7 +37,7 @@
             padding-bottom: 0 !important;
             padding-left: 0.75rem !important;
             padding-right: 2rem !important;
-            height: auto !important;
+            height: 32px !important;
             display: flex !important;
             align-items: center !important;
             justify-content: flex-start !important;
@@ -49,7 +49,6 @@
         }
 
         .select2-container--bootstrap-5 .select2-selection__arrow {
-            height: auto !important;
             top: 0 !important;
             right: 1px !important;
             display: flex !important;
@@ -57,7 +56,7 @@
         }
 
         .select2-container--bootstrap-5 .select2-selection__clear {
-            height: auto !important;
+            height: 38px !important;
             line-height: auto !important;
             margin-top: 0 !important;
             display: flex !important;
@@ -173,13 +172,15 @@
                                         @if ($activeCutoff->start_date)
                                             {{ \Carbon\Carbon::parse($activeCutoff->start_date)->format('d M') }} -
                                         @endif
-                                        {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d M Y') }}</span>
+                                        {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d M Y') }}
+                                    </span>
                                 @else
                                     Pilih Range
                                 @endif
                             </button>
-                            <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2" data-bs-toggle="modal"
-                                data-bs-target="#modalCabangDikelola" title="Cabang yang dikelola">
+                            <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2"
+                                data-bs-toggle="modal" data-bs-target="#modalCabangDikelola"
+                                title="Cabang yang dikelola">
                                 <i class="bi bi-info-circle"></i>
                             </button>
                             <button class="btn btn-sm btn-outline-secondary rounded-pill">

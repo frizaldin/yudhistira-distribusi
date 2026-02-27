@@ -3,7 +3,6 @@
 namespace App\Imports;
 
 use App\Models\Product;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithStartRow;
@@ -11,11 +10,13 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Illuminate\Support\Collection;
 
 /**
- * Import hanya update field category_manual dan serial dari Excel "IDENTIFIKASI BUKU".
- * Kolom A = KODE (book_code), G = SERIAL, H = KATEGORI (category_manual).
+ * Import update field category_manual, serial, warehouse, is_marketing_list dari Excel "IDENTIFIKASI BUKU".
+ * Kolom A = KODE (book_code), F = GUDANG (warehouse), G = SERIAL, H = KATEGORI (category_manual).
+ * Semua baris yang di-import akan di-set is_marketing_list = 'Y'.
  * Baris SUBTOTAL / SUB JUDUL di-skip.
+ * Dipanggil dari ImportProductCategorySerialJob (satu job = satu file, chunk dibaca di dalam job).
  */
-class ProductCategorySerialImport implements ToCollection, WithStartRow, WithChunkReading, SkipsEmptyRows, ShouldQueue
+class ProductCategorySerialImport implements ToCollection, WithStartRow, WithChunkReading, SkipsEmptyRows
 {
     /**
      * Baris mulai baca data (1-based). Header di row 3, data dari row 8.
@@ -38,7 +39,8 @@ class ProductCategorySerialImport implements ToCollection, WithStartRow, WithChu
         foreach ($rows as $row) {
             $row = $row->toArray();
             $kode = $this->sanitize($row[0] ?? '');
-            $kelas = $this->sanitize($row[4] ?? ''); // E = KELAS (untuk skip SUB JUDUL)
+            $kelas = $this->sanitize($row[4] ?? '');   // E = KELAS (untuk skip SUB JUDUL)
+            $gudang = $this->sanitize($row[5] ?? '');  // F = GUDANG → warehouse
             $serial = $this->sanitize($row[6] ?? '');  // G = SERIAL
             $kategori = $this->sanitize($row[7] ?? ''); // H = KATEGORI → category_manual
 
@@ -58,6 +60,8 @@ class ProductCategorySerialImport implements ToCollection, WithStartRow, WithChu
             Product::where('book_code', $kode)->update([
                 'serial' => $serial ?: null,
                 'category_manual' => $kategori ?: null,
+                'warehouse' => $gudang ?: null,
+                'is_marketing_list' => 'Y',
             ]);
         }
     }

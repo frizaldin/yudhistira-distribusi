@@ -65,10 +65,12 @@ class SpVStockController extends Controller
         }
         $centralStocks = $centralStocksQuery->get()->keyBy('book_code');
 
-        // Get SP per book_code (SUM dari SpBranch ex_sp, hanya active_data = 'yes')
+        // Get SP, Faktur, Stock Nasional per book_code (SUM dari SpBranch, hanya active_data = 'yes')
         $spDataQuery = SpBranch::select([
             'book_code',
-            DB::raw('SUM(ex_sp) as total_sp')
+            DB::raw('SUM(ex_sp) as total_sp'),
+            DB::raw('SUM(ex_ftr) as total_faktur'),
+            DB::raw('SUM(ex_stock) as stock_nasional'),
         ])
             ->where('active_data', 'yes')
             ->groupBy('book_code');
@@ -77,34 +79,33 @@ class SpVStockController extends Controller
         }
         $spData = $spDataQuery->get()->keyBy('book_code');
 
-        // Calculate percentage and status for each product
+        // Total = Stock Pusat + Stock Nasional + Faktur. Persentase = (Total - SP) / SP * 100 (lebih/kurang).
         $data = [];
         foreach ($products as $product) {
             $stockPusat = $centralStocks->get($product->book_code)->total_stock_pusat ?? 0;
-            $sp = $spData->get($product->book_code)->total_sp ?? 0;
+            $row = $spData->get($product->book_code);
+            $sp = $row->total_sp ?? 0;
+            $faktur = $row->total_faktur ?? 0;
+            $stockNasional = $row->stock_nasional ?? 0;
 
-            // Persentase = (Stock - SP) / SP * 100
-            // Jika Stock < SP → minus (kurang), Stock > SP → plus (lebih), Stock = SP → 0%
-            $persentase = 0;
+            $total = $stockPusat + $stockNasional + $faktur;
+
+            // Total vs SP: terpenuhi = (Total/SP)*100, belum terpenuhi = 100 - terpenuhi (min 0)
+            $persentaseTerpenuhi = 0;
+            $persentaseBelumTerpenuhi = 0;
             if ($sp > 0) {
-                $persentase = (($stockPusat - $sp) / $sp) * 100;
+                $persentaseTerpenuhi = ($total / $sp) * 100;
+                $persentaseBelumTerpenuhi = max(0, 100 - $persentaseTerpenuhi);
             } else {
-                // SP = 0: tidak ada pesanan, kalau ada stock anggap 100%
-                $persentase = $stockPusat > 0 ? 100 : 0;
+                $persentaseTerpenuhi = $total > 0 ? 100 : 0;
             }
 
-            // Determine status
-            // Logika: Kurang = < 70% (termasuk minus), Cukup = == 70%, Lebih = > 70%
             $status = 'cukup';
             $statusClass = 'warning';
-            if ($persentase < 70) {
+            if ($persentaseTerpenuhi < 100) {
                 $status = 'kurang';
                 $statusClass = 'danger';
-            } elseif ($persentase == 70) {
-                $status = 'cukup';
-                $statusClass = 'warning';
-            } else {
-                // persentase > 70
+            } elseif ($persentaseTerpenuhi > 100) {
                 $status = 'lebih';
                 $statusClass = 'success';
             }
@@ -113,8 +114,12 @@ class SpVStockController extends Controller
                 'book_code' => $product->book_code,
                 'book_name' => $product->book_title,
                 'stock_pusat' => $stockPusat,
+                'stock_nasional' => $stockNasional,
+                'faktur' => $faktur,
+                'total_stock_faktur' => $total,
                 'sp' => $sp,
-                'persentase' => round($persentase, 2),
+                'persentase_terpenuhi' => round($persentaseTerpenuhi, 2),
+                'persentase_belum_terpenuhi' => round($persentaseBelumTerpenuhi, 2),
                 'status' => $status,
                 'status_class' => $statusClass,
             ];

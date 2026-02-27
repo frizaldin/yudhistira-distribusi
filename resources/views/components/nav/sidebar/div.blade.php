@@ -41,6 +41,9 @@
         <x-nav.sidebar.menu url="{{ url('nppb-central') }}" key="nppb-central" icon="bi bi-truck" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nppb-warehouse') }}" key="nppb-warehouse" icon="bi bi-truck"
             :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('preparation-notes') }}" key="preparation_notes" icon="bi bi-card-list" :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('nkb') }}" key="nkb" icon="bi bi-file-earmark-text" :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('delivery-orders') }}" key="delivery_orders" icon="bi bi-truck" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('recap') }}" key="recap" icon="bi bi-journal" :authority="$authority" />
 
         @if ((auth()->user()->authority_id ?? null) == 1 || (auth()->user()->authority_id ?? null) == 4)

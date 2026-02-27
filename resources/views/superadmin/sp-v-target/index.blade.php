@@ -38,10 +38,11 @@
                         <tr>
                             <th class="text-center" style="width: 50px;">NO</th>
                             <th class="text-left">Nama Produk</th>
-                            <th class="text-center" style="width: 120px;">Target</th>
-                            <th class="text-center" style="width: 120px;">SP</th>
-                            <th class="text-center" style="width: 120px;">Persentase</th>
-                            <th class="text-center" style="width: 120px;">Status</th>
+                            <th class="text-center" style="width: 100px;">Target</th>
+                            <th class="text-center" style="width: 100px;">SP</th>
+                            <th class="text-center" style="width: 130px;">Persentase terpenuhi</th>
+                            <th class="text-center" style="width: 130px;">Persentase belum terpenuhi</th>
+                            <th class="text-center" style="width: 100px;">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -52,18 +53,23 @@
                                     <code>{{ $item['book_code'] }}</code><br>
                                     <small class="text-muted">{{ $item['book_name'] }}</small>
                                 </td>
+                                <td class="text-center">{{ number_format($item['target'], 0, ',', '.') }}</td>
+                                <td class="text-center">{{ number_format($item['sp'], 0, ',', '.') }}</td>
                                 <td class="text-center">
-                                    {{ number_format($item['target'], 0, ',', '.') }}
+                                    <strong class="{{ $item['persentase_terpenuhi'] >= 100 ? 'text-success' : ($item['persentase_terpenuhi'] < 100 ? 'text-warning' : '') }}">
+                                        {{ number_format($item['persentase_terpenuhi'], 2, ',', '.') }}%
+                                    </strong>
                                 </td>
                                 <td class="text-center">
-                                    {{ number_format($item['sp'], 0, ',', '.') }}
-                                </td>
-                                <td class="text-center">
-                                    <strong>{{ number_format($item['persentase'], 2, ',', '.') }}%</strong>
+                                    <strong class="{{ $item['persentase_belum_terpenuhi'] > 0 ? 'text-danger' : 'text-muted' }}">
+                                        {{ number_format($item['persentase_belum_terpenuhi'], 2, ',', '.') }}%
+                                    </strong>
                                 </td>
                                 <td class="text-center">
                                     @if ($item['status'] == 'kurang')
                                         <span class="badge bg-danger">Kurang</span>
+                                    @elseif ($item['status'] == 'cukup')
+                                        <span class="badge bg-warning text-dark">Cukup</span>
                                     @else
                                         <span class="badge bg-success">Lebih</span>
                                     @endif
@@ -71,7 +77,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center py-4">
+                                <td colspan="7" class="text-center py-4">
                                     <div class="text-muted">
                                         <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                                         Tidak ada data ditemukan.
@@ -88,6 +94,17 @@
                     {{ $data->links('pagination::bootstrap-5') }}
                 </div>
             @endif
+
+            <div class="mt-3">
+                <small class="text-muted">
+                    <strong>Rumus:</strong> Terpenuhi = (SP / Target) × 100%. Belum terpenuhi = 100% − Terpenuhi (min 0).<br>
+                    <strong>Contoh:</strong> SP 80 vs Target 100 → Terpenuhi 80%, Belum terpenuhi 20%. SP 120 vs Target 100 → Terpenuhi 120%, Belum terpenuhi 0%.<br>
+                    <strong>Status:</strong>
+                    <span class="badge bg-danger">Kurang</span> = terpenuhi &lt; 100%,
+                    <span class="badge bg-warning text-dark">Cukup</span> = terpenuhi = 100%,
+                    <span class="badge bg-success">Lebih</span> = terpenuhi &gt; 100%.
+                </small>
+            </div>
         </div>
     </div>
 </x-layouts>

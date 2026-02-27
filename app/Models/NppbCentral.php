@@ -18,6 +18,9 @@ class NppbCentral extends Model
         'exp',
         'date',
         'volume',
+        'stack',
+        'document_id',
+        'created_by',
     ];
 
     protected $casts = [
@@ -34,5 +37,21 @@ class NppbCentral extends Model
     public function branch()
     {
         return $this->belongsTo(Branch::class, 'branch_code', 'branch_code');
+    }
+
+    /**
+     * User yang membuat record (simpan NPPB).
+     */
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by', 'id');
+    }
+
+    /**
+     * Dokumen NPPB (setelah Approve Rencana).
+     */
+    public function nppbDocument()
+    {
+        return $this->belongsTo(NppbDocument::class, 'document_id', 'id');
     }
 }

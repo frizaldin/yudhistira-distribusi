@@ -70,20 +70,16 @@ class DashboardController extends Controller
         // Get branch filter from request
         $selectedBranchCode = $request->input('branch', null);
 
-        // Jika role ADP (authority_id = 3), seluruh data hanya cabang dari user->branch
         $userBranchCode = null;
         $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
-        if ($this->role == 3) {
-            // ADP: filter tetap dari getBranchFilterForCurrentUser() (bisa array kosong = tidak ada data)
-            $userBranchCode = null;
-        } elseif ($this->role == 2 && Auth::check()) {
+        if ($this->role == 2 && Auth::check()) {
             $userBranchCode = Auth::user()->branch_code ?? null;
             $filteredBranchCodes = null;
         } else {
-            $filteredBranchCodes = null;
+            $filteredBranchCodes = null; // superadmin & ADP: akses global
         }
 
-        // Superadmin/cabang: gunakan pilihan branch dari request atau user
+        // Hanya role cabang dan superadmin yang bisa pilih branch dari request; ADP selalu global
         if ($this->role != 3) {
             if ($selectedBranchCode) {
                 $filteredBranchCodes = [$selectedBranchCode];
@@ -1152,13 +1148,11 @@ class DashboardController extends Controller
         }
         $userBranchCode = null;
         $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
-        if ($this->role == 3) {
-            $userBranchCode = null;
-        } elseif ($this->role == 2 && Auth::check()) {
+        if ($this->role == 2 && Auth::check()) {
             $userBranchCode = Auth::user()->branch_code ?? null;
             $filteredBranchCodes = null;
         } else {
-            $filteredBranchCodes = null;
+            $filteredBranchCodes = null; // superadmin & ADP: akses global
         }
         $selectedBranchCode = $request->input('branch', null);
         if ($this->role != 3) {

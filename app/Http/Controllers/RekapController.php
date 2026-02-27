@@ -79,13 +79,13 @@ class RekapController extends Controller
             // Mode AJAX: load halaman ringan, data diisi per bagian via API (menghindari 500/timeout)
             $filterBranchCode = trim((string) $request->input('branch_code', ''));
             $activeCutoff = CutoffData::where('status', 'active')->first();
-            $allBranchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_name');
+            $allBranchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_code');
             if ($filteredBranchCodes !== null) {
                 $allBranchesQuery->whereIn('branch_code', $filteredBranchCodes);
             }
             $allBranchesForFilter = $allBranchesQuery->get();
 
-            $branchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_name');
+            $branchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_code');
             if ($filterBranchCode !== '') {
                 $allowed = $filteredBranchCodes === null || in_array($filterBranchCode, $filteredBranchCodes);
                 if ($allowed) {
@@ -350,6 +350,7 @@ class RekapController extends Controller
 
     /**
      * API: Ketersediaan stock (THD target & THD SP lebih/kurang).
+     * Di-cache 3 menit per parameter; agregasi per cabang dilakukan di DB agar load ringan.
      */
     public function apiKetersediaan(Request $request)
     {
@@ -360,48 +361,64 @@ class RekapController extends Controller
             }
             ['startDate' => $startDate, 'endDate' => $endDate, 'filterBookCode' => $filterBookCode, 'userBranchCode' => $userBranchCode, 'filteredBranchCodes' => $filteredBranchCodes] = $ctx;
 
-            $branchBooksQuery = SpBranch::select(['sp_branches.branch_code', 'sp_branches.book_code', DB::raw('SUM(sp_branches.ex_stock) as stok'), DB::raw('SUM(sp_branches.ex_sp) as sp')])
+            $cacheKey = 'recap:ketersediaan:' . $ctx['year'] . ':' . $filterBookCode . ':' . ($userBranchCode ?? '') . ':' . (is_array($filteredBranchCodes) ? implode(',', $filteredBranchCodes) : 'all');
+            $cached = Cache::get($cacheKey);
+            if ($cached !== null) {
+                return response()->json($cached);
+            }
+
+            $spSub = SpBranch::select(['sp_branches.branch_code', 'sp_branches.book_code', DB::raw('SUM(sp_branches.ex_stock) as stok'), DB::raw('SUM(sp_branches.ex_sp) as sp')])
                 ->where('sp_branches.active_data', 'yes')->whereNotNull('sp_branches.book_code');
-            $this->applyRecapSpDateFilter($branchBooksQuery, $ctx['activeCutoff'], $startDate, $endDate);
-            $branchBooks = $branchBooksQuery->when($filterBookCode !== '', fn($q) => $q->where('sp_branches.book_code', $filterBookCode))
+            $this->applyRecapSpDateFilter($spSub, $ctx['activeCutoff'], $startDate, $endDate);
+            $spSub->when($filterBookCode !== '', fn($q) => $q->where('sp_branches.book_code', $filterBookCode))
                 ->when($userBranchCode, fn($q) => $q->where('sp_branches.branch_code', $userBranchCode))
                 ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('sp_branches.branch_code', $filteredBranchCodes))
-                ->groupBy('sp_branches.branch_code', 'sp_branches.book_code')->get();
+                ->groupBy('sp_branches.branch_code', 'sp_branches.book_code');
 
-            $bookTargetsQuery = Target::select(['targets.branch_code', 'targets.book_code', DB::raw('SUM(targets.exemplar) as target')])
+            $targetSub = Target::select(['targets.branch_code', 'targets.book_code', DB::raw('SUM(targets.exemplar) as target')])
                 ->join('periods', 'targets.period_code', '=', 'periods.period_code')->whereNotNull('targets.book_code');
-            $this->applyRecapDateFilter($bookTargetsQuery, $ctx['activeCutoff'], $startDate, $endDate, $ctx['year']);
-            $bookTargets = $bookTargetsQuery->when($filterBookCode !== '', fn($q) => $q->where('targets.book_code', $filterBookCode))
+            $this->applyRecapDateFilter($targetSub, $ctx['activeCutoff'], $startDate, $endDate, $ctx['year']);
+            $targetSub->when($filterBookCode !== '', fn($q) => $q->where('targets.book_code', $filterBookCode))
                 ->when($userBranchCode, fn($q) => $q->where('targets.branch_code', $userBranchCode))
                 ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('targets.branch_code', $filteredBranchCodes))
-                ->groupBy('targets.branch_code', 'targets.book_code')->get();
-            $targetByBranchBook = $bookTargets->groupBy('branch_code')->map(fn($items) => $items->keyBy('book_code'));
+                ->groupBy('targets.branch_code', 'targets.book_code');
+
+            $spSql = $spSub->toSql();
+            $targetSql = $targetSub->toSql();
+            $bindings = array_merge($spSub->getBindings(), $targetSub->getBindings());
+
+            $rows = DB::select(
+                "SELECT s.branch_code, " .
+                "SUM(GREATEST(0, s.stok - s.sp)) AS thd_sp_lebih, " .
+                "SUM(GREATEST(0, s.sp - s.stok)) AS thd_sp_kurang, " .
+                "SUM(GREATEST(0, s.stok - IFNULL(t.target, 0))) AS thd_target_lebih, " .
+                "SUM(GREATEST(0, IFNULL(t.target, 0) - s.stok)) AS thd_target_kurang " .
+                "FROM ({$spSql}) s " .
+                "LEFT JOIN ({$targetSql}) t ON s.branch_code = t.branch_code AND s.book_code = t.book_code " .
+                "GROUP BY s.branch_code",
+                $bindings
+            );
 
             $thdByBranch = [];
-            foreach ($branchBooks->groupBy('branch_code') as $branchCode => $books) {
-                $thdSpLebih = $thdSpKurang = $thdTargetLebih = $thdTargetKurang = 0;
-                foreach ($books as $b) {
-                    $stok = (float) ($b->stok ?? 0);
-                    $sp = (float) ($b->sp ?? 0);
-                    $diffSp = $stok - $sp;
-                    $thdSpLebih += $diffSp > 0 ? $diffSp : 0;
-                    $thdSpKurang += $diffSp < 0 ? abs($diffSp) : 0;
-                    $target = (float) ($targetByBranchBook->get($branchCode)?->get($b->book_code)?->target ?? 0);
-                    $diffTarget = $stok - $target;
-                    $thdTargetLebih += $diffTarget > 0 ? $diffTarget : 0;
-                    $thdTargetKurang += $diffTarget < 0 ? abs($diffTarget) : 0;
-                }
-                $thdByBranch[$branchCode] = ['thd_target_lebih' => $thdTargetLebih, 'thd_target_kurang' => $thdTargetKurang, 'thd_sp_lebih' => $thdSpLebih, 'thd_sp_kurang' => $thdSpKurang];
+            $nasional = ['thd_target_lebih' => 0, 'thd_target_kurang' => 0, 'thd_sp_lebih' => 0, 'thd_sp_kurang' => 0];
+            foreach ($rows as $r) {
+                $bc = $r->branch_code;
+                $thdByBranch[$bc] = [
+                    'thd_target_lebih' => (float) $r->thd_target_lebih,
+                    'thd_target_kurang' => (float) $r->thd_target_kurang,
+                    'thd_sp_lebih' => (float) $r->thd_sp_lebih,
+                    'thd_sp_kurang' => (float) $r->thd_sp_kurang,
+                ];
+                $nasional['thd_target_lebih'] += $thdByBranch[$bc]['thd_target_lebih'];
+                $nasional['thd_target_kurang'] += $thdByBranch[$bc]['thd_target_kurang'];
+                $nasional['thd_sp_lebih'] += $thdByBranch[$bc]['thd_sp_lebih'];
+                $nasional['thd_sp_kurang'] += $thdByBranch[$bc]['thd_sp_kurang'];
             }
 
-            $nasional = ['thd_target_lebih' => 0, 'thd_target_kurang' => 0, 'thd_sp_lebih' => 0, 'thd_sp_kurang' => 0];
-            foreach ($thdByBranch as $bc => $v) {
-                $nasional['thd_target_lebih'] += $v['thd_target_lebih'];
-                $nasional['thd_target_kurang'] += $v['thd_target_kurang'];
-                $nasional['thd_sp_lebih'] += $v['thd_sp_lebih'];
-                $nasional['thd_sp_kurang'] += $v['thd_sp_kurang'];
-            }
-            return response()->json(['nasional' => $nasional, 'branches' => $thdByBranch]);
+            $payload = ['nasional' => $nasional, 'branches' => $thdByBranch];
+            Cache::put($cacheKey, $payload, now()->addMinutes(3));
+
+            return response()->json($payload);
         } catch (\Throwable $e) {
             Log::error('RekapController@apiKetersediaan: ' . $e->getMessage());
             return response()->json(['error' => $e->getMessage()], 500);
@@ -526,7 +543,7 @@ class RekapController extends Controller
             $startDate = $activeCutoff->start_date ? \Carbon\Carbon::parse($activeCutoff->start_date)->format('Y-m-d') : null;
         }
 
-        $branchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_name');
+        $branchesQuery = Branch::select(['branch_code', 'branch_name'])->orderBy('branch_code');
         if ($filteredBranchCodes !== null) {
             $branchesQuery->whereIn('branch_code', $filteredBranchCodes);
         }

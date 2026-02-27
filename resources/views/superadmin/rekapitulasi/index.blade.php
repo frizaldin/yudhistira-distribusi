@@ -86,6 +86,9 @@
                     <input type="text" id="filter_book_code" name="book_code" class="form-control form-control-sm"
                         placeholder="Kode buku (kosongkan = semua)"
                         value="{{ request('book_code', $filterBookCode ?? '') }}" style="min-width: 180px;" />
+                    @if (!empty($filterBookCode ?? '') && !empty($filterBookTitle ?? ''))
+                        <small class="text-muted d-block mt-1" id="filter_book_name_label">Nama buku: {{ $filterBookTitle }}</small>
+                    @endif
                 </div>
                 <div class="col-auto">
                     <button type="submit" class="btn btn-primary btn-sm">
@@ -206,6 +209,7 @@
                                     <td class="text-center">{{ $idx + 2 }}</td>
                                     <td class="ps-4">
                                         <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">{{ $branch->branch_name ?? $branch->branch_code }}</a>
+                                        <small class="d-block text-muted">{{ $branch->branch_code }}</small>
                                     </td>
                                     <td class="text-end" data-recap-col="target">...</td>
                                     <td class="text-end" data-recap-col="total_sp">...</td>
@@ -250,7 +254,10 @@
                                 @foreach ($area['branches'] as $branch)
                                     <tr>
                                         <td class="text-center">{{ $rowNumber++ }}</td>
-                                        <td class="ps-4"><a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">{{ $branch->branch_name ?? $branch->branch_code }}</a></td>
+                                        <td class="ps-4">
+                                            <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="text-decoration-none fw-medium">{{ $branch->branch_name ?? $branch->branch_code }}</a>
+                                            <small class="d-block text-muted">{{ $branch->branch_code }}</small>
+                                        </td>
                                         <td class="text-end">{{ number_format($branch->target ?? 0) }}</td>
                                         <td class="text-end">{{ number_format($branch->total_sp ?? 0) }}</td>
                                         <td class="text-end">{{ number_format($branch->total_faktur ?? 0) }}</td>

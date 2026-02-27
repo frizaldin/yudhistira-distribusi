@@ -15,6 +15,9 @@ use App\Http\Controllers\TargetController;
 use App\Http\Controllers\PeriodeController;
 use App\Http\Controllers\NppbCentralController;
 use App\Http\Controllers\NppbWarehouseController;
+use App\Http\Controllers\PreparationNotesController;
+use App\Http\Controllers\NkbController;
+use App\Http\Controllers\DeliveryOrderController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiController;
 use App\Models\Staging\Master\Book;
@@ -64,6 +67,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/nppb-products', 'getNppbProducts')->name('api.nppb-products');
         Route::get('/api/nppb-products-by-warehouse', 'getNppbProductsByWarehouse')->name('api.nppb-products-by-warehouse');
         Route::post('/api/nppb-products/save', 'saveNppbProducts')->name('api.nppb-products.save');
+        Route::get('/api/nkb/{id}/detail', 'getNkbDetail')->name('api.nkb.detail');
     });
 
     Route::controller(DashboardController::class)->group(function () {
@@ -159,6 +163,36 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(NppbWarehouseController::class)->group(function () {
         Route::get('/nppb-warehouse', 'index')->name('nppb-warehouse.index');
+    });
+
+    Route::controller(PreparationNotesController::class)->group(function () {
+        Route::get('/preparation-notes', 'index')->name('preparation_notes.index');
+        Route::get('/preparation-notes/detail', 'detail')->name('preparation_notes.detail');
+        Route::post('/preparation-notes/detail/update', 'updateDetail')->name('preparation_notes.detail.update');
+        Route::post('/preparation-notes/approve-rencana', 'approveRencana')->name('preparation_notes.approve_rencana');
+        Route::get('/preparation-notes/export-nppb', 'exportNota')->name('preparation_notes.export_nota');
+        Route::get('/preparation-notes/preview-nkb', 'previewNkb')->name('preparation_notes.preview_nkb');
+        Route::get('/preparation-notes/preview-nkb-page', 'previewNkbPage')->name('preparation_notes.preview_nkb_page');
+        Route::get('/preparation-notes/nkb/{number}', 'viewNkb')->name('preparation_notes.view_nkb');
+        Route::post('/preparation-notes/jadikan-nkb', 'jadikanNkb')->name('preparation_notes.jadikan_nkb');
+    });
+
+    Route::controller(NkbController::class)->group(function () {
+        Route::get('/nkb', 'index')->name('nkb.index');
+        Route::get('/nkb/create', 'create')->name('nkb.create');
+        Route::get('/nkb/{number}/print', 'print')->name('nkb.print');
+        Route::get('/nkb/{number}', 'show')->name('nkb.show');
+    });
+
+    Route::controller(DeliveryOrderController::class)->group(function () {
+        Route::get('/delivery-orders', 'index')->name('delivery-orders.index');
+        Route::get('/delivery-orders/create', 'create')->name('delivery-orders.create');
+        Route::post('/delivery-orders', 'store')->name('delivery-orders.store');
+        Route::get('/delivery-orders/{id}/print', 'print')->name('delivery-orders.print');
+        Route::get('/delivery-orders/{id}', 'show')->name('delivery-orders.show');
+        Route::get('/delivery-orders/{id}/edit', 'edit')->name('delivery-orders.edit');
+        Route::put('/delivery-orders/{id}', 'update')->name('delivery-orders.update');
+        Route::delete('/delivery-orders/{id}', 'destroy')->name('delivery-orders.destroy');
     });
 
     Route::controller(NppbCentralController::class)->group(function () {

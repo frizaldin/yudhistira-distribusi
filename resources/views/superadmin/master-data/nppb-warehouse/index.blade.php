@@ -19,14 +19,49 @@
             overflow: auto;
         }
 
-        /* ===== HEADER BASE ===== */
-        .table-responsive thead th {
+        #nppb-products-table {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        /* ===== STICKY HEADER BAR (row judul – elemen terpisah supaya benar-benar float) ===== */
+        #sticky-header-bar {
             position: sticky;
             top: 0;
-            background: #f8f9fa;
             z-index: 20;
+            background: #f8f9fa;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .08);
+        }
+
+        #sticky-header-bar table {
+            margin-bottom: 0;
+        }
+
+        /* Seragamkan row 1 & 2: tinggi dan alignment sama */
+        #sticky-header-bar th {
+            background: #f8f9fa !important;
+            color: #212529 !important;
             vertical-align: middle !important;
-            /* header normal */
+            padding: 0.4rem 0.5rem !important;
+            min-height: 38px;
+            line-height: 1.3 !important;
+        }
+
+        #sticky-header-bar .sticky-col {
+            background: #f8f9fa !important;
+            color: #212529 !important;
+        }
+
+        /* Row total (baris 2) di header bar: style dan alignment sama dengan row 1 */
+        #sticky-header-bar #row-totals th {
+            background: #e9ecef !important;
+            padding: 0.4rem 0.5rem !important;
+            min-height: 38px;
+            vertical-align: middle !important;
+        }
+
+        #sticky-header-bar #row-totals .sticky-col {
+            background: #e9ecef !important;
         }
 
         /* ===== STICKY COLUMN BASE ===== */
@@ -39,8 +74,17 @@
         tbody .sticky-col,
         thead .sticky-col {
             z-index: 10;
-            background: #ffc107 !important;
+            background: #18925a !important;
             box-shadow: unset !important;
+        }
+
+        tbody .sticky-col *,
+        thead .sticky-col * {
+            color: #fff !important;
+        }
+
+        tbody .sticky-col small {
+            color: #ffc107 !important;
         }
 
         tbody .sticky-col,
@@ -49,24 +93,92 @@
             border-color: #fff !important;
         }
 
-        /* ===== STICKY HEADER COLUMN (INI KUNCI) ===== */
-        thead .sticky-col {
+        /* ===== STICKY HEADER COLUMN (di body table + di sticky header bar) ===== */
+        .table-responsive thead tr:first-child .sticky-col,
+        #sticky-header-bar .sticky-col {
             z-index: 999 !important;
-            background: #f8f9fa;
+            background: #f8f9fa !important;
         }
 
-        /* ===== KOLOM NO ===== */
+        /* ===== KOLOM NO & KODE BUKU – lebar dan alignment seragam di semua baris ===== */
         .sticky-col-1 {
             left: 0;
-            width: 50px;
+            width: 50px !important;
+            min-width: 50px !important;
+            max-width: 50px !important;
+            text-align: center !important;
+            padding: 0.4rem 0.5rem !important;
         }
 
-        /* ===== KOLOM KODE BUKU ===== */
         .sticky-col-2 {
             left: 50px;
-            /* HARUS = width NO */
-            min-width: 200px;
+            min-width: 200px !important;
+            width: 200px !important;
             box-shadow: 3px 0 6px -3px rgba(0, 0, 0, .3);
+            padding: 0.4rem 0.5rem !important;
+        }
+
+        /* Body table: kolom 1 & 2 selaras dengan header/total */
+        .nppb-table-body tbody td.sticky-col-1,
+        .nppb-table-body tbody td.sticky-col-2 {
+            vertical-align: middle !important;
+            padding: 0.4rem 0.5rem !important;
+        }
+
+        /* ===== LAYOUT: header table + sticky totals bar + body table (satu scroll) ===== */
+        .nppb-table-wrap {
+            display: block;
+            width: max-content;
+            min-width: 100%;
+        }
+
+        .nppb-table-wrap>.nppb-table-body,
+        .nppb-table-wrap #sticky-header-bar table,
+        .nppb-table-wrap #sticky-totals-bar table {
+            width: 100%;
+        }
+
+        #sticky-totals-bar {
+            position: sticky;
+            top: 41px;
+            z-index: 18;
+            background: #e9ecef;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .06);
+            display: none;
+        }
+
+        #sticky-totals-bar table {
+            margin-bottom: 0;
+            background: #e9ecef;
+        }
+
+        #sticky-totals-bar th {
+            background: #e9ecef !important;
+            color: #212529 !important;
+            vertical-align: middle !important;
+            border-color: #dee2e6;
+            padding: 0.4rem 0.5rem !important;
+            min-height: 38px;
+            line-height: 1.3 !important;
+        }
+
+        #sticky-totals-bar .sticky-col {
+            background: #e9ecef !important;
+            color: #212529 !important;
+        }
+
+        .nppb-body-thead th {
+            height: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            visibility: hidden !important;
+            line-height: 0 !important;
+            overflow: hidden !important;
+        }
+
+        /* Judul kolom panjang: tampilan singkat, full text saat hover */
+        .nppb-col-tooltip {
+            cursor: help !important;
         }
     </style>
     <div class="card mb-3">
@@ -82,8 +194,9 @@
                             @else
                                 s.d.
                             @endif
-                            {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d M Y') }}</span>
-                        @endif
+                            {{ \Carbon\Carbon::parse($activeCutoff->end_date)->format('d M Y') }}
+                        </span>
+                    @endif
                 </div>
                 {{-- <div class="d-flex flex-wrap gap-2">
                     <a href="{{ route('nppb-central.create') }}" class="btn btn-primary btn-sm rounded-pill">
@@ -95,23 +208,28 @@
             <!-- Select Warehouse/Area -->
             <div class="mb-3">
                 <label for="select_warehouse_code" class="form-label">Pilih Warehouse/Area</label>
-                <select id="select_warehouse_code" class="form-select select2-ajax" data-url="{{ route('api.warehouse-codes') }}"
-                    data-placeholder="Pilih Warehouse/Area">
+                <select id="select_warehouse_code" class="form-select select2-ajax"
+                    data-url="{{ route('api.warehouse-codes') }}" data-placeholder="Pilih Warehouse/Area">
                 </select>
             </div>
 
             <!-- Persentase Penentuan Rencana Kirim -->
             <div class="mb-4">
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                    <label for="input_persen_rencana_kirim" class="form-label mb-0">Persentase Penentuan Rencana Kirim (%)</label>
-                    <button type="button" id="btn-toggle-persen" class="btn btn-sm btn-outline-warning" title="Klik untuk menonaktifkan/mengaktifkan batasan persentase">
+                    <label for="input_persen_rencana_kirim" class="form-label mb-0">Persentase Penentuan Rencana Kirim
+                        (%)</label>
+                    <button type="button" id="btn-toggle-persen" class="btn btn-sm btn-outline-warning"
+                        title="Klik untuk menonaktifkan/mengaktifkan batasan persentase">
                         <i class="bi bi-toggle-on me-1"></i><span id="label-toggle-persen">Nonaktifkan Persentase</span>
                     </button>
                 </div>
                 <div class="d-flex flex-wrap align-items-center gap-2" id="wrap-persen-input">
-                    <input type="number" id="input_persen_rencana_kirim" class="form-control" min="1" max="100"
-                        value="100" style="max-width: 120px;" title="Persentase batas: jika Persentase Kurang SP thd Stock Pusat di bawah nilai ini, Koli/Eceran/Total tidak dapat diisi (rencana kirim diblok)." />
-                    <small class="text-muted">1–100. Rencana kirim hanya diizinkan jika (Kurang SP Nasional ÷ Stock Pusat × 100%) ≥ nilai ini. Jika di bawah, kolom Koli/Eceran/Total dikosongkan dan tidak dapat diisi.</small>
+                    <input type="number" id="input_persen_rencana_kirim" class="form-control" min="1"
+                        max="100" value="100" style="max-width: 120px;"
+                        title="Persentase batas: jika Persentase Kurang SP thd Stock Pusat di bawah nilai ini, Koli/Eceran/Total tidak dapat diisi (rencana kirim diblok)." />
+                    <small class="text-muted">1–100. Rencana kirim hanya diizinkan jika (Kurang SP Nasional ÷ Stock
+                        Pusat × 100%) ≥ nilai ini. Jika di bawah, kolom Koli/Eceran/Total dikosongkan dan tidak dapat
+                        diisi.</small>
                 </div>
             </div>
 
@@ -126,8 +244,8 @@
                             data-bs-toggle="modal" data-bs-target="#modalRumusNppb">
                             <i class="bi bi-calculator me-1"></i>Lihat Rumus
                         </button>
-                        <button type="button" id="btn-export-data" class="btn btn-success btn-sm" title="Export data tabel ke CSV"
-                            data-export-prefix="nppb-warehouse">
+                        <button type="button" id="btn-export-data" class="btn btn-success btn-sm"
+                            title="Export data tabel ke CSV" data-export-prefix="nppb-warehouse">
                             <i class="bi bi-download me-1"></i>Export Data
                         </button>
                         <button type="button" id="btn-save" class="btn btn-primary btn-sm">
@@ -142,7 +260,8 @@
                         placeholder="Kode buku..." />
                     <input type="text" id="filter-book-name" class="form-control" style="max-width: 220px;"
                         placeholder="Nama buku..." />
-                    <select id="filter-marketing-list" class="form-select form-select-sm" style="width: auto; max-width: 200px;" title="Filter buku yang ditampilkan">
+                    <select id="filter-marketing-list" class="form-select form-select-sm"
+                        style="width: auto; max-width: 200px;" title="Filter buku yang ditampilkan">
                         <option value="">Semua buku</option>
                         <option value="Y">List marketing saja</option>
                     </select>
@@ -167,14 +286,18 @@
 
                 <!-- Legenda kolom: tampilkan/sembunyikan kolom -->
                 <div class="mb-3">
-                    <button class="btn btn-outline-secondary btn-sm collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#legend-columns-nppb" aria-expanded="false" aria-controls="legend-columns-nppb">
+                    <button class="btn btn-outline-secondary btn-sm collapsed" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#legend-columns-nppb" aria-expanded="false"
+                        aria-controls="legend-columns-nppb">
                         <i class="bi bi-list-ul me-1"></i>Legenda kolom (tampilkan/sembunyikan)
                     </button>
                     <div class="collapse mt-2" id="legend-columns-nppb">
                         <div class="card card-body py-2">
                             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-                                <button type="button" id="legend-show-all" class="btn btn-sm btn-outline-primary">Tampilkan semua</button>
-                                <button type="button" id="legend-hide-all" class="btn btn-sm btn-outline-secondary">Sembunyikan semua</button>
+                                <button type="button" id="legend-show-all"
+                                    class="btn btn-sm btn-outline-primary">Tampilkan semua</button>
+                                <button type="button" id="legend-hide-all"
+                                    class="btn btn-sm btn-outline-secondary">Sembunyikan semua</button>
                             </div>
                             <div id="legend-checkboxes" class="d-flex flex-wrap gap-3 gap-md-4">
                                 <!-- Diisi oleh JS sesuai NPPB_COLUMNS -->
@@ -183,66 +306,124 @@
                     </div>
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-hover table-sm align-middle mb-0" id="nppb-products-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="text-center sticky-col sticky-col-1" style="width: 50px;" data-col="no">NO</th>
-                                <th class="text-left sticky-col sticky-col-2" data-col="kode-buku">Kode Buku</th>
-                                <th class="text-center" style="width: 90px;" data-col="stock-pusat">Stock Pusat</th>
-                                <th class="text-center" style="width: 120px;" data-col="stock-nasional">Stock Nasional</th>
-                                <th class="text-center" style="width: 120px;" data-col="sp-nasional">SP Nasional</th>
-                                <th class="text-center" style="width: 250px;" data-col="pct-stock-pusat-target">% Stock Pusat thd Target Nasional</th>
-                                <th class="text-center" style="width: 220px;" data-col="pct-stock-pusat-sp">% Stock Pusat thd SP</th>
-                                <th class="text-center" style="width: 175px;" data-col="total-eksemplar-nasional">Total Eksemplar Nasional</th>
-                                <th class="text-center" style="width: 150px;" data-col="stock-teralokasikan">Stock Teralokasikan</th>
-                                <th class="text-center" style="width: 100px;" data-col="maks-kirim">Maks. Kirim</th>
-                                <th class="text-center" style="width: 100px;" data-col="sisa-kuota">Sisa Kuota</th>
-                                <th class="text-center" style="width: 150px;" data-col="sisa-stock-pusat">Sisa Stock Pusat</th>
-                                <th class="text-center" style="width: 80px;" data-col="sp">SP</th>
-                                <th class="text-center" style="width: 80px;" data-col="faktur">Faktur</th>
-                                <th class="text-center" style="width: 100px;" data-col="stock-cabang">Stock Cabang</th>
-                                <th class="text-center" style="width: 100px;" data-col="kurang-sp">Kurang SP</th>
-                                <th class="text-center" style="width: 100px;" data-col="pct-ftr-stk-vs-sp">% (Ftr+Stk+Kirim vs SP)</th>
-                                <th class="text-center" style="width: 100px;" data-col="pct-ftr-stk-vs-target">% (Ftr+Stk+Kirim vs Target)</th>
-                                <th class="text-center" style="width: 70px;" data-col="isi">Isi</th>
-                                <th class="text-center" style="width: 80px;" data-col="koli">Koli</th>
-                                <th class="text-center" style="width: 80px;" data-col="eceran">Eceran</th>
-                                <th class="text-center" style="width: 90px;" data-col="total">Total</th>
-                                <th class="text-center" style="width: 70px;" data-col="checklist">Checklist</th>
-                            </tr>
-                        </thead>
-                        <tbody id="products-table-totals">
-                            <tr id="row-totals" class="table-secondary fw-bold" style="display: none;">
-                                <td class="text-center sticky-col sticky-col-1" data-col="no">—</td>
-                                <td class="text-start sticky-col sticky-col-2" data-col="kode-buku">Total</td>
-                                <td class="text-center" data-col="stock-pusat">—</td>
-                                <td class="text-center" data-col="stock-nasional">—</td>
-                                <td class="text-center" data-col="sp-nasional">—</td>
-                                <td class="text-center" data-col="pct-stock-pusat-target">—</td>
-                                <td class="text-center" data-col="pct-stock-pusat-sp">—</td>
-                                <td class="text-center" data-col="total-eksemplar-nasional">—</td>
-                                <td class="text-center" data-col="stock-teralokasikan">—</td>
-                                <td class="text-center" data-col="maks-kirim">—</td>
-                                <td class="text-center" data-col="sisa-kuota">—</td>
-                                <td class="text-center" data-col="sisa-stock-pusat">—</td>
-                                <td class="text-center" data-col="sp">0</td>
-                                <td class="text-center" data-col="faktur">0</td>
-                                <td class="text-center" data-col="stock-cabang">0</td>
-                                <td class="text-center" data-col="kurang-sp">0</td>
-                                <td class="text-center" data-col="pct-ftr-stk-vs-sp">—</td>
-                                <td class="text-center" data-col="pct-ftr-stk-vs-target">—</td>
-                                <td class="text-center" data-col="isi">—</td>
-                                <td class="text-center" data-col="koli">0</td>
-                                <td class="text-center" data-col="eceran">0</td>
-                                <td class="text-center" data-col="total">0</td>
-                                <td class="text-center" data-col="checklist">—</td>
-                            </tr>
-                        </tbody>
-                        <tbody id="products-table-body">
-                            <!-- Data akan diisi via AJAX -->
-                        </tbody>
-                    </table>
+                <div class="table-responsive" id="nppb-table-responsive">
+                    <div class="nppb-table-wrap">
+                        <div id="sticky-header-bar">
+                            <table class="table table-sm align-middle mb-0 table-light" id="nppb-products-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-center sticky-col sticky-col-1" style="width: 50px;"
+                                            data-col="no">NO</th>
+                                        <th class="text-left sticky-col sticky-col-2" data-col="kode-buku">Kode Buku
+                                        </th>
+                                        <th class="text-center" style="width: 90px;" data-col="stock-pusat">Stock
+                                            Pusat</th>
+                                        <th class="text-center" style="width: 120px;" data-col="stock-nasional">Stock
+                                            Nasional</th>
+                                        <th class="text-center" style="width: 120px;" data-col="sp-nasional">SP
+                                            Nasional</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 250px;"
+                                            data-col="pct-stock-pusat-target" title="% Stock Pusat thd Target Nasional" data-bs-toggle="tooltip" data-bs-trigger="hover click">% Stock Pusat...</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 220px;" data-col="pct-stock-pusat-sp"
+                                            title="% Stock Pusat thd SP" data-bs-toggle="tooltip" data-bs-trigger="hover click">% Stock Pusat thd SP</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 175px;"
+                                            data-col="total-eksemplar-nasional" title="Total Eksemplar Nasional" data-bs-toggle="tooltip" data-bs-trigger="hover click">Total Eks. Nasional</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 150px;" data-col="stock-teralokasikan"
+                                            title="Stock Teralokasikan" data-bs-toggle="tooltip" data-bs-trigger="hover click">Stk Teralokasikan</th>
+                                        <th class="text-center" style="width: 100px;" data-col="maks-kirim">Maks.
+                                            Kirim</th>
+                                        <th class="text-center" style="width: 100px;" data-col="sisa-kuota">Sisa
+                                            Kuota</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 150px;" data-col="sisa-stock-pusat"
+                                            title="Sisa Stock Pusat">Sisa Stk Pusat</th>
+                                        <th class="text-center" style="width: 80px;" data-col="sp">SP</th>
+                                        <th class="text-center" style="width: 80px;" data-col="faktur">Faktur</th>
+                                        <th class="text-center" style="width: 100px;" data-col="stock-cabang">Stock
+                                            Cabang</th>
+                                        <th class="text-center" style="width: 100px;" data-col="kurang-sp">Kurang SP
+                                        </th>
+                                        <th class="text-center" style="width: 100px;" data-col="kurang-sp-nasional">Kurang SP Nasional</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 100px;" data-col="pct-ftr-stk-vs-sp"
+                                            title="% (Ftr+Stk+Kirim vs SP)" data-bs-toggle="tooltip" data-bs-trigger="hover click">% Ftr+Stk vs SP</th>
+                                        <th class="text-center nppb-col-tooltip" style="width: 100px;"
+                                            data-col="pct-ftr-stk-vs-target" title="% (Ftr+Stk+Kirim vs Target)" data-bs-toggle="tooltip" data-bs-trigger="hover click">% Ftr+Stk vs Target</th>
+                                        <th class="text-center" style="width: 70px;" data-col="isi">Isi</th>
+                                        <th class="text-center" style="width: 80px;" data-col="koli">Koli</th>
+                                        <th class="text-center" style="width: 80px;" data-col="eceran">Eceran</th>
+                                        <th class="text-center" style="width: 90px;" data-col="total">Total</th>
+                                        <th class="text-center" style="width: 70px;" data-col="checklist">Checklist
+                                        </th>
+                                    </tr>
+                                    <tr id="row-totals" class="table-secondary fw-bold">
+                                        <th class="text-center sticky-col sticky-col-1" data-col="no">—</th>
+                                        <th class="text-start sticky-col sticky-col-2" data-col="kode-buku">Total</th>
+                                        <th class="text-center" data-col="stock-pusat">—</th>
+                                        <th class="text-center" data-col="stock-nasional">—</th>
+                                        <th class="text-center" data-col="sp-nasional">—</th>
+                                        <th class="text-center" data-col="pct-stock-pusat-target">—</th>
+                                        <th class="text-center" data-col="pct-stock-pusat-sp">—</th>
+                                        <th class="text-center" data-col="total-eksemplar-nasional">—</th>
+                                        <th class="text-center" data-col="stock-teralokasikan">—</th>
+                                        <th class="text-center" data-col="maks-kirim">—</th>
+                                        <th class="text-center" data-col="sisa-kuota">—</th>
+                                        <th class="text-center" data-col="sisa-stock-pusat">—</th>
+                                        <th class="text-center" data-col="sp">0</th>
+                                        <th class="text-center" data-col="faktur">0</th>
+                                        <th class="text-center" data-col="stock-cabang">0</th>
+                                        <th class="text-center" data-col="kurang-sp">0</th>
+                                        <th class="text-center" data-col="kurang-sp-nasional">0</th>
+                                        <th class="text-center" data-col="pct-ftr-stk-vs-sp">—</th>
+                                        <th class="text-center" data-col="pct-ftr-stk-vs-target">—</th>
+                                        <th class="text-center" data-col="isi">—</th>
+                                        <th class="text-center" data-col="koli">0</th>
+                                        <th class="text-center" data-col="eceran">0</th>
+                                        <th class="text-center" data-col="total">0</th>
+                                        <th class="text-center" data-col="checklist">—</th>
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
+                        <div id="sticky-totals-bar">
+                            <table class="table table-sm align-middle mb-0">
+                                <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                        <table class="table table-hover table-sm align-middle mb-0 nppb-table-body"
+                            id="nppb-products-table-body">
+                            <thead class="table-light nppb-body-thead">
+                                <tr>
+                                    <th class="text-center" style="width: 50px;"></th>
+                                    <th class="text-left" style="min-width: 200px;"></th>
+                                    <th style="width: 90px;"></th>
+                                    <th style="width: 120px;"></th>
+                                    <th style="width: 120px;"></th>
+                                    <th style="width: 250px;"></th>
+                                    <th style="width: 220px;"></th>
+                                    <th style="width: 175px;"></th>
+                                    <th style="width: 150px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 150px;"></th>
+                                    <th style="width: 80px;"></th>
+                                    <th style="width: 80px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 100px;"></th>
+                                    <th style="width: 70px;"></th>
+                                    <th style="width: 80px;"></th>
+                                    <th style="width: 80px;"></th>
+                                    <th style="width: 90px;"></th>
+                                    <th style="width: 70px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="products-table-body">
+                                <!-- Data akan diisi via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Pagination -->
@@ -269,7 +450,9 @@
                 <div class="modal-body">
                     <p class="text-muted small mb-3">Berikut penjelasan kolom dan rumus yang digunakan pada halaman
                         NPPB. Semua angka mengacu pada periode cutoff yang aktif.</p>
-                    <p class="small alert alert-warning py-2 mb-3"><i class="bi bi-info-circle me-1"></i><strong>Catatan:</strong> Jika Stock Pusat kosong (0), maka inputan Isi, Koli, Eceran, dan Total akan kosong dan tidak dapat diisi.</p>
+                    <p class="small alert alert-warning py-2 mb-3"><i
+                            class="bi bi-info-circle me-1"></i><strong>Catatan:</strong> Jika Stock Pusat kosong (0),
+                        maka inputan Isi, Koli, Eceran, dan Total akan kosong dan tidak dapat diisi.</p>
                     <div class="small">
                         <table class="table table-sm table-bordered mb-0">
                             <thead class="table-light">
@@ -293,11 +476,19 @@
                                 </tr>
                                 <tr>
                                     <td><strong>Kurang SP Nasional</strong></td>
-                                    <td>Total kekurangan SP seluruh cabang untuk kode buku tersebut. <strong>Rumus:</strong> max(0, <strong>SP Nasional − Faktur Nasional − Stock Cabang Nasional − Stock Pusat</strong>). Stock Cabang Nasional = stok cabang seluruh cabang + Intransit + NPPB yang sudah disetujui.</td>
+                                    <td>Total kekurangan SP seluruh cabang untuk kode buku tersebut.
+                                        <strong>Rumus:</strong> max(0, <strong>SP Nasional − Faktur Nasional − Stock
+                                            Cabang Nasional − Stock Pusat</strong>). Stock Cabang Nasional = stok cabang
+                                        seluruh cabang + Intransit + NPPB yang sudah disetujui.
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td><strong>Persentase Kurang SP thd Stock Pusat</strong></td>
-                                    <td><strong>Rumus:</strong> (Kurang SP Nasional ÷ Stock Pusat) × 100%. Nilai ini dibandingkan dengan <strong>Persentase Penentuan Rencana Kirim</strong>: jika persentase ini <strong>kurang dari</strong> nilai penentuan, maka kolom Koli, Eceran, dan Total untuk baris tersebut dikosongkan dan tidak dapat diisi (rencana kirim diblok).</td>
+                                    <td><strong>Rumus:</strong> (Kurang SP Nasional ÷ Stock Pusat) × 100%. Nilai ini
+                                        dibandingkan dengan <strong>Persentase Penentuan Rencana Kirim</strong>: jika
+                                        persentase ini <strong>kurang dari</strong> nilai penentuan, maka kolom Koli,
+                                        Eceran, dan Total untuk baris tersebut dikosongkan dan tidak dapat diisi
+                                        (rencana kirim diblok).</td>
                                 </tr>
                                 <tr>
                                     <td><strong>% Stock Pusat / Target Nasional</strong></td>
@@ -322,21 +513,35 @@
                                 </tr>
                                 <tr>
                                     <td><strong>Persentase Penentuan Rencana Kirim</strong></td>
-                                    <td>Nilai 1–100 (%). <strong>Pembatasan:</strong> Kurang SP Nasional (seluruh cabang) dan Stock Pusat dihitung per buku. Persentase SP thd Stock = (Kurang SP Nasional ÷ Stock Pusat) × 100%. Jika Persentase SP thd Stock <strong>kurang dari</strong> nilai penentuan ini, maka rencana kirim untuk baris tersebut tidak diizinkan: kolom Koli, Eceran, dan Total dikosongkan dan tidak dapat diisi. Contoh: Kurang SP Nasional = 700, Stock Pusat = 1000 → 70%. Penentuan = 80% → karena 70% &lt; 80%, rencana kirim diblok.</td>
+                                    <td>Nilai 1–100 (%). <strong>Pembatasan:</strong> Kurang SP Nasional (seluruh
+                                        cabang) dan Stock Pusat dihitung per buku. Persentase SP thd Stock = (Kurang SP
+                                        Nasional ÷ Stock Pusat) × 100%. Jika Persentase SP thd Stock <strong>kurang
+                                            dari</strong> nilai penentuan ini, maka rencana kirim untuk baris tersebut
+                                        tidak diizinkan: kolom Koli, Eceran, dan Total dikosongkan dan tidak dapat
+                                        diisi. Contoh: Kurang SP Nasional = 700, Stock Pusat = 1000 → 70%. Penentuan =
+                                        80% → karena 70% &lt; 80%, rencana kirim diblok.</td>
                                 </tr>
                                 <tr>
                                     <td><strong>Maks. Kirim</strong></td>
-                                    <td>Maksimal total eksemplar nasional yang boleh dikirim, dihitung sebagai: <strong>Persentase × Stock Pusat</strong>. Contoh: Persentase = 70, Stock Pusat = 4000 → Maks. Kirim = 70% × 4000 = 2800.</td>
+                                    <td>Maksimal total eksemplar nasional yang boleh dikirim, dihitung sebagai:
+                                        <strong>Persentase × Stock Pusat</strong>. Contoh: Persentase = 70, Stock Pusat
+                                        = 4000 → Maks. Kirim = 70% × 4000 = 2800.
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td><strong>Sisa Kuota</strong></td>
-                                    <td>Sisa eksemplar yang masih boleh dialokasikan, dihitung sebagai: <strong>Maks. Kirim − Stock Teralokasikan</strong>. Contoh: Maks. Kirim = 2800, Stock Teralokasikan = 1000 → Sisa Kuota = 1800. Input kolom Total (eksemplar untuk cabang ini) tidak boleh melebihi Sisa Kuota.</td>
+                                    <td>Sisa eksemplar yang masih boleh dialokasikan, dihitung sebagai: <strong>Maks.
+                                            Kirim − Stock Teralokasikan</strong>. Contoh: Maks. Kirim = 2800, Stock
+                                        Teralokasikan = 1000 → Sisa Kuota = 1800. Input kolom Total (eksemplar untuk
+                                        cabang ini) tidak boleh melebihi Sisa Kuota.</td>
                                 </tr>
                                 <tr>
                                     <td colspan="2" class="bg-light small">
-                                        <strong>Contoh perhitungan:</strong> Persentase = 70%, Stock Pusat = 4000, SP Nasional = 5000, Stock Nasional = 2300, Stock Teralokasikan = 1000.<br>
+                                        <strong>Contoh perhitungan:</strong> Persentase = 70%, Stock Pusat = 4000, SP
+                                        Nasional = 5000, Stock Nasional = 2300, Stock Teralokasikan = 1000.<br>
                                         → Maks. Kirim = 70% × 4000 = <strong>2800</strong>.<br>
-                                        → Sisa Kuota = 2800 − 1000 = <strong>1800</strong> (maksimal total eksemplar yang masih boleh diisi untuk cabang/cabang-cabang).
+                                        → Sisa Kuota = 2800 − 1000 = <strong>1800</strong> (maksimal total eksemplar
+                                        yang masih boleh diisi untuk cabang/cabang-cabang).
                                     </td>
                                 </tr>
                                 <tr>
@@ -396,64 +601,156 @@
 
     <x-slot name="js">
         <script>
-            var NPPB_COLUMNS = [
-                { key: 'no', label: 'NO' },
-                { key: 'kode-buku', label: 'Kode Buku' },
-                { key: 'stock-pusat', label: 'Stock Pusat' },
-                { key: 'stock-nasional', label: 'Stock Nasional' },
-                { key: 'sp-nasional', label: 'SP Nasional' },
-                { key: 'pct-stock-pusat-target', label: '% Stock Pusat thd Target Nasional' },
-                { key: 'pct-stock-pusat-sp', label: '% Stock Pusat thd SP' },
-                { key: 'total-eksemplar-nasional', label: 'Total Eksemplar Nasional' },
-                { key: 'stock-teralokasikan', label: 'Stock Teralokasikan' },
-                { key: 'maks-kirim', label: 'Maks. Kirim' },
-                { key: 'sisa-kuota', label: 'Sisa Kuota' },
-                { key: 'sisa-stock-pusat', label: 'Sisa Stock Pusat' },
-                { key: 'sp', label: 'SP' },
-                { key: 'faktur', label: 'Faktur' },
-                { key: 'stock-cabang', label: 'Stock Cabang' },
-                { key: 'kurang-sp', label: 'Kurang SP' },
-                { key: 'pct-ftr-stk-vs-sp', label: '% (Ftr+Stk+Kirim vs SP)' },
-                { key: 'pct-ftr-stk-vs-target', label: '% (Ftr+Stk+Kirim vs Target)' },
-                { key: 'isi', label: 'Isi' },
-                { key: 'koli', label: 'Koli' },
-                { key: 'eceran', label: 'Eceran' },
-                { key: 'total', label: 'Total' },
-                { key: 'checklist', label: 'Checklist' }
+            var NPPB_COLUMNS = [{
+                    key: 'no',
+                    label: 'NO'
+                },
+                {
+                    key: 'kode-buku',
+                    label: 'Kode Buku'
+                },
+                {
+                    key: 'stock-pusat',
+                    label: 'Stock Pusat'
+                },
+                {
+                    key: 'stock-nasional',
+                    label: 'Stock Nasional'
+                },
+                {
+                    key: 'sp-nasional',
+                    label: 'SP Nasional'
+                },
+                {
+                    key: 'pct-stock-pusat-target',
+                    label: '% Stock Pusat thd Target Nasional'
+                },
+                {
+                    key: 'pct-stock-pusat-sp',
+                    label: '% Stock Pusat thd SP'
+                },
+                {
+                    key: 'total-eksemplar-nasional',
+                    label: 'Total Eksemplar Nasional'
+                },
+                {
+                    key: 'stock-teralokasikan',
+                    label: 'Stock Teralokasikan'
+                },
+                {
+                    key: 'maks-kirim',
+                    label: 'Maks. Kirim'
+                },
+                {
+                    key: 'sisa-kuota',
+                    label: 'Sisa Kuota'
+                },
+                {
+                    key: 'sisa-stock-pusat',
+                    label: 'Sisa Stock Pusat'
+                },
+                {
+                    key: 'sp',
+                    label: 'SP'
+                },
+                {
+                    key: 'faktur',
+                    label: 'Faktur'
+                },
+                {
+                    key: 'stock-cabang',
+                    label: 'Stock Cabang'
+                },
+                {
+                    key: 'kurang-sp',
+                    label: 'Kurang SP'
+                },
+                {
+                    key: 'kurang-sp-nasional',
+                    label: 'Kurang SP Nasional'
+                },
+                {
+                    key: 'pct-ftr-stk-vs-sp',
+                    label: '% (Ftr+Stk+Kirim vs SP)'
+                },
+                {
+                    key: 'pct-ftr-stk-vs-target',
+                    label: '% (Ftr+Stk+Kirim vs Target)'
+                },
+                {
+                    key: 'isi',
+                    label: 'Isi'
+                },
+                {
+                    key: 'koli',
+                    label: 'Koli'
+                },
+                {
+                    key: 'eceran',
+                    label: 'Eceran'
+                },
+                {
+                    key: 'total',
+                    label: 'Total'
+                },
+                {
+                    key: 'checklist',
+                    label: 'Checklist'
+                }
             ];
             var COLUMN_STORAGE_KEY = 'nppb-warehouse-columns';
 
             function getColumnVisibility() {
                 var saved = null;
-                try { saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY)); } catch (e) {}
+                try {
+                    saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY));
+                } catch (e) {}
                 var vis = {};
-                NPPB_COLUMNS.forEach(function(c) { vis[c.key] = saved && saved[c.key] !== undefined ? !!saved[c.key] : true; });
+                NPPB_COLUMNS.forEach(function(c) {
+                    vis[c.key] = saved && saved[c.key] !== undefined ? !!saved[c.key] : true;
+                });
                 return vis;
             }
+
             function setColumnVisibility(key, visible) {
                 var vis = getColumnVisibility();
                 vis[key] = visible;
-                try { localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(vis)); } catch (e) {}
+                try {
+                    localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify(vis));
+                } catch (e) {}
             }
+
             function applyColumnVisibility() {
                 var vis = getColumnVisibility();
                 $('#nppb-products-table thead th[data-col]').each(function() {
                     var col = $(this).attr('data-col');
                     $(this).toggle(vis[col] !== false);
                 });
-                $('#nppb-products-table tbody td[data-col]').each(function() {
+                $('#row-totals th[data-col]').each(function() {
+                    var col = $(this).attr('data-col');
+                    $(this).toggle(vis[col] !== false);
+                });
+                $('#nppb-products-table-body tbody td[data-col]').each(function() {
                     var col = $(this).attr('data-col');
                     $(this).toggle(vis[col] !== false);
                 });
             }
 
             $(document).ready(function() {
+                // Inisialisasi tooltip untuk judul kolom (hover + klik = tampil teks lengkap)
+                if (typeof bootstrap !== 'undefined') {
+                    document.querySelectorAll('.nppb-col-tooltip[data-bs-toggle="tooltip"]').forEach(function(el) {
+                        new bootstrap.Tooltip(el);
+                    });
+                }
                 var $legend = $('#legend-checkboxes');
                 NPPB_COLUMNS.forEach(function(c) {
                     var vis = getColumnVisibility();
                     var checked = vis[c.key] !== false;
                     $legend.append(
-                        '<label class="form-check form-check-inline mb-0"><input type="checkbox" class="form-check-input legend-col-toggle" data-col="' + c.key + '"' + (checked ? ' checked' : '') + '> <span class="form-check-label">' + c.label + '</span></label>'
+                        '<label class="form-check form-check-inline mb-0"><input type="checkbox" class="form-check-input legend-col-toggle" data-col="' +
+                        c.key + '"' + (checked ? ' checked' : '') + '> <span class="form-check-label">' + c
+                        .label + '</span></label>'
                     );
                 });
                 $(document).on('change', '.legend-col-toggle', function() {
@@ -463,12 +760,16 @@
                     applyColumnVisibility();
                 });
                 $('#legend-show-all').on('click', function() {
-                    NPPB_COLUMNS.forEach(function(c) { setColumnVisibility(c.key, true); });
+                    NPPB_COLUMNS.forEach(function(c) {
+                        setColumnVisibility(c.key, true);
+                    });
                     $('.legend-col-toggle').prop('checked', true);
                     applyColumnVisibility();
                 });
                 $('#legend-hide-all').on('click', function() {
-                    NPPB_COLUMNS.forEach(function(c) { setColumnVisibility(c.key, false); });
+                    NPPB_COLUMNS.forEach(function(c) {
+                        setColumnVisibility(c.key, false);
+                    });
                     $('.legend-col-toggle').prop('checked', false);
                     applyColumnVisibility();
                 });
@@ -516,7 +817,8 @@
                         const warehouseCode = $('#select_warehouse_code').val();
                         if (warehouseCode) {
                             currentPage = 1;
-                            loadProducts(warehouseCode, 1, currentSearchBookCode, currentSearchBookName, currentSort);
+                            loadProducts(warehouseCode, 1, currentSearchBookCode, currentSearchBookName,
+                                currentSort);
                         }
                     });
 
@@ -585,7 +887,8 @@
                 }
             }
 
-            function loadProducts(warehouseCode, page = 1, searchBookCode = '', searchBookName = '', sort = null, perPage = null) {
+            function loadProducts(warehouseCode, page = 1, searchBookCode = '', searchBookName = '', sort = null, perPage =
+                null) {
                 currentWarehouseCode = warehouseCode;
                 currentPage = page;
                 currentSearchBookCode = searchBookCode;
@@ -606,7 +909,7 @@
                 const pct = usePercentage ? Math.max(1, Math.min(100, percentage)) : 100;
 
                 $('#products-table-body').html(
-                    '<tr><td colspan="23" class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>'
+                    '<tr><td colspan="24" class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>'
                 );
 
                 // Fetch products via AJAX
@@ -642,16 +945,18 @@
 
                         if (products.length === 0) {
                             html =
-                                '<tr><td colspan="23" class="text-center py-4"><div class="text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Belum ada data produk.</div></td></tr>';
+                                '<tr><td colspan="24" class="text-center py-4"><div class="text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Belum ada data produk.</div></td></tr>';
                             $('#pagination-container').hide();
-                            $('#row-totals').hide();
+                            $('#sticky-totals-bar').hide();
                         } else {
                             const startNumber = (page - 1) * perPage + 1;
                             products.forEach(function(product, index) {
                                 const stockPusat = Number(product.stock_pusat) || 0;
                                 const noStock = stockPusat === 0;
-                                const maksKirim = product.maksimal_total_eksemplar_nasional != null ? product.maksimal_total_eksemplar_nasional : 0;
-                                const sisaKuota = product.sisa_kuota_eksemplar != null ? product.sisa_kuota_eksemplar : 0;
+                                const maksKirim = product.maksimal_total_eksemplar_nasional != null ?
+                                    product.maksimal_total_eksemplar_nasional : 0;
+                                const sisaKuota = product.sisa_kuota_eksemplar != null ? product
+                                    .sisa_kuota_eksemplar : 0;
                                 const sisaSp = parseFloat(product.sisa_sp) || 0; // Kurang SP
                                 const allowRencana = product.allow_rencana_kirim !== false;
                                 const existing = allProductsData[product.book_code];
@@ -689,9 +994,9 @@
                                     }
                                 }
                                 const hadData = (koli > 0 || pls > 0 || exp > 0);
-                                const checked = (existing && typeof existing.checked === 'boolean')
-                                    ? existing.checked
-                                    : hadData;
+                                const checked = (existing && typeof existing.checked === 'boolean') ?
+                                    existing.checked :
+                                    hadData;
                                 allProductsData[product.book_code] = {
                                     book_code: product.book_code,
                                     book_name: product.book_name,
@@ -702,76 +1007,121 @@
                                     checked: checked
                                 };
 
-                                html += '<tr class="' + (product.row_highlight_yellow ? 'table-warning' : '') + '" data-book-code="' + (product.book_code || '') +
-                                    '" data-sisa-sp="' + (product.sisa_sp || 0) + '" data-stock-pusat="' + stockPusat + '">';
-                                html += '<td class="text-center sticky-col sticky-col-1" data-col="no">' + (startNumber +
+                                html += '<tr class="' + (product.row_highlight_yellow ? 'table-warning' :
+                                        '') + '" data-book-code="' + (product.book_code || '') +
+                                    '" data-sisa-sp="' + (product.sisa_sp || 0) + '" data-stock-pusat="' +
+                                    stockPusat + '">';
+                                html += '<td class="text-center sticky-col sticky-col-1" data-col="no">' + (
+                                    startNumber +
                                     index) + '</td>';
-                                html += '<td class="text-start sticky-col sticky-col-2" data-col="kode-buku"><code>' + (product
+                                html +=
+                                    '<td class="text-start sticky-col sticky-col-2" data-col="kode-buku"><code>' +
+                                    (product
                                         .book_code || '-') +
                                     '</code><br><small class="text-muted">' + (product.book_name || '-') +
                                     '</small></td>';
-                                html += '<td class="text-center" data-col="stock-pusat">' + formatNumber(product.stock_pusat ||
+                                html += '<td class="text-center" data-col="stock-pusat">' + formatNumber(
+                                    product.stock_pusat ||
                                     0) + '</td>';
-                                html += '<td class="text-center" data-col="stock-nasional">' + formatNumber(product.stock_nasional ||
+                                html += '<td class="text-center" data-col="stock-nasional">' + formatNumber(
+                                    product.stock_nasional ||
                                     0) + '</td>';
-                                html += '<td class="text-center" data-col="sp-nasional">' + formatNumber(product.sp_nasional ||
+                                html += '<td class="text-center" data-col="sp-nasional">' + formatNumber(
+                                    product.sp_nasional ||
                                     0) + '</td>';
-                                html += '<td class="text-center" data-col="pct-stock-pusat-target">' + (Number(product
-                                    .pct_stock_pusat_target_nasional || 0).toFixed(2)) + '%</td>';
-                                html += '<td class="text-center" data-col="pct-stock-pusat-sp">' + (Number(product.pct_stock_pusat_sp ||
+                                html += '<td class="text-center" data-col="pct-stock-pusat-target">' + (
+                                    Number(product
+                                        .pct_stock_pusat_target_nasional || 0).toFixed(2)) + '%</td>';
+                                html += '<td class="text-center" data-col="pct-stock-pusat-sp">' + (Number(
+                                    product.pct_stock_pusat_sp ||
                                     0).toFixed(2)) + '%</td>';
-                                html += '<td class="text-center" data-col="total-eksemplar-nasional">' + formatNumber(product
-                                    .stock_teralokasikan || 0) + '</td>';
-                                html += '<td class="text-center" data-col="stock-teralokasikan">' + formatNumber(product
-                                    .stock_teralokasikan || 0) + '</td>';
-                                html += '<td class="text-center" data-col="maks-kirim" title="Persen × Stock Pusat">' + formatNumber(maksKirim) + '</td>';
-                                html += '<td class="text-center" data-col="sisa-kuota" title="Maks. Kirim − Stock Teralokasikan">' + formatNumber(sisaKuota) + '</td>';
-                                html += '<td class="text-center" data-col="sisa-stock-pusat">' + formatNumber(product
-                                    .sisa_stock_pusat || 0) + '</td>';
-                                html += '<td class="text-center" data-col="sp">' + formatNumber(product.sp || 0) +
-                                    '</td>';
-                                html += '<td class="text-center" data-col="faktur">' + formatNumber(product.faktur || 0) +
-                                    '</td>';
-                                html += '<td class="text-center" data-col="stock-cabang">' + formatNumber(product.stock_cabang ||
-                                    0) + '</td>';
-                                html += '<td class="text-center" data-col="kurang-sp"><strong>' + formatNumber(product.sisa_sp ||
-                                    0) + '</strong></td>';
-                                html += '<td class="text-center" data-col="pct-ftr-stk-vs-sp">' + (product.pct_faktur_stock_total_vs_sp != null ? (Number(product.pct_faktur_stock_total_vs_sp).toFixed(2) + '%') : '-') + '</td>';
-                                html += '<td class="text-center" data-col="pct-ftr-stk-vs-target">' + (product.pct_faktur_stock_total_vs_target != null ? (Number(product.pct_faktur_stock_total_vs_target).toFixed(2) + '%') : '-') + '</td>';
+                                html += '<td class="text-center" data-col="total-eksemplar-nasional">' +
+                                    formatNumber(product
+                                        .stock_teralokasikan || 0) + '</td>';
+                                html += '<td class="text-center" data-col="stock-teralokasikan">' +
+                                    formatNumber(product
+                                        .stock_teralokasikan || 0) + '</td>';
                                 html +=
-                                    '<td class="text-center" data-col="isi"><input type="number" class="form-control form-control-sm text-center input-volume" value="' + volume +
+                                    '<td class="text-center" data-col="maks-kirim" title="Persen × Stock Pusat">' +
+                                    formatNumber(maksKirim) + '</td>';
+                                html +=
+                                    '<td class="text-center" data-col="sisa-kuota" title="Maks. Kirim − Stock Teralokasikan">' +
+                                    formatNumber(sisaKuota) + '</td>';
+                                html += '<td class="text-center" data-col="sisa-stock-pusat">' +
+                                    formatNumber(product
+                                        .sisa_stock_pusat || 0) + '</td>';
+                                html += '<td class="text-center" data-col="sp">' + formatNumber(product
+                                        .sp || 0) +
+                                    '</td>';
+                                html += '<td class="text-center" data-col="faktur">' + formatNumber(product
+                                        .faktur || 0) +
+                                    '</td>';
+                                html += '<td class="text-center" data-col="stock-cabang">' + formatNumber(
+                                    product.stock_cabang ||
+                                    0) + '</td>';
+                                html += '<td class="text-center" data-col="kurang-sp"><strong>' +
+                                    formatNumber(product.sisa_sp ||
+                                        0) + '</strong></td>';
+                                html += '<td class="text-center" data-col="kurang-sp-nasional"><strong>' +
+                                    formatNumber(product.kurang_sp_nasional || 0) + '</strong></td>';
+                                html += '<td class="text-center" data-col="pct-ftr-stk-vs-sp">' + (product
+                                        .pct_faktur_stock_total_vs_sp != null ? (Number(product
+                                            .pct_faktur_stock_total_vs_sp).toFixed(2) + '%') : '-') +
+                                    '</td>';
+                                html += '<td class="text-center" data-col="pct-ftr-stk-vs-target">' + (
+                                        product.pct_faktur_stock_total_vs_target != null ? (Number(product
+                                            .pct_faktur_stock_total_vs_target).toFixed(2) + '%') : '-') +
+                                    '</td>';
+                                html +=
+                                    '<td class="text-center" data-col="isi"><input type="number" class="form-control form-control-sm text-center input-volume" value="' +
+                                    volume +
                                     '" min="0" step="1" style="width: 70px; display: inline-block;" data-book-code="' +
                                     product.book_code + '"></td>';
-                                const pctSpVsStock = product.pct_sp_vs_stock != null ? product.pct_sp_vs_stock : 0;
-                                const disAttr = !allowRencana ? ' disabled readonly' : '';
-                                const disTitle = !allowRencana ? ' title="Rencana kirim tidak diizinkan: Persentase Kurang SP thd Stock (' + pctSpVsStock + '%) di bawah batas (' + pct + '%)."' : '';
+                                const pctSpVsStock = product.pct_sp_vs_stock != null ? product
+                                    .pct_sp_vs_stock : 0;
+                                const disTitle = !allowRencana ?
+                                    ' title="Rencana kirim tidak diizinkan: Persentase Kurang SP thd Stock (' +
+                                    pctSpVsStock + '%) di bawah batas (' + pct +
+                                    '%). Nilai default 0, kolom tetap dapat diedit."' : '';
                                 html +=
-                                    '<td class="text-center" data-col="koli"><input type="number" class="form-control form-control-sm text-center input-koli" value="' + koli +
+                                    '<td class="text-center" data-col="koli"><input type="number" class="form-control form-control-sm text-center input-koli" value="' +
+                                    koli +
                                     '" min="0" step="1" style="width: 80px; display: inline-block;" data-book-code="' +
-                                    product.book_code + '" data-allow-rencana="' + (allowRencana ? '1' : '0') + '"' + disAttr + disTitle + '></td>';
+                                    product.book_code + '" data-allow-rencana="' + (allowRencana ? '1' :
+                                        '0') + '"' + disTitle + '></td>';
                                 html +=
-                                    '<td class="text-center" data-col="eceran"><input type="number" class="form-control form-control-sm text-center input-pls" value="' + pls +
+                                    '<td class="text-center" data-col="eceran"><input type="number" class="form-control form-control-sm text-center input-pls" value="' +
+                                    pls +
                                     '" min="0" step="1" style="width: 80px; display: inline-block;" data-book-code="' +
-                                    product.book_code + '"' + disAttr + disTitle + '></td>';
-                                const expMax = allowRencana && !noStock && usePercentage && sisaKuota >= 0 ? sisaKuota : '';
+                                    product.book_code + '"' + disTitle + '></td>';
+                                const expMax = allowRencana && !noStock && usePercentage && sisaKuota >= 0 ?
+                                    sisaKuota : '';
                                 html +=
-                                    '<td class="text-center" data-col="total"><input type="number" class="form-control form-control-sm text-center input-exp" value="' + exp +
+                                    '<td class="text-center" data-col="total"><input type="number" class="form-control form-control-sm text-center input-exp" value="' +
+                                    exp +
                                     '" min="0" step="1" ' + (expMax !== '' ? 'max="' + expMax + '"' : '') +
-                                    ' style="width: 80px; display: inline-block;" data-book-code="' + product.book_code +
-                                    '" data-sisa-kuota="' + sisaKuota + '" data-allow-rencana="' + (allowRencana ? '1' : '0') + '"' + disAttr + disTitle + '></td>';
-                                html += '<td class="text-center align-middle" data-col="checklist"><input type="checkbox" class="input-check-save" data-book-code="' + product.book_code + '"' + (checked ? ' checked' : '') + ' title="Centang untuk menyimpan baris ini" style="cursor:pointer;width:1.1em;height:1.1em;"></td>';
+                                    ' style="width: 80px; display: inline-block;" data-book-code="' +
+                                    product.book_code +
+                                    '" data-sisa-kuota="' + sisaKuota + '" data-allow-rencana="' + (
+                                        allowRencana ? '1' : '0') + '"' + disTitle + '></td>';
+                                html +=
+                                    '<td class="text-center align-middle" data-col="checklist"><input type="checkbox" class="input-check-save" data-book-code="' +
+                                    product.book_code + '"' + (checked ? ' checked' : '') +
+                                    ' title="Centang untuk menyimpan baris ini" style="cursor:pointer;width:1.1em;height:1.1em;"></td>';
                                 html += '</tr>';
                             });
 
                             var totals = response.totals || {};
-                            $('#row-totals').show();
-                            $('#row-totals td[data-col="sp"]').text(formatNumber(totals.sp || 0));
-                            $('#row-totals td[data-col="faktur"]').text(formatNumber(totals.faktur || 0));
-                            $('#row-totals td[data-col="stock-cabang"]').text(formatNumber(totals.stock_cabang || 0));
-                            $('#row-totals td[data-col="kurang-sp"]').text(formatNumber(totals.sisa_sp || 0));
-                            $('#row-totals td[data-col="koli"]').text(formatNumber(totals.koli || 0));
-                            $('#row-totals td[data-col="eceran"]').text(formatNumber(totals.pls || 0));
-                            $('#row-totals td[data-col="total"]').text(formatNumber(totals.exp || 0));
+                            $('#sticky-totals-bar').show();
+                            $('#row-totals th[data-col="sp"]').text(formatNumber(totals.sp || 0));
+                            $('#row-totals th[data-col="faktur"]').text(formatNumber(totals.faktur || 0));
+                            $('#row-totals th[data-col="stock-cabang"]').text(formatNumber(totals.stock_cabang ||
+                                0));
+                            $('#row-totals th[data-col="kurang-sp"]').text(formatNumber(totals.sisa_sp || 0));
+                            $('#row-totals th[data-col="kurang-sp-nasional"]').text(formatNumber(totals.sisa_sp_nasional || 0));
+                            $('#row-totals th[data-col="koli"]').text(formatNumber(totals.koli || 0));
+                            $('#row-totals th[data-col="eceran"]').text(formatNumber(totals.pls || 0));
+                            $('#row-totals th[data-col="total"]').text(formatNumber(totals.exp || 0));
 
                             // Generate pagination
                             generatePagination(page, lastPage);
@@ -780,10 +1130,12 @@
 
                         $('#products-table-body').html(html);
                         applyColumnVisibility();
+                        var w = $('.nppb-table-body').outerWidth();
+                        if (w > 0) $('.nppb-table-wrap').width(w);
                     },
                     error: function(xhr, status, error) {
                         $('#products-table-body').html(
-                                '<tr><td colspan="23" class="text-center py-4"><div class="text-danger">Error loading data: ' +
+                            '<tr><td colspan="24" class="text-center py-4"><div class="text-danger">Error loading data: ' +
                             error + '</div></td></tr>'
                         );
                         $('#pagination-container').hide();
@@ -855,7 +1207,15 @@
                     const volume = parseFloat($row.find('.input-volume').val()) || 0;
                     const checked = $row.find('.input-check-save').is(':checked');
                     if (!allProductsData[bookCode]) {
-                        allProductsData[bookCode] = { book_code: bookCode, book_name: '', koli: 0, exp: 0, pls: 0, volume_used: 0, checked: false };
+                        allProductsData[bookCode] = {
+                            book_code: bookCode,
+                            book_name: '',
+                            koli: 0,
+                            exp: 0,
+                            pls: 0,
+                            volume_used: 0,
+                            checked: false
+                        };
                     }
                     allProductsData[bookCode].koli = koli;
                     allProductsData[bookCode].exp = exp;
@@ -899,7 +1259,8 @@
                                             warehouse_code: warehouseCode,
                                             page: page,
                                             search: (searchBookCode || searchBookName || '').trim(),
-                                            marketing_list_only: $('#filter-marketing-list').val() === 'Y' ? 1 : 0
+                                            marketing_list_only: $('#filter-marketing-list')
+                                                .val() === 'Y' ? 1 : 0
                                         }
                                     })
                                 );
@@ -962,7 +1323,8 @@
 
                 const $btn = $(this);
                 const originalHtml = $btn.html();
-                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...');
+                $btn.prop('disabled', true).html(
+                    '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...');
 
                 $.ajax({
                     url: '{{ route('api.nppb-products.save') }}',
@@ -1005,7 +1367,8 @@
                         Swal.fire({
                             icon: 'error',
                             title: 'Error',
-                            text: xhr.responseJSON?.message || error || 'Terjadi kesalahan saat menyimpan data',
+                            text: xhr.responseJSON?.message || error ||
+                                'Terjadi kesalahan saat menyimpan data',
                             confirmButtonText: 'OK'
                         });
                     },
@@ -1026,6 +1389,7 @@
                 if (/[,"\r\n]/.test(val)) return '"' + val.replace(/"/g, '""') + '"';
                 return val;
             }
+
             function productToCsvRow(product, index, sisaKuota, maksKirim, koli, exp, pls, vol) {
                 return [
                     index + 1,
@@ -1078,7 +1442,8 @@
                                 p.volume_used = allProductsData[p.book_code].volume_used ?? p.volume_used;
                             }
                         });
-                        const headers = 'NO,Kode Buku,Nama Buku,Stock Pusat,Stock Nasional,SP Nasional,% Stock Pusat thd Target Nasional,% Stock Pusat thd SP,Total Eksemplar Nasional,Stock Teralokasikan,Maks. Kirim,Sisa Kuota,Sisa Stock Pusat,SP,Faktur,Stock Cabang,Kurang SP,% (Ftr+Stk+Kirim vs SP),% (Ftr+Stk+Kirim vs Target),Isi,Koli,Eceran,Total';
+                        const headers =
+                            'NO,Kode Buku,Nama Buku,Stock Pusat,Stock Nasional,SP Nasional,% Stock Pusat thd Target Nasional,% Stock Pusat thd SP,Total Eksemplar Nasional,Stock Teralokasikan,Maks. Kirim,Sisa Kuota,Sisa Stock Pusat,SP,Faktur,Stock Cabang,Kurang SP,% (Ftr+Stk+Kirim vs SP),% (Ftr+Stk+Kirim vs Target),Isi,Koli,Eceran,Total';
                         const csvRows = [headers];
                         allProducts.forEach(function(product, index) {
                             const maksKirim = product.maksimal_total_eksemplar_nasional != null ?
@@ -1089,12 +1454,15 @@
                             const exp = product.exp != null ? product.exp : 0;
                             const pls = product.pls != null ? product.pls : 0;
                             const vol = parseFloat(product.volume_used) || 0;
-                            csvRows.push(productToCsvRow(product, index, sisaKuota, maksKirim, koli, exp, pls, vol));
+                            csvRows.push(productToCsvRow(product, index, sisaKuota, maksKirim, koli, exp,
+                                pls, vol));
                         });
                         const csv = '\uFEFF' + csvRows.join('\r\n');
                         const prefix = $btn.data('export-prefix') || 'nppb-warehouse';
                         const filename = prefix + '-export-' + new Date().toISOString().slice(0, 10) + '.csv';
-                        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                        const blob = new Blob([csv], {
+                            type: 'text/csv;charset=utf-8;'
+                        });
                         const link = document.createElement('a');
                         link.href = URL.createObjectURL(blob);
                         link.download = filename;

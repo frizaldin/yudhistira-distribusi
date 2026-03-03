@@ -24,12 +24,18 @@
             <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
                 <div>
                     <strong>Detail Rekapitulasi: {{ $branch->branch_name ?? $branch->branch_code }}</strong>
-                    <br><small class="text-muted">Semua buku dari master data beserta stock, SP, target cabang berdasarkan cutoff</small>
+                    <br><small class="text-muted">Semua buku dari master data beserta stock, SP, target cabang
+                        berdasarkan cutoff</small>
                 </div>
                 <div>
                     @php
-                        $exportQuery = array_filter(['book_code' => $filterBookCode ?? '', 'book_name' => $filterBookName ?? '']);
-                        $exportUrl = route('recap.detail.export', ['branch_code' => $branch->branch_code]) . ($exportQuery ? '?' . http_build_query($exportQuery) : '');
+                        $exportQuery = array_filter([
+                            'book_code' => $filterBookCode ?? '',
+                            'book_name' => $filterBookName ?? '',
+                        ]);
+                        $exportUrl =
+                            route('recap.detail.export', ['branch_code' => $branch->branch_code]) .
+                            ($exportQuery ? '?' . http_build_query($exportQuery) : '');
                     @endphp
                     <a href="{{ $exportUrl }}" class="btn btn-success btn-sm">
                         <i class="bi bi-download me-1"></i>Export Data
@@ -37,20 +43,23 @@
                 </div>
             </div>
 
-            <form method="GET" action="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="row g-2 mb-3 align-items-end">
+            <form method="GET" action="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}"
+                class="row g-2 mb-3 align-items-end">
                 <div class="col-auto">
                     <label for="filter_book_code" class="form-label small mb-0">Kode Buku</label>
-                    <input type="text" id="filter_book_code" name="book_code" class="form-control form-control-sm" placeholder="Kode buku..."
-                        value="{{ $filterBookCode ?? '' }}" style="min-width: 160px;" />
+                    <input type="text" id="filter_book_code" name="book_code" class="form-control form-control-sm"
+                        placeholder="Kode buku..." value="{{ $filterBookCode ?? '' }}" style="min-width: 160px;" />
                 </div>
                 <div class="col-auto">
                     <label for="filter_book_name" class="form-label small mb-0">Nama Buku</label>
-                    <input type="text" id="filter_book_name" name="book_name" class="form-control form-control-sm" placeholder="Nama buku..."
-                        value="{{ $filterBookName ?? '' }}" style="min-width: 200px;" />
+                    <input type="text" id="filter_book_name" name="book_name" class="form-control form-control-sm"
+                        placeholder="Nama buku..." value="{{ $filterBookName ?? '' }}" style="min-width: 200px;" />
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Filter</button>
-                    <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}" class="btn btn-outline-secondary btn-sm">Reset</a>
+                    <button type="submit" class="btn btn-primary btn-sm"><i
+                            class="bi bi-funnel me-1"></i>Filter</button>
+                    <a href="{{ route('recap.detail', ['branch_code' => $branch->branch_code]) }}"
+                        class="btn btn-outline-secondary btn-sm">Reset</a>
                 </div>
             </form>
 
@@ -80,7 +89,8 @@
                     <tbody>
                         @forelse ($rows as $index => $r)
                             <tr>
-                                <td class="text-center">{{ isset($paginator) ? $paginator->firstItem() + $index : $index + 1 }}</td>
+                                <td class="text-center">
+                                    {{ isset($paginator) ? $paginator->firstItem() + $index : $index + 1 }}</td>
                                 <td class="text-start"><code>{{ $r->book_code }}</code></td>
                                 <td class="text-start">{{ Str::limit($r->book_title, 50) }}</td>
                                 <td class="text-end">{{ number_format($r->target) }}</td>
@@ -88,19 +98,27 @@
                                 <td class="text-end">{{ number_format($r->faktur) }}</td>
                                 <td class="text-end">{{ number_format($r->sisa_sp) }}</td>
                                 <td class="text-end">{{ number_format($r->stock_cabang) }}</td>
-                                <td class="text-end">{{ $r->thd_target_lebih > 0 ? number_format($r->thd_target_lebih) : '-' }}</td>
-                                <td class="text-end text-danger">{{ $r->thd_target_kurang > 0 ? '(' . number_format($r->thd_target_kurang) . ')' : '-' }}</td>
-                                <td class="text-end">{{ $r->thd_sp_lebih > 0 ? number_format($r->thd_sp_lebih) : '-' }}</td>
-                                <td class="text-end text-danger">{{ $r->thd_sp_kurang > 0 ? '(' . number_format($r->thd_sp_kurang) . ')' : '-' }}</td>
+                                <td class="text-end">
+                                    {{ $r->thd_target_lebih > 0 ? number_format($r->thd_target_lebih) : '-' }}</td>
+                                <td class="text-end text-danger">
+                                    {{ $r->thd_target_kurang > 0 ? '(' . number_format($r->thd_target_kurang) . ')' : '-' }}
+                                </td>
+                                <td class="text-end">{{ $r->thd_sp_lebih > 0 ? number_format($r->thd_sp_lebih) : '-' }}
+                                </td>
+                                <td class="text-end text-danger">
+                                    {{ $r->thd_sp_kurang > 0 ? '(' . number_format($r->thd_sp_kurang) . ')' : '-' }}
+                                </td>
                                 <td class="text-end">{{ number_format($r->nppb_koli) }}</td>
                                 <td class="text-end">{{ number_format($r->nppb_pls) }}</td>
                                 <td class="text-end">{{ number_format($r->nppb_exp) }}</td>
-                                <td class="text-end">{{ $r->pct_stock_target > 0 ? $r->pct_stock_target . '%' : '-' }}</td>
+                                <td class="text-end">{{ $r->pct_stock_target > 0 ? $r->pct_stock_target . '%' : '-' }}
+                                </td>
                                 <td class="text-end">{{ $r->pct_stock_sp > 0 ? $r->pct_stock_sp . '%' : '-' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="17" class="text-center py-4 text-muted">Tidak ada data buku. Ubah filter atau kosongkan untuk tampilkan semua dari master.</td>
+                                <td colspan="17" class="text-center py-4 text-muted">Tidak ada data buku. Ubah filter
+                                    atau kosongkan untuk tampilkan semua dari master.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -108,8 +126,9 @@
             </div>
             @if (isset($paginator) && $paginator->hasPages())
                 <div class="d-flex justify-content-between align-items-center mt-2">
-                    <small class="text-muted">{{ $paginator->firstItem() }}–{{ $paginator->lastItem() }} dari {{ $paginator->total() }} buku</small>
-                    <div>{{ $paginator->withQueryString()->links() }}</div>
+                    <small class="text-muted">{{ $paginator->firstItem() }}–{{ $paginator->lastItem() }} dari
+                        {{ $paginator->total() }} buku</small>
+                    <div>{{ $paginator->withQueryString()->links('pagination::bootstrap-5') }}</div>
                 </div>
             @endif
         </div>

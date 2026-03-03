@@ -15,6 +15,6 @@ Artisan::command('inspire', function () {
 | Di server cukup satu cron: * * * * * cd /path && php artisan schedule:run
 |--------------------------------------------------------------------------
 */
-Schedule::command('queue:work database --stop-when-empty --max-time=55')
+Schedule::command('queue:work database --stop-when-empty')
     ->everyMinute()
     ->withoutOverlapping(2);

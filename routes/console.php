@@ -11,10 +11,11 @@ Artisan::command('inspire', function () {
 /*
 |--------------------------------------------------------------------------
 | Queue worker via scheduler (tanpa perlu jalankan queue:work manual)
-| Setiap menit proses job yang antri, max 55 detik, lalu berhenti.
+| Setiap menit proses job yang antri. --timeout=0 = job tidak dibatasi waktu
+| (boleh jalan sampai selesai, untuk sync target/sp_branch dll).
 | Di server cukup satu cron: * * * * * cd /path && php artisan schedule:run
 |--------------------------------------------------------------------------
 */
-Schedule::command('queue:work database --stop-when-empty')
+Schedule::command('queue:work database --stop-when-empty --timeout=0')
     ->everyMinute()
     ->withoutOverlapping(2);

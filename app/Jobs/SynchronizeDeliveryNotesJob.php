@@ -15,6 +15,9 @@ class SynchronizeDeliveryNotesJob implements ShouldQueue
 {
     use Queueable, InteractsWithQueue, SerializesModels;
 
+    /** Tidak dibatasi waktu (0 = sampai selesai). */
+    public int $timeout = 0;
+
     public function __construct()
     {
         //

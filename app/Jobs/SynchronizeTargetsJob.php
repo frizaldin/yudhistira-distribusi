@@ -18,6 +18,9 @@ class SynchronizeTargetsJob implements ShouldQueue
 {
     use Queueable, InteractsWithQueue, SerializesModels;
 
+    /** Tidak dibatasi waktu (0 = sampai selesai). Default 60 detik bikin job sync 170k+ data terpotong. */
+    public int $timeout = 0;
+
     protected $clearFirst;
 
     public function __construct($clearFirst = false)

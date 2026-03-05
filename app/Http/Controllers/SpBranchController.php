@@ -9,6 +9,7 @@ use App\Jobs\ImportSpBranchesJob;
 use App\Jobs\SynchronizeSpBranchesJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -212,11 +213,16 @@ class SpBranchController extends Controller
     public function synchronize(Request $request)
     {
         try {
+            if (!Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
+                return redirect()->back()->with('error', 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
+            }
+
             SynchronizeSpBranchesJob::dispatch(false)
                 ->onQueue('default');
 
             return redirect()->back()->with('success', 'Sinkronisasi data sedang diproses di background. Data akan disinkronkan secara bertahap. Silakan refresh halaman beberapa saat kemudian untuk melihat hasil.');
         } catch (\Exception $e) {
+            Cache::forget('sync_sp_branches_lock');
             Log::error('SpBranch Synchronize Error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }
@@ -228,6 +234,10 @@ class SpBranchController extends Controller
     public function clearAndSync(Request $request)
     {
         try {
+            if (!Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
+                return redirect()->back()->with('error', 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
+            }
+
             // Count data before deletion
             $deletedCount = SpBranch::count();
 
@@ -239,6 +249,7 @@ class SpBranchController extends Controller
 
             return redirect()->back()->with('success', "Semua data pesanan ({$deletedCount} data) telah dihapus. Sinkronisasi data sedang diproses di background.");
         } catch (\Exception $e) {
+            Cache::forget('sync_sp_branches_lock');
             Log::error('SpBranch ClearAndSync Error: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Error: ' . $e->getMessage());
         }

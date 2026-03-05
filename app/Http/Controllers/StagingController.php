@@ -303,20 +303,30 @@ class StagingController extends Controller
                         SynchronizeBranchesJob::dispatch();
                         break;
                     case 'central_stock':
-                        SynchronizeCentralStocksJob::dispatch();
+                        if (Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
+                            SynchronizeCentralStocksJob::dispatch();
+                        }
                         break;
                     case 'target':
-                        SynchronizeTargetsJob::dispatch(false);
+                        if (Cache::add('sync_targets_lock', true, now()->addHours(2))) {
+                            SynchronizeTargetsJob::dispatch(false);
+                        }
                         break;
                     case 'period':
                         SynchronizePeriodesJob::dispatch();
                         break;
                     case 'sp_branch':
-                        SynchronizeSpBranchesJob::dispatch(false);
+                        if (Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
+                            SynchronizeSpBranchesJob::dispatch(false);
+                        }
                         break;
                     case 'delivery_notes':
-                        SynchronizeDeliveryNotesJob::dispatch();
-                        SynchronizeDeliveryNoteDetailsJob::dispatch();
+                        if (Cache::add('sync_delivery_notes_lock', true, now()->addHours(2))) {
+                            SynchronizeDeliveryNotesJob::dispatch();
+                        }
+                        if (Cache::add('sync_delivery_note_details_lock', true, now()->addHours(2))) {
+                            SynchronizeDeliveryNoteDetailsJob::dispatch();
+                        }
                         break;
                 }
             }
@@ -356,19 +366,50 @@ class StagingController extends Controller
                     SynchronizeBranchesJob::dispatch();
                     break;
                 case 'central_stock':
+                    if (!Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Job sinkron stock pusat (r_stock_pusat) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                        ], 409);
+                    }
                     SynchronizeCentralStocksJob::dispatch();
                     break;
                 case 'target':
+                    if (!Cache::add('sync_targets_lock', true, now()->addHours(2))) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Job sinkron target masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                        ], 409);
+                    }
                     SynchronizeTargetsJob::dispatch($clearFirst);
                     break;
                 case 'period':
                     SynchronizePeriodesJob::dispatch();
                     break;
                 case 'sp_branch':
+                    if (!Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                        ], 409);
+                    }
                     SynchronizeSpBranchesJob::dispatch($clearFirst);
                     break;
                 case 'delivery_notes':
                     // Sinkron delivery_notes (m_kirim_cabang) dan delivery_note_details (d_kirim_cabang) sekaligus
+                    if (!Cache::add('sync_delivery_notes_lock', true, now()->addHours(2))) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Job sinkron nota kirim (m_kirim_cabang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                        ], 409);
+                    }
+                    if (!Cache::add('sync_delivery_note_details_lock', true, now()->addHours(2))) {
+                        Cache::forget('sync_delivery_notes_lock');
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Job sinkron detail kirim (d_kirim_cabang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                        ], 409);
+                    }
                     SynchronizeDeliveryNotesJob::dispatch();
                     SynchronizeDeliveryNoteDetailsJob::dispatch();
                     break;

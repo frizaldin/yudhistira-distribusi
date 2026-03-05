@@ -137,7 +137,9 @@ class SynchronizeDeliveryNotesJob implements ShouldQueue
                 'percentage' => 100,
                 'completed_at' => now()->toDateTimeString()
             ], now()->addHours(2));
-            
+
+            Cache::forget('sync_delivery_notes_lock');
+
             // Save last sync timestamp
             Cache::put($cacheKey . '_last_sync', now()->toDateTimeString(), now()->addDays(30));
 
@@ -162,6 +164,8 @@ class SynchronizeDeliveryNotesJob implements ShouldQueue
                 'percentage' => $currentProgress['percentage'] ?? 0,
                 'error_message' => $e->getMessage()
             ], now()->addHours(2));
+
+            Cache::forget('sync_delivery_notes_lock');
 
             Log::error('SynchronizeDeliveryNotesJob Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()

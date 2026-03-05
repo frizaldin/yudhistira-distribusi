@@ -300,6 +300,9 @@ class TargetController extends Controller
     public function synchronize(Request $request)
     {
         try {
+            if (!Cache::add('sync_targets_lock', true, now()->addHours(2))) {
+                return redirect()->back()->with('error', 'Job sinkron target masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
+            }
             Cache::forget('sync_targets_progress');
 
             SynchronizeTargetsJob::dispatch()
@@ -309,6 +312,7 @@ class TargetController extends Controller
 
             return redirect()->back()->with('success', 'Sinkronisasi data sedang diproses di background. Data akan disinkronkan secara bertahap. Silakan refresh halaman beberapa saat kemudian untuk melihat hasil.');
         } catch (\Exception $e) {
+            Cache::forget('sync_targets_lock');
             Log::error('Synchronize Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
@@ -319,6 +323,9 @@ class TargetController extends Controller
     public function clearAndSync(Request $request)
     {
         try {
+            if (!Cache::add('sync_targets_lock', true, now()->addHours(2))) {
+                return redirect()->back()->with('error', 'Job sinkron target masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
+            }
             Cache::forget('sync_targets_progress');
 
             $deletedCount = Target::count();
@@ -333,6 +340,7 @@ class TargetController extends Controller
 
             return redirect()->back()->with('success', "Semua data target ({$deletedCount} data) telah dihapus. Sinkronisasi data sedang diproses di background.");
         } catch (\Exception $e) {
+            Cache::forget('sync_targets_lock');
             Log::error('Clear and Sync Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);

@@ -50,10 +50,26 @@ class SynchronizeTargetsJob implements ShouldQueue
                 'percentage' => 0
             ], now()->addHours(2));
 
-            $chunkSize = 2500;
+            $chunkSize = 5000;
             $created = 0;
             $updated = 0;
             $errors = [];
+
+            $removeQuotes = function ($value) {
+                if (empty($value)) return $value;
+                $value = trim($value, " '\"\`");
+                $value = preg_replace('/^[\'"`]+|[\'"`]+$/u', '', $value);
+                return trim($value);
+            };
+
+            $validBranches = Branch::pluck('branch_code')->flip()->all();
+            $validBooks = Product::pluck('book_code')->flip()->all();
+            $validPeriods = Periode::pluck('period_code')->flip()->all();
+            Log::info('SynchronizeTargetsJob: Pre-loaded referensi', [
+                'branches' => count($validBranches),
+                'books' => count($validBooks),
+                'periods' => count($validPeriods),
+            ]);
 
             $offset = 0;
             $totalProcessed = 0;
@@ -72,65 +88,48 @@ class SynchronizeTargetsJob implements ShouldQueue
                     break;
                 }
 
+                $now = now();
+                $batch = [];
                 foreach ($targetRecords as $targetData) {
+                    $target = (array) $targetData;
+                    $branchCode = isset($target['branch_code']) ? $removeQuotes($target['branch_code']) : null;
+                    $bookCode = isset($target['book_code']) ? $removeQuotes($target['book_code']) : null;
+                    $periodCode = isset($target['period_code']) ? $removeQuotes($target['period_code']) : null;
+
+                    if (empty($branchCode) || empty($bookCode) || empty($periodCode)) {
+                        continue;
+                    }
+                    if (!isset($validBranches[$branchCode]) || !isset($validBooks[$bookCode]) || !isset($validPeriods[$periodCode])) {
+                        continue;
+                    }
+
+                    $batch[] = [
+                        'branch_code' => $branchCode,
+                        'book_code' => $bookCode,
+                        'period_code' => $periodCode,
+                        'exemplar' => (int) ($target['exemplar'] ?? 0),
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+
+                if (!empty($batch)) {
                     try {
-                        $target = (array) $targetData;
-
-                        $removeQuotes = function ($value) {
-                            if (empty($value)) return $value;
-                            $value = trim($value, " '\"\`");
-                            $value = preg_replace('/^[\'"`]+|[\'"`]+$/u', '', $value);
-                            return trim($value);
-                        };
-
-                        $branchCode = isset($target['branch_code']) ? $removeQuotes($target['branch_code']) : null;
-                        $bookCode = isset($target['book_code']) ? $removeQuotes($target['book_code']) : null;
-                        $periodCode = isset($target['period_code']) ? $removeQuotes($target['period_code']) : null;
-
-                        if (empty($branchCode) || empty($bookCode) || empty($periodCode)) {
-                            continue;
-                        }
-
-                        // Skip jika referensi tidak ada (hindari FK violation)
-                        if (!Branch::where('branch_code', $branchCode)->exists()) {
-                            Log::warning("Sync Target skip: branch_code {$branchCode} tidak ada di tabel branches");
-                            continue;
-                        }
-                        if (!Product::where('book_code', $bookCode)->exists()) {
-                            Log::warning("Sync Target skip: book_code {$bookCode} tidak ada di tabel books");
-                            continue;
-                        }
-                        if (!Periode::where('period_code', $periodCode)->exists()) {
-                            Log::warning("Sync Target skip: period_code {$periodCode} tidak ada di tabel periods");
-                            continue;
-                        }
-
-                        $existingTarget = Target::where('branch_code', $branchCode)
-                            ->where('book_code', $bookCode)
-                            ->where('period_code', $periodCode)
-                            ->first();
-
-                        $targetDataArray = [
-                            'branch_code' => $branchCode,
-                            'book_code' => $bookCode,
-                            'period_code' => $periodCode,
-                            'exemplar' => $target['exemplar'] ?? 0,
-                        ];
-
-                        if ($existingTarget) {
-                            $existingTarget->update($targetDataArray);
-                            $updated++;
-                        } else {
-                            Target::create($targetDataArray);
-                            $created++;
-                        }
-                        $totalProcessed++;
+                        DB::transaction(function () use ($batch, $now) {
+                            DB::table('targets')->upsert(
+                                $batch,
+                                ['branch_code', 'book_code', 'period_code'],
+                                ['exemplar', 'updated_at']
+                            );
+                        });
+                        $totalProcessed += count($batch);
+                        $created += count($batch);
                     } catch (\Exception $e) {
-                        $branchCodeError = $target['branch_code'] ?? 'unknown';
-                        $bookCodeError = $target['book_code'] ?? 'unknown';
-                        $periodCodeError = $target['period_code'] ?? 'unknown';
-                        $errors[] = "Error pada branch_code {$branchCodeError}, book_code {$bookCodeError}, period_code {$periodCodeError}: " . $e->getMessage();
-                        Log::error("Sync Error untuk branch_code {$branchCodeError}, book_code {$bookCodeError}, period_code {$periodCodeError}: " . $e->getMessage());
+                        Log::error('SynchronizeTargetsJob chunk error: ' . $e->getMessage());
+                        $errors[] = $e->getMessage();
+                        foreach ($batch as $row) {
+                            $totalProcessed++;
+                        }
                     }
                 }
 
@@ -147,7 +146,7 @@ class SynchronizeTargetsJob implements ShouldQueue
                     'percentage' => $percentage
                 ], now()->addHours(2));
 
-                if ($totalProcessed % 1000 == 0) {
+                if ($totalProcessed > 0 && $totalProcessed % 10000 == 0) {
                     Log::info("SynchronizeTargetsJob: Processed {$totalProcessed}/{$totalRecords} records ({$percentage}%)");
                 }
             }
@@ -162,7 +161,9 @@ class SynchronizeTargetsJob implements ShouldQueue
                 'percentage' => 100,
                 'completed_at' => now()->toDateTimeString()
             ], now()->addHours(2));
-            
+
+            Cache::forget('sync_targets_lock');
+
             // Save last sync timestamp
             Cache::put($cacheKey . '_last_sync', now()->toDateTimeString(), now()->addDays(30));
 
@@ -187,6 +188,8 @@ class SynchronizeTargetsJob implements ShouldQueue
                 'percentage' => $currentProgress['percentage'] ?? 0,
                 'error_message' => $e->getMessage()
             ], now()->addHours(2));
+
+            Cache::forget('sync_targets_lock');
 
             Log::error('SynchronizeTargetsJob Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()

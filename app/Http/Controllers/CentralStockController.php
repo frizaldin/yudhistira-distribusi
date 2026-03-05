@@ -143,6 +143,9 @@ class CentralStockController extends Controller
     public function synchronize(Request $request)
     {
         try {
+            if (!Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
+                return redirect()->back()->with('error', 'Job sinkron stock pusat (r_stock_pusat) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
+            }
             Cache::forget('sync_central_stocks_progress');
 
             SynchronizeCentralStocksJob::dispatch()
@@ -152,6 +155,7 @@ class CentralStockController extends Controller
 
             return redirect()->back()->with('success', 'Sinkronisasi data sedang diproses di background. Data akan disinkronkan secara bertahap. Silakan refresh halaman beberapa saat kemudian untuk melihat hasil.');
         } catch (\Exception $e) {
+            Cache::forget('sync_central_stocks_lock');
             Log::error('Synchronize Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
@@ -162,6 +166,9 @@ class CentralStockController extends Controller
     public function clearAndSync(Request $request)
     {
         try {
+            if (!Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
+                return redirect()->back()->with('error', 'Job sinkron stock pusat (r_stock_pusat) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
+            }
             Cache::forget('sync_central_stocks_progress');
 
             $deletedCount = CentralStock::count();
@@ -176,6 +183,7 @@ class CentralStockController extends Controller
 
             return redirect()->back()->with('success', "Semua data stok pusat ({$deletedCount} data) telah dihapus. Sinkronisasi data sedang diproses di background.");
         } catch (\Exception $e) {
+            Cache::forget('sync_central_stocks_lock');
             Log::error('Clear and Sync Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);

@@ -62,7 +62,29 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 SpBranch::where('active_data', 'yes')->update(['active_data' => 'no']);
             }
 
-            $chunkSize = 2500;
+            $validBranches = Branch::pluck('branch_code')->flip()->all();
+            $validBooks = Product::pluck('book_code')->flip()->all();
+            Log::info('SynchronizeSpBranchesJob: Pre-loaded referensi', [
+                'branches' => count($validBranches),
+                'books' => count($validBooks),
+            ]);
+
+            $removeQuotes = function ($value) {
+                if (empty($value) && $value !== '0') return null;
+                $value = trim($value, " '\"\`");
+                $value = preg_replace('/^[\'"`]+|[\'"`]+$/u', '', $value);
+                return trim($value) === '' ? null : trim($value);
+            };
+            $convertNumeric = function ($value) {
+                if ($value === null || $value === '' || $value === 'null') return 0;
+                if (is_string($value)) {
+                    $value = trim($value);
+                    if ($value === '' || $value === 'null') return 0;
+                }
+                return (float) $value;
+            };
+
+            $chunkSize = 5000;
             $offset = 0;
 
             while (true) {
@@ -79,115 +101,68 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                     break;
                 }
 
+                $now = now();
+                $batch = [];
                 foreach ($spBranchRecords as $spBranchData) {
-                    try {
-                        $data = (array) $spBranchData;
+                    $data = (array) $spBranchData;
+                    $branchCode = isset($data['branch_code']) ? $removeQuotes($data['branch_code']) : null;
+                    $bookCode = isset($data['book_code']) ? $removeQuotes($data['book_code']) : null;
 
-                        // Helper function to remove quotes and clean data
-                        $removeQuotes = function ($value) {
-                            if (empty($value) && $value !== '0') return null;
-                            $value = trim($value, " '\"\`");
-                            $value = preg_replace('/^[\'"`]+|[\'"`]+$/u', '', $value);
-                            return trim($value) === '' ? null : trim($value);
-                        };
-
-                        $branchCode = isset($data['branch_code']) ? $removeQuotes($data['branch_code']) : null;
-                        $bookCode = isset($data['book_code']) ? $removeQuotes($data['book_code']) : null;
-
-                        if (empty($branchCode) || empty($bookCode)) {
-                            continue; // Skip if branch_code or book_code is empty
-                        }
-
-                        // Skip jika referensi tidak ada (hindari FK constraint violation)
-                        if (!Branch::where('branch_code', $branchCode)->exists()) {
-                            Log::warning("Sync SpBranch skip: branch_code {$branchCode} tidak ada di tabel branches");
-                            $totalProcessed++;
-                            continue;
-                        }
-                        if (!Product::where('book_code', $bookCode)->exists()) {
-                            Log::warning("Sync SpBranch skip: book_code {$bookCode} tidak ada di tabel books");
-                            $totalProcessed++;
-                            continue;
-                        }
-
-                        $convertNumeric = function ($value) {
-                            if ($value === null || $value === '' || $value === 'null') {
-                                return 0;
-                            }
-                            // Handle string numeric values
-                            if (is_string($value)) {
-                                $value = trim($value);
-                                if ($value === '' || $value === 'null') {
-                                    return 0;
-                                }
-                            }
-                            return (float)$value;
-                        };
-
-                        // PostgreSQL uses 'ex_sp', MySQL also uses 'ex_sp'
-                        $exSp = $convertNumeric($data['ex_sp'] ?? null);
-                        $exFtr = $convertNumeric($data['ex_ftr'] ?? null);
-                        $exRet = $convertNumeric($data['ex_ret'] ?? null);
-                        $exRecPst = $convertNumeric($data['ex_rec_pst'] ?? null);
-                        $exRecGdg = $convertNumeric($data['ex_rec_gdg'] ?? null);
-                        $exStock = $convertNumeric($data['ex_stock'] ?? null);
-
-                        $transDate = isset($data['trans_date']) && !empty($data['trans_date']) && $data['trans_date'] !== 'null'
-                            ? $data['trans_date']
-                            : null;
-
-                        // Debug logging for first few records with non-zero ex_sp
-                        if ($totalProcessed < 10 && $exSp > 0) {
-                            Log::info("Sync Debug - branch_code: {$branchCode}, book_code: {$bookCode}", [
-                                'ex_sp_raw' => $data['ex_sp'] ?? 'not_set',
-                                'ex_sp_type' => gettype($data['ex_sp'] ?? null),
-                                'ex_sp_converted' => $exSp,
-                                'all_data_keys' => array_keys($data)
-                            ]);
-                        }
-
-                        $spBranchDataArray = [
-                            'branch_code' => $branchCode,
-                            'book_code' => $bookCode,
-                            'ex_sp' => $exSp,
-                            'ex_ftr' => $exFtr,
-                            'ex_ret' => $exRet,
-                            'ex_rec_pst' => $exRecPst,
-                            'ex_rec_gdg' => $exRecGdg,
-                            'ex_stock' => $exStock,
-                            'trans_date' => $transDate,
-                            'active_data' => 'yes', // Set semua data baru sebagai active
-                        ];
-
-                        // Create semua data baru (tidak pakai upsert)
-                        SpBranch::create($spBranchDataArray);
-                        $created++;
+                    if (empty($branchCode) || empty($bookCode)) {
+                        continue;
+                    }
+                    if (!isset($validBranches[$branchCode]) || !isset($validBooks[$bookCode])) {
                         $totalProcessed++;
+                        continue;
+                    }
+
+                    $transDate = isset($data['trans_date']) && !empty($data['trans_date']) && $data['trans_date'] !== 'null'
+                        ? $data['trans_date']
+                        : null;
+
+                    $batch[] = [
+                        'branch_code' => $branchCode,
+                        'book_code' => $bookCode,
+                        'ex_sp' => $convertNumeric($data['ex_sp'] ?? null),
+                        'ex_ftr' => $convertNumeric($data['ex_ftr'] ?? null),
+                        'ex_ret' => $convertNumeric($data['ex_ret'] ?? null),
+                        'ex_rec_pst' => $convertNumeric($data['ex_rec_pst'] ?? null),
+                        'ex_rec_gdg' => $convertNumeric($data['ex_rec_gdg'] ?? null),
+                        'ex_stock' => $convertNumeric($data['ex_stock'] ?? null),
+                        'trans_date' => $transDate,
+                        'active_data' => 'yes',
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+
+                if (!empty($batch)) {
+                    try {
+                        DB::transaction(function () use ($batch) {
+                            DB::table('sp_branches')->insert($batch);
+                        });
+                        $created += count($batch);
                     } catch (\Exception $e) {
-                        $raw = (array) $spBranchData;
-                        $branchCodeError = isset($raw['branch_code']) ? trim((string)$raw['branch_code'], " '\"`") : 'unknown';
-                        $bookCodeError = isset($raw['book_code']) ? trim((string)$raw['book_code'], " '\"`") : 'unknown';
-                        $errors[] = "Error pada branch_code {$branchCodeError}, book_code {$bookCodeError}: " . $e->getMessage();
-                        Log::error("Sync SpBranch skip (error) branch_code {$branchCodeError}, book_code {$bookCodeError}: " . $e->getMessage());
-                        $totalProcessed++; // hitung sebagai processed agar job lanjut ke row berikutnya
+                        Log::error('SynchronizeSpBranchesJob chunk error: ' . $e->getMessage());
+                        $errors[] = $e->getMessage();
                     }
                 }
+                $totalProcessed += count($spBranchRecords);
 
                 $offset += $chunkSize;
 
-                // Update progress after each chunk
                 $percentage = $totalRecords > 0 ? round(($totalProcessed / $totalRecords) * 100, 2) : 0;
                 Cache::put($cacheKey, [
                     'status' => 'running',
                     'total' => $totalRecords,
                     'processed' => $totalProcessed,
                     'created' => $created,
-                    'updated' => 0, // SpBranch tidak pakai update, hanya create
+                    'updated' => 0,
                     'errors' => count($errors),
                     'percentage' => $percentage
                 ], now()->addHours(2));
 
-                if ($totalProcessed % 1000 == 0) {
+                if ($totalProcessed > 0 && $totalProcessed % 10000 == 0) {
                     Log::info("SynchronizeSpBranchesJob: Processed {$totalProcessed}/{$totalRecords} records ({$percentage}%)");
                 }
             }
@@ -210,6 +185,8 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 'completed_at' => now()->toDateTimeString()
             ], now()->addHours(2));
 
+            Cache::forget('sync_sp_branches_lock');
+
             // Save last sync timestamp
             Cache::put($cacheKey . '_last_sync', now()->toDateTimeString(), now()->addDays(30));
 
@@ -229,6 +206,8 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 'percentage' => 0,
                 'error_message' => $e->getMessage()
             ], now()->addHours(2));
+
+            Cache::forget('sync_sp_branches_lock');
 
             Log::error('SynchronizeSpBranchesJob Error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),

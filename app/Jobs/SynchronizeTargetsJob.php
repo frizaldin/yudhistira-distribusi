@@ -50,7 +50,7 @@ class SynchronizeTargetsJob implements ShouldQueue
                 'percentage' => 0
             ], now()->addHours(2));
 
-            $chunkSize = 500;
+            $chunkSize = 2500;
             $created = 0;
             $updated = 0;
             $errors = [];

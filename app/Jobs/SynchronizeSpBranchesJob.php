@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Models\Branch;
+use App\Models\Product;
 use App\Models\SpBranch;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -60,7 +62,7 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 SpBranch::where('active_data', 'yes')->update(['active_data' => 'no']);
             }
 
-            $chunkSize = 500;
+            $chunkSize = 2500;
             $offset = 0;
 
             while (true) {
@@ -94,6 +96,18 @@ class SynchronizeSpBranchesJob implements ShouldQueue
 
                         if (empty($branchCode) || empty($bookCode)) {
                             continue; // Skip if branch_code or book_code is empty
+                        }
+
+                        // Skip jika referensi tidak ada (hindari FK constraint violation)
+                        if (!Branch::where('branch_code', $branchCode)->exists()) {
+                            Log::warning("Sync SpBranch skip: branch_code {$branchCode} tidak ada di tabel branches");
+                            $totalProcessed++;
+                            continue;
+                        }
+                        if (!Product::where('book_code', $bookCode)->exists()) {
+                            Log::warning("Sync SpBranch skip: book_code {$bookCode} tidak ada di tabel books");
+                            $totalProcessed++;
+                            continue;
                         }
 
                         $convertNumeric = function ($value) {
@@ -150,10 +164,12 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                         $created++;
                         $totalProcessed++;
                     } catch (\Exception $e) {
-                        $branchCodeError = $data['branch_code'] ?? 'unknown';
-                        $bookCodeError = $data['book_code'] ?? 'unknown';
+                        $raw = (array) $spBranchData;
+                        $branchCodeError = isset($raw['branch_code']) ? trim((string)$raw['branch_code'], " '\"`") : 'unknown';
+                        $bookCodeError = isset($raw['book_code']) ? trim((string)$raw['book_code'], " '\"`") : 'unknown';
                         $errors[] = "Error pada branch_code {$branchCodeError}, book_code {$bookCodeError}: " . $e->getMessage();
-                        Log::error("Sync Error untuk branch_code {$branchCodeError}, book_code {$bookCodeError}: " . $e->getMessage());
+                        Log::error("Sync SpBranch skip (error) branch_code {$branchCodeError}, book_code {$bookCodeError}: " . $e->getMessage());
+                        $totalProcessed++; // hitung sebagai processed agar job lanjut ke row berikutnya
                     }
                 }
 

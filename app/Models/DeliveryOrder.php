@@ -15,14 +15,17 @@ class DeliveryOrder extends Model
         'date',
         'expedition',
         'plate_number',
-        'driver',
+        'drivers',
         'driver_phone',
         'note',
+        'creator_name',
+        'known_name',
         'created_by',
     ];
 
     protected $casts = [
         'date' => 'date',
+        'drivers' => 'array',
         'created_by' => 'integer',
     ];
 

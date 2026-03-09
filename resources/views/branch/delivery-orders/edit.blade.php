@@ -63,9 +63,13 @@
                         <label class="form-label small">Plat No.</label>
                         <input type="text" name="plate_number" class="form-control form-control-sm" value="{{ old('plate_number', $deliveryOrder->plate_number) }}" />
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small">Supir</label>
-                        <input type="text" name="driver" class="form-control form-control-sm" value="{{ old('driver', $deliveryOrder->driver) }}" />
+                    <div class="col-md-2">
+                        <label class="form-label small">Supir 1</label>
+                        <input type="text" name="drivers[0]" class="form-control form-control-sm" value="{{ old('drivers.0', ($deliveryOrder->drivers ?? [])[0] ?? '') }}" placeholder="Nama supir" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Supir 2</label>
+                        <input type="text" name="drivers[1]" class="form-control form-control-sm" value="{{ old('drivers.1', ($deliveryOrder->drivers ?? [])[1] ?? '') }}" placeholder="Nama supir" />
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small">Telepon Supir</label>
@@ -76,6 +80,18 @@
                 <div class="mb-3">
                     <label class="form-label small">Keterangan</label>
                     <textarea name="note" class="form-control form-control-sm" rows="2">{{ old('note', $deliveryOrder->note) }}</textarea>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Nama Pembuat <span class="text-danger">*</span></label>
+                        <input type="text" name="creator_name" class="form-control form-control-sm" maxlength="255" value="{{ old('creator_name', $deliveryOrder->creator_name ?? '') }}" required />
+                        @error('creator_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Nama Dikenal <span class="text-danger">*</span></label>
+                        <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255" value="{{ old('known_name', $deliveryOrder->known_name ?? '') }}" required />
+                        @error('known_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
                 </div>
 
                 <hr />

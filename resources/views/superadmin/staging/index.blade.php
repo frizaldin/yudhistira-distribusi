@@ -71,19 +71,12 @@
                                     </div>
                                 </div>
                                 <div class="d-flex justify-content-between mt-1 progress-stats">
-                                    <small class="text-success">
-                                        Created: {{ $item['progress']['created'] ?? 0 }}
-                                    </small>
-                                    <small class="text-info">
-                                        Updated: {{ $item['progress']['updated'] ?? 0 }}
-                                    </small>
-                                    @if (($item['progress']['errors'] ?? 0) > 0)
-                                        <small class="text-danger">
-                                            Errors: {{ $item['progress']['errors'] ?? 0 }}
-                                        </small>
-                                    @endif
+                                    <small class="text-success progress-created">Created: {{ $item['progress']['created'] ?? 0 }}</small>
+                                    <small class="text-info progress-updated">Updated: {{ $item['progress']['updated'] ?? 0 }}</small>
+                                    <small class="text-danger progress-errors" style="display: {{ ($item['progress']['errors'] ?? 0) > 0 ? 'inline' : 'none' }};">Errors: {{ $item['progress']['errors'] ?? 0 }}</small>
                                 </div>
                             </div>
+                            <div class="alert-completed-placeholder mb-2"></div>
 
                             @if (isset($item['progress']) && ($item['progress']['status'] ?? '') === 'completed')
                                 <div class="alert alert-success alert-sm py-2 mb-2">
@@ -278,94 +271,97 @@
                         $('.count-placeholder').text('?');
                     });
 
-                // Auto refresh page every 2 seconds if any sync is running
-                let refreshInterval;
+                // Poll progress setiap 1 detik dan update DOM (progress bar bergerak tanpa reload)
+                let progressPollInterval = null;
+                const PROGRESS_POLL_MS = 1000;
 
-                function checkIfAnyJobRunning() {
-                    let hasRunningJob = false;
-                    let hasJustCompleted = false;
+                function updateCardProgress(card, progress) {
+                    if (!progress) return;
+                    const pct = (progress.percentage != null) ? progress.percentage : 0;
+                    const processed = progress.processed != null ? progress.processed : 0;
+                    const total = progress.total != null ? progress.total : 0;
+                    const created = progress.created != null ? progress.created : 0;
+                    const updated = progress.updated != null ? progress.updated : 0;
+                    const errors = progress.errors != null ? progress.errors : 0;
 
-                    // Check all items via API to see if any job is running or just completed
-                    $('.synchronize-btn').each(function() {
-                        const type = $(this).data('type');
-                        const card = $(this).closest('.card');
-                        const progressSection = card.find('.progress-section[data-type="' + type + '"]');
-                        const alertCompleted = card.find('.alert-success');
+                    card.find('.progress-bar').css('width', pct + '%');
+                    card.find('.progress-text').text(processed + ' / ' + total + ' (' + Number(pct).toFixed(1) + '%)');
+                    card.find('.progress-created').text('Created: ' + created);
+                    card.find('.progress-updated').text('Updated: ' + updated);
+                    const errEl = card.find('.progress-errors');
+                    if (errors > 0) {
+                        errEl.text('Errors: ' + errors).show();
+                    } else {
+                        errEl.hide();
+                    }
 
-                        // Always check via API if progress section is visible OR if there's no completed alert
-                        // This handles cases where job completes too fast before progress section appears
-                        if (progressSection.is(':visible') || alertCompleted.length === 0) {
-                            $.ajax({
-                                url: '{{ route('staging.progress') }}',
-                                method: 'GET',
-                                data: {
-                                    type: type
-                                },
-                                async: false, // Synchronous to check all before deciding
-                                success: function(response) {
-                                    if (response.success && response.progress) {
-                                        if (response.progress.status === 'running') {
-                                            hasRunningJob = true;
-                                        } else if (response.progress.status === 'completed') {
-                                            // Job just completed - need one more refresh to show final status
-                                            const completedAt = response.progress.completed_at;
-                                            if (completedAt) {
-                                                const completedTime = new Date(completedAt);
-                                                const now = new Date();
-                                                const diffSeconds = (now - completedTime) / 1000;
-                                                // If completed within last 10 seconds, refresh once more
-                                                if (diffSeconds < 10) {
-                                                    hasJustCompleted = true;
-                                                }
-                                            } else {
-                                                // No completed_at timestamp, but status is completed
-                                                // Check if progress section is visible (was running, now completed)
-                                                if (progressSection.is(':visible')) {
-                                                    hasJustCompleted = true;
-                                                }
-                                            }
-                                        }
-                                    } else if (!response.success || !response.progress) {
-                                        // No progress data - might be starting or just completed
-                                        // If progress section is visible, keep checking
-                                        if (progressSection.is(':visible')) {
-                                            hasRunningJob = true;
-                                        }
-                                    }
-                                }
-                            });
+                    const status = (progress.status || '').toLowerCase();
+                    if (status === 'completed' || status === 'failed' || status === 'error') {
+                        card.find('.progress-section').attr('data-polling-done', '1');
+                        card.find('.progress-bar').css('width', '100%').removeClass('progress-bar-animated');
+                        card.find('.progress-text').text(total + ' / ' + total + ' (100.0%)');
+                        const placeholder = card.find('.alert-completed-placeholder');
+                        if (placeholder.length && !placeholder.children().length) {
+                            const isError = (status === 'failed' || status === 'error');
+                            placeholder.html(
+                                '<div class="alert alert-' + (isError ? 'danger' : 'success') + ' alert-sm py-2 mb-2">' +
+                                '<small><i class="bi bi-' + (isError ? 'exclamation-circle' : 'check-circle') + '"></i> ' +
+                                (isError ? 'Terjadi error' : 'Sinkronisasi selesai') + '</small></div>'
+                            );
                         }
-                    });
-
-                    // If any job is running OR just completed, continue refreshing
-                    return hasRunningJob || hasJustCompleted;
-                }
-
-                function startAutoRefresh() {
-                    // Check if any job is running
-                    if (checkIfAnyJobRunning()) {
-                        // Start auto refresh every 2 seconds
-                        if (!refreshInterval) {
-                            refreshInterval = setInterval(function() {
-                                // Check again before refreshing
-                                if (checkIfAnyJobRunning()) {
-                                    location.reload();
-                                } else {
-                                    // No job running, stop auto refresh
-                                    if (refreshInterval) {
-                                        clearInterval(refreshInterval);
-                                        refreshInterval = null;
-                                    }
-                                }
-                            }, 2000);
-                        }
+                        card.find('.synchronize-btn').prop('disabled', false).html('<i class="bi bi-arrow-repeat"></i> Synchronize');
                     }
                 }
 
-                function stopAutoRefresh() {
-                    if (refreshInterval) {
-                        clearInterval(refreshInterval);
-                        refreshInterval = null;
+                function pollProgressOnce() {
+                    let anyActive = false;
+                    $('.progress-section[data-type]').each(function() {
+                        const section = $(this);
+                        if (section.css('display') === 'none' || section.attr('data-polling-done')) return;
+                        const type = section.data('type');
+                        anyActive = true;
+                        $.get('{{ route('staging.progress') }}', { type: type }).done(function(response) {
+                            const card = section.closest('.card');
+                            if (response.success && response.progress) {
+                                updateCardProgress(card, response.progress);
+                            }
+                        });
+                    });
+                    if (!anyActive && progressPollInterval) {
+                        clearInterval(progressPollInterval);
+                        progressPollInterval = null;
+                    }
+                }
+
+                function startProgressPolling() {
+                    if (progressPollInterval) return;
+                    progressPollInterval = setInterval(function() {
+                        $('.progress-section[data-type]').each(function() {
+                            const section = $(this);
+                            if (section.css('display') === 'none' || section.attr('data-polling-done')) return;
+                            const type = section.data('type');
+                            $.get('{{ route('staging.progress') }}', { type: type }).done(function(response) {
+                                const card = section.closest('.card');
+                                if (response.success && response.progress) {
+                                    updateCardProgress(card, response.progress);
+                                }
+                            });
+                        });
+                        // Stop interval when no section needs polling
+                        const stillPolling = $('.progress-section[data-type]').filter(function() {
+                            return $(this).css('display') !== 'none' && !$(this).attr('data-polling-done');
+                        }).length;
+                        if (stillPolling === 0 && progressPollInterval) {
+                            clearInterval(progressPollInterval);
+                            progressPollInterval = null;
+                        }
+                    }, PROGRESS_POLL_MS);
+                }
+
+                function stopProgressPolling() {
+                    if (progressPollInterval) {
+                        clearInterval(progressPollInterval);
+                        progressPollInterval = null;
                     }
                 }
 
@@ -400,7 +396,8 @@
                                 if (response.success) {
                                     btn.html('<i class="bi bi-check-circle"></i> Dimulai');
                                     $('.progress-section').show();
-                                    startAutoRefresh();
+                                    $('.progress-section').removeAttr('data-polling-done');
+                                    startProgressPolling();
                                     Swal.fire({
                                         icon: 'success',
                                         title: 'Berhasil',
@@ -468,20 +465,23 @@
                                 const progressSection = card.find('.progress-section[data-type="' +
                                     type + '"]');
                                 if (progressSection.length) {
-                                    progressSection.show();
-                                    // Set initial progress to 0% while waiting for job to start
+                                    progressSection.show().removeAttr('data-polling-done');
+                                    card.find('.alert-completed-placeholder').empty();
                                     const progressBar = card.find('.progress-bar');
                                     const progressText = card.find('.progress-text');
                                     if (progressBar.length) {
-                                        progressBar.css('width', '0%');
+                                        progressBar.css('width', '0%').addClass('progress-bar-animated');
                                     }
                                     if (progressText.length) {
                                         progressText.text('0 / 0 (0.0%)');
                                     }
+                                    card.find('.progress-created').text('Created: 0');
+                                    card.find('.progress-updated').text('Updated: 0');
+                                    card.find('.progress-errors').hide();
                                 }
 
-                                // Start auto refresh immediately
-                                startAutoRefresh();
+                                // Poll progress setiap 1 detik dan update progress bar tanpa reload
+                                startProgressPolling();
                             } else {
                                 Swal.fire({
                                     icon: 'error',
@@ -505,8 +505,10 @@
                     });
                 });
 
-                // Start auto refresh on page load if any job is running
-                startAutoRefresh();
+                // Saat load, jika ada progress section yang visible (job masih jalan), mulai polling
+                if ($('.progress-section[data-type]').filter(function() { return $(this).css('display') !== 'none'; }).length) {
+                    startProgressPolling();
+                }
 
                 // Cutoff Data Functions
                 $('#btnAddCutoffData').on('click', function() {

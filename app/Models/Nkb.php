@@ -13,6 +13,8 @@ class Nkb extends Model
         'number',
         'nppb_code',
         'note',
+        'creator_name',
+        'known_name',
         'sender_code',
         'recipient_code',
         'send_date',
@@ -42,6 +44,12 @@ class Nkb extends Model
     public function recipientBranch()
     {
         return $this->belongsTo(Branch::class, 'recipient_code', 'branch_code');
+    }
+
+    /** Dokumen NPPB asal (jika NKB dibuat dari preparation notes). */
+    public function document()
+    {
+        return $this->belongsTo(NppbDocument::class, 'nppb_code', 'number');
     }
 
     public function items()

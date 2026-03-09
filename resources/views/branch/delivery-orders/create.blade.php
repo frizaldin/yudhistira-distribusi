@@ -38,7 +38,7 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small">Cabang Tujuan</label>
-                        <select name="recipient_code" class="form-select form-select-sm select2-static" required>
+                        <select name="recipient_code" id="recipient_code" class="form-select form-select-sm select2-static" required>
                             <option value="">-- Pilih --</option>
                             @foreach($branches as $b)
                                 <option value="{{ $b->branch_code }}" {{ old('recipient_code') == $b->branch_code ? 'selected' : '' }}>{{ $b->branch_code }} — {{ $b->branch_name }}</option>
@@ -65,9 +65,13 @@
                         <label class="form-label small">Plat No.</label>
                         <input type="text" name="plate_number" class="form-control form-control-sm" value="{{ old('plate_number') }}" placeholder="B 1234 XY" />
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small">Supir</label>
-                        <input type="text" name="driver" class="form-control form-control-sm" value="{{ old('driver') }}" />
+                    <div class="col-md-2">
+                        <label class="form-label small">Supir 1</label>
+                        <input type="text" name="drivers[0]" class="form-control form-control-sm" value="{{ old('drivers.0') }}" placeholder="Nama supir" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Supir 2</label>
+                        <input type="text" name="drivers[1]" class="form-control form-control-sm" value="{{ old('drivers.1') }}" placeholder="Nama supir" />
                     </div>
                     <div class="col-md-2">
                         <label class="form-label small">Telepon Supir</label>
@@ -78,6 +82,18 @@
                 <div class="mb-3">
                     <label class="form-label small">Keterangan</label>
                     <textarea name="note" class="form-control form-control-sm" rows="2" placeholder="Catatan pengiriman">{{ old('note') }}</textarea>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Nama Pembuat <span class="text-danger">*</span></label>
+                        <input type="text" name="creator_name" class="form-control form-control-sm" maxlength="255" value="{{ old('creator_name') }}" required />
+                        @error('creator_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Nama Dikenal <span class="text-danger">*</span></label>
+                        <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255" value="{{ old('known_name') }}" required />
+                        @error('known_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
                 </div>
 
                 <hr />
@@ -107,10 +123,10 @@
                             @foreach($oldItems as $idx => $oi)
                                 <tr class="item-row">
                                     <td>
-                                        <select name="items[{{ $idx }}][nkb_id]" class="form-select form-select-sm nkb-select select2-nkb" required>
+                                        <select name="items[{{ $idx }}][nkb_id]" class="form-select form-select-sm nkb-select select2-nkb" required data-recipient-filter="1">
                                             <option value="">-- Pilih NKB --</option>
                                             @foreach($nkbs as $n)
-                                                <option value="{{ $n->id }}" {{ (old('items.'.$idx.'.nkb_id') ?? $oi['nkb_id'] ?? '') == $n->id ? 'selected' : '' }}>{{ $n->number }}</option>
+                                                <option value="{{ $n->id }}" data-recipient="{{ $n->recipient_code ?? '' }}" {{ (old('items.'.$idx.'.nkb_id') ?? $oi['nkb_id'] ?? '') == $n->id ? 'selected' : '' }}>{{ $n->number }}</option>
                                             @endforeach
                                         </select>
                                     </td>
@@ -138,10 +154,10 @@
     <template id="row-template">
         <tr class="item-row">
             <td>
-                <select name="items[__INDEX__][nkb_id]" class="form-select form-select-sm nkb-select select2-nkb" required>
+                <select name="items[__INDEX__][nkb_id]" class="form-select form-select-sm nkb-select select2-nkb" required data-recipient-filter="1">
                     <option value="">-- Pilih NKB --</option>
                     @foreach($nkbs as $n)
-                        <option value="{{ $n->id }}">{{ $n->number }}</option>
+                        <option value="{{ $n->id }}" data-recipient="{{ $n->recipient_code ?? '' }}">{{ $n->number }}</option>
                     @endforeach
                 </select>
             </td>
@@ -154,6 +170,7 @@
 
     @push('js')
     <script>
+        var nkbsList = @json($nkbs->map(fn($n) => ['id' => $n->id, 'number' => $n->number, 'recipient_code' => $n->recipient_code ?? '']));
         $(function() {
             var rowIndex = $('#items-tbody .item-row').length;
             var nkbDetailUrlTemplate = '{{ route("api.nkb.detail", ["id" => ":id"]) }}';
@@ -240,9 +257,39 @@
                 });
             }
 
+            function filterNkbByRecipient() {
+                var recipient = $('#recipient_code').val() || '';
+                var allowed = (recipient === '') ? nkbsList : nkbsList.filter(function(n) { return (n.recipient_code || '') === recipient; });
+                $('#items-tbody select.nkb-select[data-recipient-filter="1"]').each(function() {
+                    var $sel = $(this);
+                    var curVal = $sel.val();
+                    $sel.find('option').remove();
+                    $sel.append($('<option value="">-- Pilih NKB --</option>'));
+                    allowed.forEach(function(n) {
+                        var opt = $('<option></option>').attr('value', n.id).text(n.number);
+                        if (String(n.id) === String(curVal)) opt.prop('selected', true);
+                        $sel.append(opt);
+                    });
+                    if (curVal && allowed.every(function(n) { return String(n.id) !== String(curVal); })) {
+                        $sel.closest('tr').find('td').eq(1).find('input').val(0);
+                        $sel.closest('tr').find('td').eq(2).find('input').val(0);
+                        $sel.closest('tr').find('td').eq(3).find('input').val(0);
+                    }
+                    if ($sel.hasClass('select2-hidden-accessible')) {
+                        $sel.select2('destroy');
+                    }
+                    initSelect2Nkb($sel);
+                });
+            }
+
+            $('#recipient_code').on('change', function() {
+                filterNkbByRecipient();
+            });
+
             $('#items-tbody select.select2-nkb').each(function() {
                 initSelect2Nkb($(this));
             });
+            filterNkbByRecipient();
 
             // Isi otomatis untuk baris yang sudah punya NKB terpilih (mis. setelah validasi gagal)
             $('#items-tbody .item-row').each(function() {
@@ -254,7 +301,9 @@
                 var tpl = $('#row-template').html();
                 var html = tpl.replace(/__INDEX__/g, rowIndex);
                 $('#items-tbody').append(html);
-                initSelect2Nkb($('#items-tbody tr:last-child select.select2-nkb'));
+                var $newSelect = $('#items-tbody tr:last-child select.select2-nkb');
+                initSelect2Nkb($newSelect);
+                filterNkbByRecipient();
                 rowIndex++;
             });
 

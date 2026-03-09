@@ -93,9 +93,19 @@
             </div>
 
             <form class="row g-2 mb-3" method="GET" action="{{ route('product.index') }}">
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <input type="text" class="form-control" name="search_book_code" placeholder="Kode buku"
+                        value="{{ request('search_book_code') }}" />
+                </div>
+                <div class="col-md-2">
                     <input type="text" class="form-control" name="search" placeholder="Cari nama produk"
                         value="{{ request('search') }}" />
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select select2-static" name="marketing_list" title="Filter list marketing">
+                        <option value="">Semua</option>
+                        <option value="Y" {{ request('marketing_list') === 'Y' ? 'selected' : '' }}>List marketing saja</option>
+                    </select>
                 </div>
                 <div class="col-md-2">
                     <select class="form-select select2-static" name="jenis">
@@ -107,7 +117,7 @@
                         </option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <select class="form-select select2-static" name="jenjang">
                         <option value="">Jenjang</option>
                         <option value="SD" {{ request('jenjang') == 'SD' ? 'selected' : '' }}>SD</option>
@@ -115,7 +125,7 @@
                         <option value="SMA" {{ request('jenjang') == 'SMA' ? 'selected' : '' }}>SMA</option>
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <select class="form-select select2-static" name="status">
                         <option value="">Status</option>
                         <option value="Aktif" {{ request('status') == 'Aktif' ? 'selected' : '' }}>Aktif</option>
@@ -123,7 +133,7 @@
                         </option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex gap-2">
+                <div class="col-md-2 d-flex gap-2">
                     <button type="submit" class="btn btn-outline-secondary" style="height: 38px;">
                         <i class="bi bi-search me-1"></i>Cari
                     </button>
@@ -154,6 +164,12 @@
                                 <td class="text-end">
                                     <a href="{{ route('product.detail', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-primary" title="Detail stok & SP per cabang">
                                         <i class="bi bi-eye me-1"></i>Detail
+                                    </a>
+                                    <a href="{{ route('product.nkb-history', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-secondary" title="History NKB untuk buku ini">
+                                        <i class="bi bi-journal-text me-1"></i>History NKB
+                                    </a>
+                                    <a href="{{ route('product.delivery-order-history', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-secondary" title="History Surat Jalan untuk buku ini">
+                                        <i class="bi bi-truck me-1"></i>History SJ
                                     </a>
                                 </td>
                             </tr>

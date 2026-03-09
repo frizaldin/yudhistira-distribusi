@@ -10,6 +10,11 @@
                         class="btn btn-outline-secondary btn-sm mb-2 ms-1">
                         <i class="bi bi-printer me-1"></i>Print
                     </a>
+                    @if (empty($used_in_do))
+                        <a href="{{ route('nkb.edit', ['number' => $nkb->number]) }}" class="btn btn-outline-primary btn-sm mb-2 ms-1">
+                            <i class="bi bi-pencil me-1"></i>Edit
+                        </a>
+                    @endif
                     <strong>Detail NKB — {{ $nkb->number ?? '' }}</strong>
                 </div>
             </div>

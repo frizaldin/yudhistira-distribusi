@@ -69,7 +69,7 @@
                                 <td>{{ $item->recipientBranch->branch_name ?? $item->recipient_code }}</td>
                                 <td>{{ $item->date ? $item->date->format('d/m/Y') : '-' }}</td>
                                 <td>{{ $item->expedition ?? '-' }}</td>
-                                <td>{{ $item->driver ?? '-' }}</td>
+                                <td>{{ is_array($item->drivers) ? implode(', ', array_filter($item->drivers)) : ($item->drivers ?? '-') }}</td>
                                 <td class="text-center">
                                     <a href="{{ route('delivery-orders.show', $item->id) }}"
                                         class="btn btn-sm btn-outline-primary">

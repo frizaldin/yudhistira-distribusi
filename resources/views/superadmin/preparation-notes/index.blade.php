@@ -71,6 +71,16 @@
                                         class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-list-ul me-1"></i>Detail
                                     </a>
+                                    @if (empty($item->has_document))
+                                        <form method="POST" action="{{ route('preparation_notes.cancel_rencana') }}"
+                                            class="d-inline form-cancel-rencana" data-stack="{{ $item->stack }}">
+                                            @csrf
+                                            <input type="hidden" name="stack" value="{{ $item->stack }}" />
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-1 btn-cancel-rencana">
+                                                <i class="bi bi-x-circle me-1"></i>Batalkan Rencana
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
@@ -112,4 +122,30 @@
             @endif
         </div>
     </div>
+
+    @push('js')
+        <script>
+            document.querySelectorAll('.btn-cancel-rencana').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var form = this.closest('form');
+                    var stack = form.dataset.stack || '';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Batalkan rencana?',
+                            text: 'Seluruh data rencana kirim stack ' + stack + ' akan dihapus. Lanjutkan?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: 'Ya, batalkan'
+                        }).then(function(result) {
+                            if (result.isConfirmed) form.submit();
+                        });
+                    } else if (confirm('Batalkan seluruh rencana stack ' + stack + '? Data akan dihapus.')) {
+                        form.submit();
+                    }
+                });
+            });
+        </script>
+    @endpush
 </x-layouts>

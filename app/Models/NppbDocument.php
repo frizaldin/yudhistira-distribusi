@@ -22,6 +22,8 @@ class NppbDocument extends Model
         'total_type_books',
         'total_exemplar',
         'note_more',
+        'creator_name',
+        'known_name',
         'created_by',
     ];
 

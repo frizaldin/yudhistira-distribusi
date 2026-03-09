@@ -73,6 +73,12 @@
                                         class="btn btn-sm btn-outline-primary" title="Lihat Detail">
                                         <i class="bi bi-eye me-1"></i>Detail
                                     </a>
+                                    <a href="{{ route('branch.nkb-history', ['branch_code' => $branch->branch_code]) }}" class="btn btn-sm btn-outline-secondary" title="History NKB cabang ini">
+                                        <i class="bi bi-journal-text me-1"></i>History NKB
+                                    </a>
+                                    <a href="{{ route('branch.delivery-order-history', ['branch_code' => $branch->branch_code]) }}" class="btn btn-sm btn-outline-secondary" title="History Surat Jalan cabang ini">
+                                        <i class="bi bi-truck me-1"></i>History SJ
+                                    </a>
                                 </td>
                             </tr>
                         @empty

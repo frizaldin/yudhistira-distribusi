@@ -56,7 +56,7 @@
                                     <i class="bi bi-eye me-1"></i>Lihat NKB
                                 </a>
                             @else
-                                <a href="{{ route('preparation_notes.preview_nkb_page', ['stack' => $stack ?? '']) }}"
+                                <a href="{{ route('preparation_notes.preview_nkb_page', ['stack' => $stack ?? '', 'from' => 'nkb']) }}"
                                     class="btn btn-outline-primary btn-sm ms-1">
                                     <i class="bi bi-file-earmark-plus me-1"></i>Jadikan NKB
                                 </a>
@@ -70,6 +70,7 @@
                 <form id="form-detail-update" method="POST" action="{{ route('preparation_notes.detail.update') }}">
                     @csrf
                     <input type="hidden" name="stack" value="{{ $stack ?? '' }}" />
+                </form>
             @endif
             <div class="table-responsive">
                 <table class="table table-hover table-sm align-middle mb-0">
@@ -84,6 +85,9 @@
                             <th class="text-center">Koli</th>
                             <th class="text-center">Eceran</th>
                             <th class="text-center">Total</th>
+                            @if (empty($has_document))
+                                <th class="text-center" style="width: 80px;">Aksi</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -127,10 +131,27 @@
                                     <td class="text-end">{{ number_format($row->pls ?? 0) }}</td>
                                     <td class="text-end">{{ number_format($row->exp ?? 0) }}</td>
                                 @endif
+                                @if (empty($has_document))
+                                    <td class="text-center align-middle">
+                                        <form method="POST"
+                                            action="{{ route('preparation_notes.detail.delete_rows') }}"
+                                            class="d-inline form-delete-item" data-book-code="{{ $row->book_code }}">
+                                            @csrf
+                                            <input type="hidden" name="stack" value="{{ $stack ?? '' }}" />
+                                            <input type="hidden" name="rows[]" value="{{ $row->id }}" />
+                                            <button type="button"
+                                                class="btn btn-outline-danger btn-sm py-0 px-1 btn-delete-item"
+                                                title="Hapus item">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="text-center py-4 text-muted">
+                                <td colspan="{{ empty($has_document) ? 10 : 9 }}"
+                                    class="text-center py-4 text-muted">
                                     Tidak ada data untuk stack ini.
                                 </td>
                             </tr>
@@ -138,9 +159,6 @@
                     </tbody>
                 </table>
             </div>
-            @if (empty($has_document))
-                </form>
-            @endif
         </div>
     </div>
 
@@ -148,7 +166,7 @@
     @if (isset($rows) && $rows->isNotEmpty() && empty($has_document))
         <div class="modal fade" id="modalApproveRencana" tabindex="-1" aria-labelledby="modalApproveRencanaLabel"
             aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content">
                     <form method="POST" action="{{ route('preparation_notes.approve_rencana') }}">
                         @csrf
@@ -171,48 +189,44 @@
                                 <small><i>Contoh: Kepada, Pemegang Stock Gudang U/P Destiana Mohon Segera Disiapkan
                                         Barang Barang SBB</i></small>
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label">Pengirim <span class="text-danger">*</span></label>
-                                <select name="sender_code" id="approve_sender_code"
-                                    class="form-select form-select-sm select2-approve-modal w-100" required>
-                                    <option value="">-- Pilih Pengirim --</option>
-                                    @foreach ($branches ?? [] as $b)
-                                        <option value="{{ $b->branch_code }}"
-                                            {{ old('sender_code') == $b->branch_code ? 'selected' : '' }}>
-                                            {{ $b->branch_code }} - {{ $b->branch_name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('sender_code')
-                                    <div class="text-danger small">{{ $message }}</div>
-                                @enderror
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Pengirim</label>
+                                        <input type="hidden" name="sender_code"
+                                            value="{{ $default_sender_code ?? 'PS00' }}" />
+                                        <input type="text" class="form-control form-control-sm bg-light" readonly
+                                            value="{{ $default_sender_code ?? 'PS00' }} - {{ $branches->firstWhere('branch_code', $default_sender_code ?? 'PS00')?->branch_name ?? 'Pusat' }}" />
+                                        <small class="text-muted">Pengirim selalu PS00 (Pusat).</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Penerima (Cabang)</label>
+                                        <input type="hidden" name="recipient_code"
+                                            value="{{ $default_recipient_code ?? '' }}" />
+                                        <input type="text" class="form-control form-control-sm bg-light" readonly
+                                            value="{{ $default_recipient_code ?? '' }} - {{ $default_recipient_name ?? '' }}" />
+                                        <small class="text-muted">Penerima diambil dari data stack (cabang pada rencana
+                                            kirim
+                                            ini).</small>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label">Penerima (Cabang) <span class="text-danger">*</span></label>
-                                <select name="recipient_code" id="approve_recipient_code"
-                                    class="form-select form-select-sm select2-approve-modal w-100" required>
-                                    <option value="">-- Pilih Cabang Penerima --</option>
-                                    @foreach ($branches ?? [] as $b)
-                                        <option value="{{ $b->branch_code }}"
-                                            {{ old('recipient_code') == $b->branch_code ? 'selected' : '' }}>
-                                            {{ $b->branch_code }} - {{ $b->branch_name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('recipient_code')
-                                    <div class="text-danger small">{{ $message }}</div>
-                                @enderror
-                            </div>
-                            <div class="mb-2">
-                                <label class="form-label">Tanggal Kirim <span class="text-danger">*</span></label>
-                                <input type="date" name="send_date" class="form-control form-control-sm"
-                                    value="{{ old('send_date', date('Y-m-d')) }}" required />
-                                @error('send_date')
-                                    <div class="text-danger small">{{ $message }}</div>
-                                @enderror
-                            </div>
+
                             <div class="row g-2">
-                                <div class="col-6">
+                                <div class="col-4">
+                                    <div class="mb-2">
+                                        <label class="form-label">Tanggal Kirim <span
+                                                class="text-danger">*</span></label>
+                                        <input type="date" name="send_date" class="form-control form-control-sm"
+                                            value="{{ old('send_date', date('Y-m-d')) }}" required />
+                                        @error('send_date')
+                                            <div class="text-danger small">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-4">
                                     <label class="form-label">Total Jenis Buku <span
                                             class="text-danger">*</span></label>
                                     <input type="number" name="total_type_books" readonly
@@ -222,7 +236,7 @@
                                         <div class="text-danger small">{{ $message }}</div>
                                     @enderror
                                 </div>
-                                <div class="col-6">
+                                <div class="col-4">
                                     <label class="form-label">Total Eksemplar <span
                                             class="text-danger">*</span></label>
                                     <input type="number" name="total_exemplar" readonly
@@ -241,6 +255,31 @@
                                 @enderror
                                 <small><i>Contoh : Tolong Kirim Buku Secepatnya</i></small>
                             </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Nama Pembuat <span
+                                                class="text-danger">*</span></label>
+                                        <input type="text" name="creator_name"
+                                            class="form-control form-control-sm" maxlength="255"
+                                            value="{{ old('creator_name') }}" required />
+                                        @error('creator_name')
+                                            <div class="text-danger small">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Yang Mengetahui <span
+                                                class="text-danger">*</span></label>
+                                        <input type="text" name="known_name" class="form-control form-control-sm"
+                                            maxlength="255" value="{{ old('known_name') }}" required />
+                                        @error('known_name')
+                                            <div class="text-danger small">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-outline-secondary btn-sm"
@@ -253,30 +292,25 @@
             </div>
         </div>
 
-@push('js')
+        @push('js')
             <script>
-                $(function() {
-                    var $modal = $('#modalApproveRencana');
-                    if (!$modal.length) return;
-                    var opts = {
-                        theme: 'bootstrap-5',
-                        width: '100%',
-                        allowClear: true,
-                        dropdownParent: $modal
-                    };
-                    $modal.on('shown.bs.modal', function() {
-                        var $s = $('#approve_sender_code'),
-                            $r = $('#approve_recipient_code');
-                        if (!$s.length || !$r.length) return;
-                        if ($s.hasClass('select2-hidden-accessible')) $s.select2('destroy');
-                        if ($r.hasClass('select2-hidden-accessible')) $r.select2('destroy');
-                        $s.select2(opts);
-                        $r.select2(opts);
-                    }).on('hidden.bs.modal', function() {
-                        var $s = $('#approve_sender_code'),
-                            $r = $('#approve_recipient_code');
-                        if ($s.hasClass('select2-hidden-accessible')) $s.select2('destroy');
-                        if ($r.hasClass('select2-hidden-accessible')) $r.select2('destroy');
+                document.addEventListener('DOMContentLoaded', function() {
+                    document.querySelectorAll('.btn-delete-item').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            var form = this.closest('form');
+                            var bookCode = form.dataset.bookCode || '';
+                            Swal.fire({
+                                title: 'Hapus item?',
+                                text: 'Hapus item ' + bookCode + ' dari rencana?',
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonColor: '#d33',
+                                cancelButtonColor: '#6c757d',
+                                confirmButtonText: 'Ya, hapus'
+                            }).then(function(result) {
+                                if (result.isConfirmed) form.submit();
+                            });
+                        });
                     });
                 });
             </script>

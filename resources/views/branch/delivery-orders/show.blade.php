@@ -56,7 +56,7 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small">Supir</label>
-                    <input type="text" class="form-control form-control-sm" value="{{ $deliveryOrder->driver ?? '-' }}" readonly />
+                    <input type="text" class="form-control form-control-sm" value="{{ is_array($deliveryOrder->drivers) ? implode(', ', array_filter($deliveryOrder->drivers)) : ($deliveryOrder->drivers ?? '-') }}" readonly />
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small">Telepon Supir</label>

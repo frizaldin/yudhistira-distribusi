@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Product;
 use App\Models\NppbCentral;
 use App\Models\CentralStock;
+use App\Models\CentralStockDeduction;
 use App\Models\CentralStockKoli;
 use App\Models\Periode;
 use App\Models\SpBranch;
@@ -243,6 +244,12 @@ class ApiController extends Controller
             ->get()
             ->keyBy('book_code');
 
+        // Pengurangan stock pusat karena NKB / Delivery Order (eksemplar yang sudah keluar)
+        $centralStockDeductions = CentralStockDeduction::select([
+            'book_code',
+            DB::raw('SUM(quantity) as total_deducted')
+        ])->groupBy('book_code')->get()->keyBy('book_code');
+
         // Check if there's an active cutoff_data
         $activeCutoff = CutoffData::where('status', 'active')->first();
 
@@ -457,7 +464,7 @@ class ApiController extends Controller
         }
 
         // Combine data
-        $results = $products->map(function ($product) use ($centralStocks, $existingNppb, $spBranchData, $spBranchNasional, $stockTeralokasikanData, $targetNasional, $branchCode, $stockKolisByBranch, $stockKolisGeneral, $intransitData, $nppbApprovedExpByBook, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
+        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductions, $existingNppb, $spBranchData, $spBranchNasional, $stockTeralokasikanData, $targetNasional, $branchCode, $stockKolisByBranch, $stockKolisGeneral, $intransitData, $nppbApprovedExpByBook, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $spBranch = $spBranchData->get($product->book_code);
@@ -468,7 +475,9 @@ class ApiController extends Controller
             $sp = $spBranch->sp ?? 0;
             $faktur = $spBranch->faktur ?? 0;
             $stockCabang = $spBranch->stock_cabang ?? 0;
-            $stockPusat = $stock->total_stock_pusat ?? 0;
+            $rawStockPusat = $stock->total_stock_pusat ?? 0;
+            $deducted = $centralStockDeductions->get($product->book_code)?->total_deducted ?? 0;
+            $stockPusat = max(0, $rawStockPusat - $deducted);
             $stockNasional = $spNasionalRow->stock_nasional ?? 0;
             $spNasional = $spNasionalRow->sp_nasional ?? 0;
             $stockTeralokasikan = $teralokasikanRow->stock_teralokasikan ?? 0;
@@ -594,27 +603,27 @@ class ApiController extends Controller
             ];
         });
 
-        // Urutkan berdasarkan parameter sort
+        // Urutkan berdasarkan parameter sort (pakai numerik agar string dari DB tidak salah urut)
         $sort = $request->get('sort', '');
         if ($sort !== '') {
             switch ($sort) {
                 case 'sp_desc':
-                    $results = $results->sortByDesc('sp')->values();
+                    $results = $results->sortByDesc(fn ($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'sp_asc':
-                    $results = $results->sortBy('sp')->values();
+                    $results = $results->sortBy(fn ($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'exp_desc':
-                    $results = $results->sortByDesc('exp')->values();
+                    $results = $results->sortByDesc(fn ($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'exp_asc':
-                    $results = $results->sortBy('exp')->values();
+                    $results = $results->sortBy(fn ($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_desc':
-                    $results = $results->sortByDesc('sisa_sp')->values();
+                    $results = $results->sortByDesc(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_asc':
-                    $results = $results->sortBy('sisa_sp')->values();
+                    $results = $results->sortBy(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 default:
                     break;
@@ -701,6 +710,11 @@ class ApiController extends Controller
             ->groupBy('book_code')
             ->get()
             ->keyBy('book_code');
+
+        $centralStockDeductionsWarehouse = CentralStockDeduction::select([
+            'book_code',
+            DB::raw('SUM(quantity) as total_deducted')
+        ])->groupBy('book_code')->get()->keyBy('book_code');
 
         $activeCutoff = CutoffData::where('status', 'active')->first();
 
@@ -860,7 +874,7 @@ class ApiController extends Controller
                 ->keyBy('book_code');
         }
 
-        $results = $products->map(function ($product) use ($centralStocks, $existingNppb, $spBranchData, $intransitData, $allStockKolis, $nppbApprovedExpByBook, $targetNasional, $spBranchNasional, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
+        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductionsWarehouse, $existingNppb, $spBranchData, $intransitData, $allStockKolis, $nppbApprovedExpByBook, $targetNasional, $spBranchNasional, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $hasExistingData = ($nppb !== null);
@@ -872,7 +886,9 @@ class ApiController extends Controller
             $sp = $spBranch->sp ?? 0;
             $faktur = $spBranch->faktur ?? 0;
             $stockCabang = $spBranch->stock_cabang ?? 0;
-            $stockPusat = $stock->total_stock_pusat ?? 0;
+            $rawStockPusatWarehouse = $stock->total_stock_pusat ?? 0;
+            $deductedWarehouse = $centralStockDeductionsWarehouse->get($product->book_code)?->total_deducted ?? 0;
+            $stockPusat = max(0, $rawStockPusatWarehouse - $deductedWarehouse);
             $targetNasionalVal = $targetNasionalRow->target_nasional ?? 0;
 
             // Tambahkan eksemplar dari NPPB yang sudah diapprove ke stock cabang
@@ -939,26 +955,27 @@ class ApiController extends Controller
             ];
         });
 
+        // Urutkan berdasarkan parameter sort (pakai numerik agar string dari DB tidak salah urut)
         $sort = $request->get('sort', '');
         if ($sort !== '') {
             switch ($sort) {
                 case 'sp_desc':
-                    $results = $results->sortByDesc('sp')->values();
+                    $results = $results->sortByDesc(fn ($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'sp_asc':
-                    $results = $results->sortBy('sp')->values();
+                    $results = $results->sortBy(fn ($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'exp_desc':
-                    $results = $results->sortByDesc('exp')->values();
+                    $results = $results->sortByDesc(fn ($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'exp_asc':
-                    $results = $results->sortBy('exp')->values();
+                    $results = $results->sortBy(fn ($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_desc':
-                    $results = $results->sortByDesc('sisa_sp')->values();
+                    $results = $results->sortByDesc(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_asc':
-                    $results = $results->sortBy('sisa_sp')->values();
+                    $results = $results->sortBy(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 default:
                     break;

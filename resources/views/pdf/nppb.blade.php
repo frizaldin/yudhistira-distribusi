@@ -199,24 +199,31 @@
 
     <table class="footer-table" style="margin-top: 28px; width: 100%;">
         <tr>
-            <td>
+            <td class="text-center" style="text-align: center">
                 <strong>DITERIMA</strong><br>
-                <span style="display: inline-block; margin-top: 20px;">(__________________)</span>
+                <br><br><br><br><br>
+                <span style="display: inline-block; margin-top: 20px;">(_______________)</span>
             </td>
-            <td>
+            <td class="text-center" style="text-align: center">
                 <strong>MENGETAHUI</strong><br>
-                <span style="display: inline-block; margin-top: 20px;">(__________________)</span>
+                <br><br><br><br><br>
+                <span
+                    style="display: inline-block; margin-top: 20px;">(_____{{ substr($document->known_name, 0, 20) ?? '' }}_____)</span>
             </td>
-            <td>
+            <td class="text-center" style="text-align: center">
                 <strong>KETERANGAN :</strong><br>
+                <br><br><br><br><br>
                 @if (!empty($document->note_more))
                     {{ nl2br(e($document->note_more)) }}
                 @endif
             </td>
-            <td>
+            <td class="text-center" style="text-align: center">
                 <strong>PUSAT</strong>,
-                {{ $document->send_date ? $document->send_date->locale('id')->translatedFormat('d F Y') : '' }}<br>
-                <span style="display: inline-block; margin-top: 20px;">(__________________)</span>
+                {{ $document->send_date ? $document->send_date->locale('id')->translatedFormat('d F Y') : '' }}<br><br>
+                <br>
+                <br><br><br>
+                <span
+                    style="display: inline-block; margin-top: 20px;">(_____{{ substr($document->creator_name, 0, 20) ?? '' }}_____)</span>
             </td>
         </tr>
     </table>

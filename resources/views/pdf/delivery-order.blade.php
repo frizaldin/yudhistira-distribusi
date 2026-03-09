@@ -269,7 +269,7 @@
             <td class="colon">:</td>
             <td class="value">
                 <div class="row-split">
-                    <div class="row-split-left">{{ $do->driver ?? '-' }}</div>
+                    <div class="row-split-left">{{ is_array($do->drivers) ? implode(', ', array_filter($do->drivers)) : ($do->drivers ?? '-') }}</div>
                     <div class="row-split-right"><strong>Telp/HP:</strong> {{ $do->driver_phone ?? '' }}</div>
                 </div>
             </td>

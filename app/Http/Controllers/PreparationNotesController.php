@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Nkb;
 use App\Models\NkbItem;
 use App\Models\NppbCentral;
+use App\Models\CentralStockDeduction;
 use App\Models\NppbDocument;
 use App\Models\Branch;
 use App\Models\Product;
@@ -87,7 +88,7 @@ class PreparationNotesController extends Controller
 
         $groupedByStack = $rows->groupBy('stack');
 
-        // List ringkas per stack: stack, tanggal (max date), jumlah baris, nama pembuat
+        // List ringkas per stack: stack, tanggal (max date), jumlah baris, nama pembuat, sudah disetujui atau belum
         $stackList = $stacksForPage->map(function ($stack) use ($groupedByStack) {
             $rowsInStack = $groupedByStack[$stack] ?? collect();
             $firstRow = $rowsInStack->first();
@@ -96,6 +97,7 @@ class PreparationNotesController extends Controller
                 'date' => $rowsInStack->max('date'),
                 'count' => $rowsInStack->count(),
                 'creator_name' => $firstRow && $firstRow->creator ? $firstRow->creator->name : '-',
+                'has_document' => $rowsInStack->contains(fn ($r) => !empty($r->document_id)),
             ];
         });
 
@@ -166,6 +168,14 @@ class PreparationNotesController extends Controller
             ->orderBy('branch_name')
             ->get(['branch_code', 'branch_name']);
 
+        // Pengirim selalu PS00; penerima dari data stack (jika semua baris satu cabang = cabang itu, else cabang pertama)
+        $defaultSenderCode = 'PS00';
+        $branchCodesInStack = $rows->pluck('branch_code')->unique()->values();
+        $defaultRecipientCode = $branchCodesInStack->count() === 1
+            ? $branchCodesInStack->first()
+            : $branchCodesInStack->first();
+        $defaultRecipientName = $branches->firstWhere('branch_code', $defaultRecipientCode)?->branch_name ?? $defaultRecipientCode;
+
         $data = [
             'title' => $this->title . ' - Detail',
             'base_url' => $this->base_url,
@@ -177,6 +187,9 @@ class PreparationNotesController extends Controller
             'has_document' => $hasDocument,
             'existing_nkb' => $existingNkb,
             'branches' => $branches,
+            'default_sender_code' => $defaultSenderCode,
+            'default_recipient_code' => $defaultRecipientCode,
+            'default_recipient_name' => $defaultRecipientName,
         ];
 
         return view($this->callbackfolder . '.preparation-notes.detail', $data);
@@ -249,20 +262,20 @@ class PreparationNotesController extends Controller
         $request->validate([
             'stack' => 'required|string|max:255',
             'note' => 'required|string',
-            'sender_code' => 'required|string|max:255|exists:branches,branch_code',
-            'recipient_code' => 'required|string|max:255|exists:branches,branch_code',
             'send_date' => 'required|date',
             'total_type_books' => 'required|integer|min:0',
             'total_exemplar' => 'required|integer|min:0',
             'note_more' => 'required|string',
+            'creator_name' => 'required|string|max:255',
+            'known_name' => 'required|string|max:255',
         ], [], [
             'note' => 'Catatan',
-            'sender_code' => 'Pengirim',
-            'recipient_code' => 'Penerima',
             'send_date' => 'Tanggal Kirim',
             'total_type_books' => 'Total Jenis Buku',
             'total_exemplar' => 'Total Eksemplar',
             'note_more' => 'Catatan Tambahan',
+            'creator_name' => 'Nama Pembuat',
+            'known_name' => 'Nama Dikenal',
         ]);
 
         $stack = $request->input('stack');
@@ -278,17 +291,28 @@ class PreparationNotesController extends Controller
                 ->with('error', 'Tidak ada data rencana untuk stack ini.');
         }
 
-        $doc = DB::transaction(function () use ($request, $stack, $filteredBranchCodes) {
+        // Pengirim selalu PS00; penerima dari data stack (satu cabang unik atau cabang pertama)
+        $senderCode = 'PS00';
+        $branchCodesInStack = $rows->pluck('branch_code')->unique()->values();
+        $recipientCode = $branchCodesInStack->count() >= 1 ? $branchCodesInStack->first() : null;
+        if (!$recipientCode) {
+            return redirect()->route('preparation_notes.detail', ['stack' => $stack])
+                ->with('error', 'Tidak dapat menentukan cabang penerima dari data stack.');
+        }
+
+        $doc = DB::transaction(function () use ($request, $stack, $filteredBranchCodes, $senderCode, $recipientCode) {
             $number = NppbDocument::generateNextNumber();
             $doc = NppbDocument::create([
                 'number' => $number,
                 'note' => $request->input('note'),
-                'sender_code' => $request->input('sender_code'),
-                'recipient_code' => $request->input('recipient_code'),
+                'sender_code' => $senderCode,
+                'recipient_code' => $recipientCode,
                 'send_date' => $request->input('send_date'),
                 'total_type_books' => (int) $request->input('total_type_books'),
                 'total_exemplar' => (int) $request->input('total_exemplar'),
                 'note_more' => $request->input('note_more', ''),
+                'creator_name' => $request->input('creator_name', ''),
+                'known_name' => $request->input('known_name', ''),
                 'created_by' => Auth::id(),
             ]);
 
@@ -303,6 +327,63 @@ class PreparationNotesController extends Controller
 
         return redirect()->route('preparation_notes.detail', ['stack' => $stack])
             ->with('success', 'Rencana berhasil disetujui. Dokumen NPPB ' . $doc->number . ' telah dibuat.');
+    }
+
+    /**
+     * Hapus item (baris NPPB) yang dipilih dari detail stack.
+     * Hanya boleh jika stack belum punya dokumen (belum disetujui).
+     */
+    public function deleteDetailRows(Request $request)
+    {
+        $request->validate([
+            'stack' => 'required|string|max:255',
+            'rows' => 'required|array',
+            'rows.*' => 'required|integer|exists:nppb_centrals,id',
+        ], [], [
+            'stack' => 'Stack',
+            'rows' => 'Item',
+        ]);
+
+        $stack = $request->input('stack');
+        $ids = $request->input('rows');
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+
+        $query = NppbCentral::where('stack', $stack)
+            ->whereIn('id', $ids)
+            ->whereNull('document_id');
+        if ($filteredBranchCodes !== null) {
+            $query->whereIn('branch_code', $filteredBranchCodes);
+        }
+        $deleted = $query->delete();
+
+        return redirect()->route('preparation_notes.detail', ['stack' => $stack])
+            ->with('success', $deleted . ' item berhasil dihapus.');
+    }
+
+    /**
+     * Batalkan/hapus rencana (seluruh stack). Hanya untuk stack yang belum disetujui (belum punya dokumen).
+     */
+    public function cancelRencana(Request $request)
+    {
+        $request->validate([
+            'stack' => 'required|string|max:255',
+        ], [], ['stack' => 'Stack']);
+
+        $stack = $request->input('stack');
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+
+        $query = NppbCentral::where('stack', $stack)->whereNull('document_id');
+        if ($filteredBranchCodes !== null) {
+            $query->whereIn('branch_code', $filteredBranchCodes);
+        }
+        if ($query->count() === 0) {
+            return redirect()->route('preparation_notes.index')
+                ->with('error', 'Rencana tidak ditemukan atau sudah disetujui. Hanya rencana yang belum disetujui yang dapat dibatalkan.');
+        }
+
+        $deleted = $query->delete();
+        return redirect()->route('preparation_notes.index')
+            ->with('success', 'Rencana ' . $stack . ' berhasil dibatalkan (' . $deleted . ' baris dihapus).');
     }
 
     /**
@@ -537,8 +618,13 @@ class PreparationNotesController extends Controller
     {
         $request->validate([
             'stack' => 'required|string|max:255',
+            'creator_name' => 'required|string|max:255',
+            'known_name' => 'required|string|max:255',
             'row_ids' => 'sometimes|array',
             'row_ids.*' => 'integer|exists:nppb_centrals,id',
+        ], [], [
+            'creator_name' => 'Nama Pembuat',
+            'known_name' => 'Nama Dikenal',
         ]);
 
         $stack = $request->input('stack');
@@ -581,15 +667,35 @@ class PreparationNotesController extends Controller
                 ->with('error', 'Pilih minimal satu item untuk dibuat NKB.');
         }
 
-        $totalTypeBooks = $rows->pluck('book_code')->unique()->count();
-        $totalExemplar = (int) $rows->sum('exp');
+        // Ambil nilai koli, volume, exp dari form (bisa diedit); fallback ke data NPPB
+        $rowsWithEdits = $rows->map(function ($row) use ($request) {
+            $koli = (int) $request->input('items.' . $row->id . '.koli', $row->koli);
+            $volume = (int) $request->input('items.' . $row->id . '.volume', $row->volume);
+            $exp = (int) $request->input('items.' . $row->id . '.exp', $row->exp);
+            $pls = max(0, $exp - $koli * $volume);
+            return (object) [
+                'row' => $row,
+                'koli' => $koli,
+                'volume' => $volume,
+                'exp' => $exp,
+                'pls' => $pls,
+            ];
+        });
 
-        $nkb = DB::transaction(function () use ($document, $rows, $totalTypeBooks, $totalExemplar) {
+        $totalTypeBooks = $rowsWithEdits->pluck('row.book_code')->unique()->count();
+        $totalExemplar = (int) $rowsWithEdits->sum('exp');
+
+        $creatorName = $request->input('creator_name', '');
+        $knownName = $request->input('known_name', '');
+
+        $nkb = DB::transaction(function () use ($document, $rowsWithEdits, $totalTypeBooks, $totalExemplar, $creatorName, $knownName) {
             $number = Nkb::generateNextNumber($document->sender_code ?? '');
             $nkb = Nkb::create([
                 'number' => $number,
                 'nppb_code' => $document->number,
                 'note' => $document->note ?? '',
+                'creator_name' => $creatorName,
+                'known_name' => $knownName,
                 'sender_code' => $document->sender_code,
                 'recipient_code' => $document->recipient_code,
                 'send_date' => $document->send_date,
@@ -599,16 +705,30 @@ class PreparationNotesController extends Controller
                 'created_by' => Auth::id(),
             ]);
 
-            foreach ($rows as $row) {
+            foreach ($rowsWithEdits as $edit) {
+                $row = $edit->row;
                 NkbItem::create([
                     'nkb_code' => $nkb->number,
                     'book_code' => $row->book_code ?? '',
                     'book_name' => $row->book_name ?? '',
-                    'koli' => (int) $row->koli,
-                    'pls' => (int) $row->pls,
-                    'exp' => (int) $row->exp,
-                    'volume' => (int) $row->volume,
+                    'koli' => $edit->koli,
+                    'pls' => $edit->pls,
+                    'exp' => $edit->exp,
+                    'volume' => $edit->volume,
                 ]);
+            }
+
+            // Kurangi stock pusat: catat deduction per book_code (eksemplar NKB) agar tampil di nppb-central/nppb-warehouse
+            $expByBook = $rowsWithEdits->groupBy('row.book_code')->map(fn ($items) => $items->sum('exp'));
+            foreach ($expByBook as $bookCode => $qty) {
+                if ($bookCode !== '' && $qty > 0) {
+                    CentralStockDeduction::create([
+                        'book_code' => $bookCode,
+                        'quantity' => (int) $qty,
+                        'source_type' => CentralStockDeduction::SOURCE_NKB,
+                        'source_id' => $nkb->number,
+                    ]);
+                }
             }
 
             return $nkb;

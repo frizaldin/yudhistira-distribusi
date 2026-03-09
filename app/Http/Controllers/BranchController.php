@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\DeliveryOrder;
+use App\Models\Nkb;
 use App\Jobs\SynchronizeBranchesJob;
 use App\Imports\BranchesImport;
 use Illuminate\Http\Request;
@@ -61,6 +63,73 @@ class BranchController extends Controller
         ];
 
         return view($this->callbackfolder . '.master-data.branch.index', $data);
+    }
+
+    /**
+     * History NKB untuk satu cabang (branch_code): NKB yang pengirim atau tujuannya cabang ini.
+     * Filter opsional: start_date, end_date (filter by send_date).
+     */
+    public function nkbHistory(Request $request, string $branch_code)
+    {
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+        if ($filteredBranchCodes !== null && !in_array($branch_code, $filteredBranchCodes)) {
+            abort(403);
+        }
+
+        $branch = Branch::where('branch_code', $branch_code)->firstOrFail();
+
+        $query = Nkb::where(function ($q) use ($branch_code) {
+            $q->where('sender_code', $branch_code)->orWhere('recipient_code', $branch_code);
+        })
+            ->with('senderBranch', 'recipientBranch', 'document');
+
+        $startDate = $request->get('start_date');
+        $endDate = $request->get('end_date');
+        if ($startDate && $endDate) {
+            $query->whereBetween('send_date', [$startDate, $endDate]);
+        } elseif ($startDate) {
+            $query->where('send_date', '>=', $startDate);
+        } elseif ($endDate) {
+            $query->where('send_date', '<=', $endDate);
+        }
+
+        $nkbs = $query->orderByDesc('send_date')->orderByDesc('id')->get();
+
+        return view($this->callbackfolder . '.master-data.branch.nkb-history', [
+            'branch' => $branch,
+            'nkbs' => $nkbs,
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+    }
+
+    /**
+     * History Surat Jalan untuk satu cabang: Surat Jalan yang pengirim atau tujuannya cabang ini.
+     */
+    public function deliveryOrderHistory(string $branch_code)
+    {
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+        if ($filteredBranchCodes !== null && !in_array($branch_code, $filteredBranchCodes)) {
+            abort(403);
+        }
+
+        $branch = Branch::where('branch_code', $branch_code)->firstOrFail();
+
+        $deliveryOrders = DeliveryOrder::where('sender_code', $branch_code)
+            ->orWhere('recipient_code', $branch_code)
+            ->with('senderBranch', 'recipientBranch')
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get();
+
+        return view($this->callbackfolder . '.master-data.branch.delivery-order-history', [
+            'branch' => $branch,
+            'deliveryOrders' => $deliveryOrders,
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+        ]);
     }
 
     /**

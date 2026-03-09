@@ -70,6 +70,17 @@
                                         target="_blank" class="btn btn-sm btn-outline-secondary">
                                         <i class="bi bi-printer me-1"></i>Print
                                     </a>
+                                    <a href="{{ route('nkb.edit', ['number' => $item->number]) }}"
+                                        class="btn btn-sm btn-outline-secondary ms-1">
+                                        <i class="bi bi-pencil me-1"></i>Edit
+                                    </a>
+                                    <form method="POST" action="{{ route('nkb.destroy', ['number' => $item->number]) }}"
+                                        class="d-inline form-batalkan-nkb" data-nkb="{{ $item->number }}">
+                                        @csrf
+                                        <button type="button" class="btn btn-sm btn-outline-danger ms-1 btn-batalkan-nkb">
+                                            <i class="bi bi-x-circle me-1"></i>Batalkan NKB
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         @empty
@@ -90,4 +101,30 @@
             @endif
         </div>
     </div>
+
+    @push('js')
+        <script>
+            document.querySelectorAll('.btn-batalkan-nkb').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var form = this.closest('form');
+                    var nkb = form.dataset.nkb || '';
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Batalkan NKB?',
+                            text: 'NKB ' + nkb + ' akan dihapus dan pengurangan stock pusat akan dikembalikan. Lanjutkan?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            cancelButtonColor: '#6c757d',
+                            confirmButtonText: 'Ya, batalkan'
+                        }).then(function(result) {
+                            if (result.isConfirmed) form.submit();
+                        });
+                    } else if (confirm('Batalkan NKB ' + nkb + '? Data akan dihapus dan stock pusat dikembalikan.')) {
+                        form.submit();
+                    }
+                });
+            });
+        </script>
+    @endpush
 </x-layouts>

@@ -19,6 +19,12 @@
             overflow: auto;
         }
 
+        .table-sm td,
+        .table-sm th {
+            padding-top: 0.15rem !important;
+            padding-bottom: 0.15rem !important;
+        }
+
         #nppb-products-table {
             border-collapse: separate;
             border-spacing: 0;
@@ -68,6 +74,7 @@
         .sticky-col {
             position: sticky;
             background: #fff !important;
+            border: 1px solid;
         }
 
         /* ===== STICKY BODY ===== */
@@ -111,9 +118,20 @@
             padding: 0.4rem 0.5rem !important;
         }
 
-        /* Body: kolom 1 & 2 selaras dengan header/total */
+        .sticky-col-3 {
+            left: 250px;
+            width: 60px !important;
+            min-width: 60px !important;
+            max-width: 60px !important;
+            box-shadow: 3px 0 6px -3px rgba(0, 0, 0, .3);
+            padding: 0.4rem 0.5rem !important;
+            z-index: 11;
+        }
+
+        /* Body: kolom 1, 2 & 3 (Stock Pusat) selaras dengan header/total */
         #nppb-products-table tbody td.sticky-col-1,
-        #nppb-products-table tbody td.sticky-col-2 {
+        #nppb-products-table tbody td.sticky-col-2,
+        #nppb-products-table tbody td.sticky-col-3 {
             vertical-align: middle !important;
             padding: 0.4rem 0.5rem !important;
         }
@@ -271,9 +289,9 @@
                                     <th class="text-left sticky-col sticky-col-2" data-col="kode-buku"
                                         style="width: 200px !important;">Kode Buku
                                     </th>
-                                    <th class="text-center nppb-col-tooltip" style="width: 60px;"
-                                        data-col="stock-pusat" title="Stock Pusat" data-bs-toggle="tooltip"
-                                        data-bs-trigger="hover click">Stk Pst</th>
+                                    <th class="text-center sticky-col sticky-col-3 nppb-col-tooltip"
+                                        style="width: 60px;" data-col="stock-pusat" title="Stock Pusat"
+                                        data-bs-toggle="tooltip" data-bs-trigger="hover click">Stk Pst</th>
                                     <th class="text-center nppb-col-tooltip" style="width: 60px;"
                                         data-col="stock-nasional" title="Stock Nasional" data-bs-toggle="tooltip"
                                         data-bs-trigger="hover click">Stk Nsn</th>
@@ -334,11 +352,14 @@
                                     <th class="text-center" style="width: 90px;" data-col="total">Total</th>
                                     <th class="text-center" style="width: 70px;" data-col="checklist">Checklist
                                     </th>
+                                    <th class="text-center nppb-col-tooltip" style="width: 90px;"
+                                        data-col="pct-perencanaan" title="(Faktur + Stock Cabang + NPPB disetujui + Total) ÷ SP"
+                                        data-bs-toggle="tooltip" data-bs-trigger="hover click">% Rencana</th>
                                 </tr>
                                 <tr id="row-totals" class="table-secondary fw-bold nppb-thead-row-totals">
                                     <th class="text-center sticky-col sticky-col-1" data-col="no">—</th>
                                     <th class="text-start sticky-col sticky-col-2" data-col="kode-buku">Total</th>
-                                    <th class="text-center" data-col="stock-pusat">—</th>
+                                    <th class="text-center sticky-col sticky-col-3" data-col="stock-pusat">—</th>
                                     <th class="text-center" data-col="stock-nasional">—</th>
                                     <th class="text-center" data-col="sp-nasional">—</th>
                                     <th class="text-center" data-col="pct-stock-pusat-target">—</th>
@@ -360,6 +381,7 @@
                                     <th class="text-center" data-col="eceran">0</th>
                                     <th class="text-center" data-col="total">0</th>
                                     <th class="text-center" data-col="checklist">—</th>
+                                    <th class="text-center" data-col="pct-perencanaan">—</th>
                                 </tr>
                             </thead>
                             <tbody id="products-table-body">
@@ -639,6 +661,10 @@
                 {
                     key: 'checklist',
                     label: 'Checklist'
+                },
+                {
+                    key: 'pct-perencanaan',
+                    label: '% Perencanaan'
                 }
             ];
             var COLUMN_STORAGE_KEY = 'nppb-warehouse-columns';
@@ -676,6 +702,19 @@
                 $('#nppb-products-table tbody td[data-col]').each(function() {
                     var col = $(this).attr('data-col');
                     $(this).toggle(vis[col] !== false);
+                });
+                // Sticky kolom: posisi left dinamis agar kolom pertama yang terlihat di kiri tanpa bolong
+                var stickyCols = [
+                    { key: 'no', width: 50, className: 'sticky-col-1' },
+                    { key: 'kode-buku', width: 200, className: 'sticky-col-2' },
+                    { key: 'stock-pusat', width: 60, className: 'sticky-col-3' }
+                ];
+                var left = 0;
+                stickyCols.forEach(function(c) {
+                    if (vis[c.key] !== false) {
+                        $('#nppb-products-table thead th.' + c.className + ', #row-totals th.' + c.className + ', #nppb-products-table tbody td.' + c.className).css('left', left + 'px');
+                        left += c.width;
+                    }
                 });
             }
 
@@ -852,7 +891,7 @@
                 const pct = usePercentage ? Math.max(1, Math.min(100, percentage)) : 100;
 
                 $('#products-table-body').html(
-                    '<tr><td colspan="24" class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>'
+                    '<tr><td colspan="25" class="text-center py-4"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Loading...</span></div></td></tr>'
                 );
 
                 // Fetch products via AJAX
@@ -888,7 +927,7 @@
 
                         if (products.length === 0) {
                             html =
-                                '<tr><td colspan="24" class="text-center py-4"><div class="text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Belum ada data produk.</div></td></tr>';
+                                '<tr><td colspan="25" class="text-center py-4"><div class="text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Belum ada data produk.</div></td></tr>';
                             $('#pagination-container').hide();
                         } else {
                             const startNumber = (page - 1) * perPage + 1;
@@ -952,19 +991,22 @@
                                 html += '<tr class="' + (product.row_highlight_yellow ? 'table-warning' :
                                         '') + '" data-book-code="' + (product.book_code || '') +
                                     '" data-sisa-sp="' + (product.sisa_sp || 0) + '" data-stock-pusat="' +
-                                    stockPusat + '">';
+                                    stockPusat + '" data-sp="' + (product.sp || 0) + '" data-faktur="' + (product.faktur || 0) + '" data-stock-cabang="' + (product.stock_cabang || 0) + '">';
                                 html += '<td class="text-center sticky-col sticky-col-1" data-col="no">' + (
                                     startNumber +
                                     index) + '</td>';
                                 html +=
-                                    '<td class="text-start sticky-col sticky-col-2" data-col="kode-buku"><code>' +
-                                    (product
-                                        .book_code || '-') +
-                                    '</code><br><small class="text-muted">' + (product.book_name || '-') +
+                                    '<td class="text-start sticky-col sticky-col-2" data-col="kode-buku" style="max-width:200px;"><code>' +
+                                    (product.book_code || '-') +
+                                    '</code><small class="text-muted d-block text-truncate" title="' + (
+                                        product.book_name || '-').replace(/"/g, '&quot;') + '">' + (product
+                                        .book_name || '-') +
                                     '</small></td>';
-                                html += '<td class="text-center" data-col="stock-pusat">' + formatNumber(
-                                    product.stock_pusat ||
-                                    0) + '</td>';
+                                html +=
+                                    '<td class="text-center sticky-col sticky-col-3" data-col="stock-pusat">' +
+                                    formatNumber(
+                                        product.stock_pusat ||
+                                        0) + '</td>';
                                 html += '<td class="text-center" data-col="stock-nasional">' + formatNumber(
                                     product.stock_nasional ||
                                     0) + '</td>';
@@ -1050,6 +1092,12 @@
                                     '<td class="text-center align-middle" data-col="checklist"><input type="checkbox" class="input-check-save" data-book-code="' +
                                     product.book_code + '"' + (checked ? ' checked' : '') +
                                     ' title="Centang untuk menyimpan baris ini" style="cursor:pointer;width:1.1em;height:1.1em;"></td>';
+                                var spVal = product.sp || 0;
+                                var ftrVal = product.faktur || 0;
+                                var stkVal = product.stock_cabang || 0;
+                                var num = ftrVal + stkVal + exp;
+                                var pctRencana = spVal > 0 ? (num / spVal * 100) : 0;
+                                html += '<td class="text-center" data-col="pct-perencanaan">' + (spVal > 0 ? (pctRencana.toFixed(2) + '%') : '—') + '</td>';
                                 html += '</tr>';
                             });
 
@@ -1059,10 +1107,14 @@
                             $('#row-totals th[data-col="stock-cabang"]').text(formatNumber(totals.stock_cabang ||
                                 0));
                             $('#row-totals th[data-col="kurang-sp"]').text(formatNumber(totals.sisa_sp || 0));
-                            $('#row-totals th[data-col="kurang-sp-nasional"]').text(formatNumber(totals.sisa_sp_nasional || 0));
+                            $('#row-totals th[data-col="kurang-sp-nasional"]').text(formatNumber(totals
+                                .sisa_sp_nasional || 0));
                             $('#row-totals th[data-col="koli"]').text(formatNumber(totals.koli || 0));
                             $('#row-totals th[data-col="eceran"]').text(formatNumber(totals.pls || 0));
                             $('#row-totals th[data-col="total"]').text(formatNumber(totals.exp || 0));
+                            var sumSp = totals.sp || 0;
+                            var sumNum = (totals.faktur || 0) + (totals.stock_cabang || 0) + (totals.exp || 0);
+                            $('#row-totals th[data-col="pct-perencanaan"]').text(sumSp > 0 ? (sumNum / sumSp * 100).toFixed(2) + '%' : '—');
 
                             // Generate pagination
                             generatePagination(page, lastPage);
@@ -1076,7 +1128,7 @@
                     },
                     error: function(xhr, status, error) {
                         $('#products-table-body').html(
-                            '<tr><td colspan="24" class="text-center py-4"><div class="text-danger">Error loading data: ' +
+                            '<tr><td colspan="25" class="text-center py-4"><div class="text-danger">Error loading data: ' +
                             error + '</div></td></tr>'
                         );
                         $('#pagination-container').hide();
@@ -1383,10 +1435,13 @@
                                 p.volume_used = allProductsData[p.book_code].volume_used ?? p.volume_used;
                             }
                         });
+                        var toExport = allProducts.filter(function(p) {
+                            return allProductsData[p.book_code] && allProductsData[p.book_code].checked === true;
+                        });
                         const headers =
                             'NO,Kode Buku,Nama Buku,Stock Pusat,Stock Nasional,SP Nasional,% Stock Pusat thd Target Nasional,% Stock Pusat thd SP,Total Eksemplar Nasional,Stock Teralokasikan,Maks. Kirim,Sisa Kuota,Sisa Stock Pusat,SP,Faktur,Stock Cabang,Kurang SP,% (Ftr+Stk+Kirim vs SP),% (Ftr+Stk+Kirim vs Target),Isi,Koli,Eceran,Total';
                         const csvRows = [headers];
-                        allProducts.forEach(function(product, index) {
+                        toExport.forEach(function(product, index) {
                             const maksKirim = product.maksimal_total_eksemplar_nasional != null ?
                                 product.maksimal_total_eksemplar_nasional : 0;
                             const sisaKuota = product.sisa_kuota_eksemplar != null ?
@@ -1409,18 +1464,18 @@
                         link.download = filename;
                         link.click();
                         URL.revokeObjectURL(link.href);
-                        if (allProducts.length === 0) {
+                        if (toExport.length === 0) {
                             Swal.fire({
                                 icon: 'info',
                                 title: 'Tidak ada data',
-                                text: 'Tidak ada data untuk diexport.',
+                                text: 'Tidak ada baris yang dicentang. Centang checklist pada baris yang ingin diexport.',
                                 confirmButtonText: 'OK'
                             });
                         } else {
                             Swal.fire({
                                 icon: 'success',
                                 title: 'Export selesai',
-                                text: allProducts.length + ' baris berhasil diexport.',
+                                text: toExport.length + ' baris (yang dicentang) berhasil diexport.',
                                 timer: 2000,
                                 showConfirmButton: false
                             });
@@ -1475,6 +1530,7 @@
                     allProductsData[bookCode].exp = totalEksemplar;
                     allProductsData[bookCode].volume_used = volume;
                 }
+                updatePctPerencanaanRow($row);
             }
 
             // Ketika Koli diubah: Total Eksemplar = Koli × Volume, Eceran = sisa jika Total < Kurang SP
@@ -1497,11 +1553,27 @@
                     allProductsData[bookCode].exp = finalTotal;
                     allProductsData[bookCode].volume_used = volume;
                 }
+                updatePctPerencanaanRow($row);
             }
 
+            const MAX_CHECKLIST_ROWS = 25;
             $(document).on('change', '.input-check-save', function() {
-                const bookCode = $(this).data('book-code');
-                if (allProductsData[bookCode]) allProductsData[bookCode].checked = $(this).is(':checked');
+                const $cb = $(this);
+                const bookCode = $cb.data('book-code');
+                const isChecked = $cb.is(':checked');
+                if (isChecked) {
+                    const checkedCount = $('.input-check-save:checked').length;
+                    if (checkedCount > MAX_CHECKLIST_ROWS) {
+                        $cb.prop('checked', false);
+                        if (typeof Swal !== 'undefined') {
+                            Swal.fire({ icon: 'warning', title: 'Batas checklist', text: 'Maksimal ' + MAX_CHECKLIST_ROWS + ' baris yang dapat dicentang.' });
+                        } else {
+                            alert('Maksimal ' + MAX_CHECKLIST_ROWS + ' baris yang dapat dicentang.');
+                        }
+                        return;
+                    }
+                }
+                if (allProductsData[bookCode]) allProductsData[bookCode].checked = $cb.is(':checked');
             });
 
             $(document).on('change blur input', '.input-volume', function() {
@@ -1527,6 +1599,7 @@
                 const totalEksemplar = koli * volume + pls;
                 $row.find('.input-exp').val(totalEksemplar);
 
+                updatePctPerencanaanRow($row);
                 if (allProductsData[bookCode]) {
                     allProductsData[bookCode].koli = koli;
                     allProductsData[bookCode].pls = pls;
@@ -1535,8 +1608,21 @@
                 }
             });
 
+            // Update tampilan Persentase Perencanaan per baris: (Faktur + Stock Cabang + Total) / SP
+            function updatePctPerencanaanRow($row) {
+                var $td = $row.find('td[data-col="pct-perencanaan"]');
+                if (!$td.length) return;
+                var sp = parseFloat($row.data('sp')) || 0;
+                var faktur = parseFloat($row.data('faktur')) || 0;
+                var stockCabang = parseFloat($row.data('stock-cabang')) || 0;
+                var total = parseFloat($row.find('.input-exp').val()) || 0;
+                var num = faktur + stockCabang + total;
+                var pct = sp > 0 ? (num / sp * 100) : 0;
+                $td.text(sp > 0 ? (pct.toFixed(2) + '%') : '—');
+            }
+
             // Ketika Total Eksemplar diubah manual → clamp ke Sisa Kuota hanya jika persentase aktif dan sisa kuota > 0 (sama seperti nppb-central)
-            $(document).on('change blur', '.input-exp', function() {
+            $(document).on('change blur input', '.input-exp', function() {
                 const $row = $(this).closest('tr');
                 const bookCode = $(this).data('book-code');
                 const $input = $(this);
@@ -1558,6 +1644,7 @@
                     allProductsData[bookCode].pls = pls;
                     allProductsData[bookCode].volume_used = volume;
                 }
+                updatePctPerencanaanRow($row);
             });
         </script>
     </x-slot>

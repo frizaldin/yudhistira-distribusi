@@ -55,7 +55,8 @@
             <div class="row g-2 mb-3">
                 <div class="col-md-4">
                     <label class="form-label small">NPPB</label>
-                    <input type="text" class="form-control form-control-sm" value="{{ $document->number ?? '' }}" readonly />
+                    <input type="text" class="form-control form-control-sm" value="{{ $document->number ?? '' }}"
+                        readonly />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label small">Keterangan (Note)</label>
@@ -73,6 +74,26 @@
                 @if (!empty($from))
                     <input type="hidden" name="from" value="{{ $from }}" />
                 @endif
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small">Nama Pembuat <span class="text-danger">*</span></label>
+                        <input type="text" name="creator_name" class="form-control form-control-sm" maxlength="255"
+                            value="{{ old('creator_name', $document->creator_name ?? '') }}" required />
+                        {{-- <small class="text-muted">Diambil dari NPPB, bisa diedit</small> --}}
+                        @error('creator_name')
+                            <div class="text-danger small">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Nama Dikenal <span class="text-danger">*</span></label>
+                        <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255"
+                            value="{{ old('known_name', $document->known_name ?? '') }}" required />
+                        {{-- <small class="text-muted">Diambil dari NPPB, bisa diedit</small> --}}
+                        @error('known_name')
+                            <div class="text-danger small">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
                 <div class="table-responsive mb-3">
                     <table class="table table-sm table-bordered">
                         <thead class="table-light">
@@ -81,26 +102,39 @@
                                     <input type="checkbox" id="preview-check-all" class="form-check-input" checked />
                                 </th>
                                 <th>Buku</th>
-                                <th class="text-end" style="width:110px">Harga Satuan (Rp)</th>
                                 <th class="text-center" style="width:70px">Koli</th>
                                 <th class="text-center" style="width:80px">Isi koli</th>
                                 <th class="text-center" style="width:80px">Eksemplar</th>
+                                <th class="text-end" style="width:110px">Harga Satuan (Rp)</th>
                                 <th class="text-end" style="width:110px">Harga Total (Rp)</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach ($items ?? [] as $it)
-                                <tr>
+                                @php
+                                    $oldKoli = old('items.'.$it->id.'.koli', $it->koli);
+                                    $oldVolume = old('items.'.$it->id.'.volume', $it->volume);
+                                    $oldExp = old('items.'.$it->id.'.exp', $it->exp);
+                                    $subtotal = $it->harga_buku ? $oldExp * $it->harga_buku : 0;
+                                @endphp
+                                <tr class="preview-item-row" data-harga="{{ $it->harga_buku ?? 0 }}">
                                     <td class="text-center">
-                                        <input type="checkbox" class="form-check-input item-nkb-check" name="row_ids[]"
-                                            value="{{ $it->id }}" checked />
+                                        <input type="checkbox" class="form-check-input item-nkb-check"
+                                            name="row_ids[]" value="{{ $it->id }}" checked />
                                     </td>
                                     <td>{{ $it->book_code }} — {{ $it->book_name }}</td>
-                                    <td class="text-end">{{ $it->harga_buku ? number_format($it->harga_buku, 0, ',', '.') : '-' }}</td>
-                                    <td class="text-center">{{ $it->koli }}</td>
-                                    <td class="text-center">{{ $it->volume }}</td>
-                                    <td class="text-center">{{ $it->exp }}</td>
-                                    <td class="text-end">{{ $it->subtotal ? number_format($it->subtotal, 0, ',', '.') : '-' }}</td>
+                                    <td class="text-center">
+                                        <input type="number" name="items[{{ $it->id }}][koli]" class="form-control form-control-sm text-center input-koli-preview" min="0" step="1" value="{{ $oldKoli }}" style="width:60px" />
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" name="items[{{ $it->id }}][volume]" class="form-control form-control-sm text-center input-volume-preview" min="0" step="1" value="{{ $oldVolume }}" style="width:60px" />
+                                    </td>
+                                    <td class="text-center">
+                                        <input type="number" name="items[{{ $it->id }}][exp]" class="form-control form-control-sm text-center input-exp-preview" min="0" step="1" value="{{ $oldExp }}" style="width:70px" />
+                                    </td>
+                                    <td class="text-end">
+                                        {{ $it->harga_buku ? number_format($it->harga_buku, 0, ',', '.') : '-' }}</td>
+                                    <td class="text-end preview-subtotal">{{ $subtotal ? number_format($subtotal, 0, ',', '.') : '-' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -134,6 +168,15 @@
                         alert('Pilih minimal satu item.');
                         return false;
                     }
+                });
+                function updateSubtotal($row) {
+                    var harga = parseFloat($row.data('harga')) || 0;
+                    var exp = parseFloat($row.find('.input-exp-preview').val()) || 0;
+                    var subtotal = exp * harga;
+                    $row.find('.preview-subtotal').text(subtotal ? subtotal.toLocaleString('id-ID') : '-');
+                }
+                $(document).on('change input', '.input-koli-preview, .input-volume-preview, .input-exp-preview', function() {
+                    updateSubtotal($(this).closest('tr'));
                 });
             });
         </script>

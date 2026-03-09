@@ -82,6 +82,8 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(ProductController::class)->group(function () {
         Route::get('/product', 'index')->name('product.index');
+        Route::get('/product/{book_code}/nkb-history', 'nkbHistory')->name('product.nkb-history');
+        Route::get('/product/{book_code}/delivery-order-history', 'deliveryOrderHistory')->name('product.delivery-order-history');
         Route::get('/product/{book_code}/detail', 'showDetail')->name('product.detail');
         Route::post('/product/import', 'import')->name('product.import');
         Route::post('/product/import-category-serial', 'importCategorySerial')->name('product.import-category-serial');
@@ -92,6 +94,8 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(BranchController::class)->group(function () {
         Route::get('/branch', 'index')->name('branch.index');
+        Route::get('/branch/{branch_code}/nkb-history', 'nkbHistory')->name('branch.nkb-history');
+        Route::get('/branch/{branch_code}/delivery-order-history', 'deliveryOrderHistory')->name('branch.delivery-order-history');
         Route::post('/branch/import', 'import')->name('branch.import');
         Route::post('/branch/synchronize', 'synchronize')->name('branch.synchronize');
         Route::post('/branch/clear-and-sync', 'clearAndSync')->name('branch.clear-and-sync');
@@ -170,6 +174,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/preparation-notes/detail', 'detail')->name('preparation_notes.detail');
         Route::post('/preparation-notes/detail/update', 'updateDetail')->name('preparation_notes.detail.update');
         Route::post('/preparation-notes/approve-rencana', 'approveRencana')->name('preparation_notes.approve_rencana');
+        Route::post('/preparation-notes/detail/delete-rows', 'deleteDetailRows')->name('preparation_notes.detail.delete_rows');
+        Route::post('/preparation-notes/cancel-rencana', 'cancelRencana')->name('preparation_notes.cancel_rencana');
         Route::get('/preparation-notes/export-nppb', 'exportNota')->name('preparation_notes.export_nota');
         Route::get('/preparation-notes/preview-nkb', 'previewNkb')->name('preparation_notes.preview_nkb');
         Route::get('/preparation-notes/preview-nkb-page', 'previewNkbPage')->name('preparation_notes.preview_nkb_page');
@@ -180,6 +186,9 @@ Route::middleware('auth')->group(function () {
     Route::controller(NkbController::class)->group(function () {
         Route::get('/nkb', 'index')->name('nkb.index');
         Route::get('/nkb/create', 'create')->name('nkb.create');
+        Route::post('/nkb/{number}/destroy', 'destroy')->name('nkb.destroy');
+        Route::get('/nkb/{number}/edit', 'edit')->name('nkb.edit');
+        Route::put('/nkb/{number}', 'update')->name('nkb.update');
         Route::get('/nkb/{number}/print', 'print')->name('nkb.print');
         Route::get('/nkb/{number}', 'show')->name('nkb.show');
     });

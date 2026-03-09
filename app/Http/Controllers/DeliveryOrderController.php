@@ -48,7 +48,7 @@ class DeliveryOrderController extends Controller
                         ->orWhere('sender_code', 'like', '%' . $s . '%')
                         ->orWhere('recipient_code', 'like', '%' . $s . '%')
                         ->orWhere('expedition', 'like', '%' . $s . '%')
-                        ->orWhere('driver', 'like', '%' . $s . '%');
+                        ->orWhere('drivers', 'like', '%' . $s . '%');
                 });
             })
             ->orderBy('id', 'desc');
@@ -99,11 +99,18 @@ class DeliveryOrderController extends Controller
             'date' => ['nullable', 'date'],
             'expedition' => ['nullable', 'string', 'max:255'],
             'plate_number' => ['nullable', 'string', 'max:20'],
-            'driver' => ['nullable', 'string', 'max:200'],
+            'drivers' => ['nullable', 'array'],
+            'drivers.*' => ['nullable', 'string', 'max:200'],
             'driver_phone' => ['nullable', 'string', 'max:20'],
             'note' => ['nullable', 'string'],
+            'creator_name' => ['required', 'string', 'max:255'],
+            'known_name' => ['required', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.nkb_id' => ['required', 'integer', 'exists:nkbs,id'],
+            'items.*.nkb_id' => [
+                'required',
+                'integer',
+                Rule::exists('nkbs', 'id')->where('recipient_code', $request->input('recipient_code')),
+            ],
             'items.*.koli' => ['required', 'numeric', 'min:0'],
             'items.*.ex' => ['required', 'numeric', 'min:0'],
             'items.*.total_ex' => ['required', 'numeric', 'min:0'],
@@ -116,9 +123,11 @@ class DeliveryOrderController extends Controller
         $do->date = $validated['date'] ?? null;
         $do->expedition = $validated['expedition'] ?? null;
         $do->plate_number = $validated['plate_number'] ?? null;
-        $do->driver = $validated['driver'] ?? null;
+        $do->drivers = isset($validated['drivers']) ? array_values(array_filter($validated['drivers'])) : null;
         $do->driver_phone = $validated['driver_phone'] ?? '';
         $do->note = $validated['note'] ?? '';
+        $do->creator_name = $validated['creator_name'] ?? '';
+        $do->known_name = $validated['known_name'] ?? '';
         $do->created_by = Auth::id();
         $do->save();
 
@@ -220,11 +229,18 @@ class DeliveryOrderController extends Controller
             'date' => ['nullable', 'date'],
             'expedition' => ['nullable', 'string', 'max:255'],
             'plate_number' => ['nullable', 'string', 'max:20'],
-            'driver' => ['nullable', 'string', 'max:200'],
+            'drivers' => ['nullable', 'array'],
+            'drivers.*' => ['nullable', 'string', 'max:200'],
             'driver_phone' => ['nullable', 'string', 'max:20'],
             'note' => ['nullable', 'string'],
+            'creator_name' => ['required', 'string', 'max:255'],
+            'known_name' => ['required', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.nkb_id' => ['required', 'integer', 'exists:nkbs,id'],
+            'items.*.nkb_id' => [
+                'required',
+                'integer',
+                Rule::exists('nkbs', 'id')->where('recipient_code', $request->input('recipient_code')),
+            ],
             'items.*.koli' => ['required', 'numeric', 'min:0'],
             'items.*.ex' => ['required', 'numeric', 'min:0'],
             'items.*.total_ex' => ['required', 'numeric', 'min:0'],
@@ -236,9 +252,11 @@ class DeliveryOrderController extends Controller
         $do->date = $validated['date'] ?? null;
         $do->expedition = $validated['expedition'] ?? null;
         $do->plate_number = $validated['plate_number'] ?? null;
-        $do->driver = $validated['driver'] ?? null;
+        $do->drivers = isset($validated['drivers']) ? array_values(array_filter($validated['drivers'])) : null;
         $do->driver_phone = $validated['driver_phone'] ?? '';
         $do->note = $validated['note'] ?? '';
+        $do->creator_name = $validated['creator_name'] ?? '';
+        $do->known_name = $validated['known_name'] ?? '';
         $do->save();
 
         $do->items()->delete();

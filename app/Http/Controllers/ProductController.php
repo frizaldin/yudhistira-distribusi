@@ -5,8 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\CentralStock;
 use App\Models\CutoffData;
+use App\Models\DeliveryOrder;
+use App\Models\DeliveryOrderItem;
 use App\Models\DeliveryNote;
 use App\Models\DeliveryNoteDetail;
+use App\Models\Nkb;
+use App\Models\NkbItem;
 use App\Models\NppbCentral;
 use App\Models\Product;
 use App\Models\SpBranch;
@@ -58,6 +62,12 @@ class ProductController extends Controller
             ->when($request->search, function ($query, $search) {
                 return $query->where('book_title', 'like', '%' . $search . '%');
             })
+            ->when($request->search_book_code, function ($query, $v) {
+                return $query->where('book_code', 'like', '%' . $v . '%');
+            })
+            ->when($request->marketing_list === 'Y', function ($query) {
+                return $query->where('is_marketing_list', 'Y');
+            })
             ->when($request->jenis, function ($query, $jenis) {
                 return $query->where('category', $jenis);
             })
@@ -77,6 +87,51 @@ class ProductController extends Controller
         ];
 
         return view($this->callbackfolder . '.master-data.product.index', $data);
+    }
+
+    /**
+     * Halaman History NKB untuk satu buku (book_code).
+     */
+    public function nkbHistory(string $book_code)
+    {
+        $product = Product::where('book_code', $book_code)->firstOrFail();
+
+        $items = NkbItem::where('book_code', $book_code)
+            ->with('nkb.senderBranch', 'nkb.recipientBranch', 'nkb.document')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view($this->callbackfolder . '.master-data.product.nkb-history', [
+            'product' => $product,
+            'items' => $items,
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+        ]);
+    }
+
+    /**
+     * Halaman History Surat Jalan untuk satu buku (book_code).
+     * Menampilkan Delivery Order yang memuat NKB berisi buku ini.
+     */
+    public function deliveryOrderHistory(string $book_code)
+    {
+        $product = Product::where('book_code', $book_code)->firstOrFail();
+
+        $nkbIds = Nkb::whereHas('items', fn ($q) => $q->where('book_code', $book_code))->pluck('id');
+        $doIds = DeliveryOrderItem::whereIn('nkb_id', $nkbIds)->pluck('delivery_order_id')->unique()->values();
+
+        $deliveryOrders = DeliveryOrder::whereIn('id', $doIds)
+            ->with('senderBranch', 'recipientBranch')
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get();
+
+        return view($this->callbackfolder . '.master-data.product.delivery-order-history', [
+            'product' => $product,
+            'deliveryOrders' => $deliveryOrders,
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+        ]);
     }
 
     /**

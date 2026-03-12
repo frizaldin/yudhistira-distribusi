@@ -294,11 +294,11 @@
                                         data-bs-toggle="tooltip" data-bs-trigger="hover click">Stk Pst</th>
                                     <th class="text-center nppb-col-tooltip" style="width: 60px;"
                                         data-col="stock-nasional" title="Stock Nasional" data-bs-toggle="tooltip"
-                                        data-bs-trigger="hover click">Stk Nsn</th>
+                                        data-bs-trigger="hover click">Stk Nas</th>
                                     <th class="text-center nppb-col-tooltip" style="width: 60px;"
                                         data-col="sp-nasional" title="SP Nasional" data-bs-toggle="tooltip"
                                         data-bs-trigger="hover click">SP
-                                        Nsn</th>
+                                        Nas</th>
                                     <th class="text-center nppb-col-tooltip" style="width: 60px;"
                                         data-col="pct-stock-pusat-target" title="% Stock Pusat thd Target Nasional"
                                         data-bs-toggle="tooltip" data-bs-trigger="hover click">% Trgt</th>
@@ -337,7 +337,7 @@
                                     <th class="text-center nppb-col-tooltip" style="width: 75px;"
                                         data-col="kurang-sp-nasional" title="Kurang SP Nasional"
                                         data-bs-toggle="tooltip" data-bs-trigger="hover click">
-                                        Kur. SP Nsn</th>
+                                        Kur. SP Nas</th>
                                     <th class="text-center nppb-col-tooltip" style="width: 70px;"
                                         data-col="pct-ftr-stk-vs-sp" title="% (Ftr+Stk+Kirim vs SP)"
                                         data-bs-toggle="tooltip" data-bs-trigger="hover click">%
@@ -1057,10 +1057,18 @@
                                             .pct_faktur_stock_total_vs_target).toFixed(2) + '%') : '-') +
                                     '</td>';
                                 html +=
-                                    '<td class="text-center" data-col="isi"><input type="number" class="form-control form-control-sm text-center input-volume" value="' +
-                                    volume +
-                                    '" min="0" step="1" style="width: 70px; display: inline-block;" data-book-code="' +
-                                    product.book_code + '"></td>';
+                                var volumeOptions = product.volume_options || [];
+                                var volSelect = '<select class="form-control form-control-sm text-center input-volume" style="width: 90px; display: inline-block; padding: 0.2rem 0.4rem;" data-book-code="' + product.book_code + '">';
+                                if (volumeOptions.length === 0) {
+                                    volSelect += '<option value="0">0</option>';
+                                } else {
+                                    volumeOptions.forEach(function(opt) {
+                                        var sel = (parseFloat(opt.value) === parseFloat(volume)) ? ' selected' : '';
+                                        volSelect += '<option value="' + opt.value + '"' + sel + '>' + (opt.label || opt.value) + '</option>';
+                                    });
+                                }
+                                volSelect += '</select>';
+                                html += '<td class="text-center" data-col="isi">' + volSelect + '</td>';
                                 const pctSpVsStock = product.pct_sp_vs_stock != null ? product
                                     .pct_sp_vs_stock : 0;
                                 const disTitle = !allowRencana ?
@@ -1102,6 +1110,18 @@
                             });
 
                             var totals = response.totals || {};
+                            $('#row-totals th[data-col="stock-pusat"]').text(formatNumber(totals.stock_pusat || 0));
+                            $('#row-totals th[data-col="stock-nasional"]').text(formatNumber(totals.stock_nasional || 0));
+                            $('#row-totals th[data-col="sp-nasional"]').text(formatNumber(totals.sp_nasional || 0));
+                            $('#row-totals th[data-col="total-eksemplar-nasional"]').text(formatNumber(totals.stock_teralokasikan || 0));
+                            $('#row-totals th[data-col="stock-teralokasikan"]').text(formatNumber(totals.stock_teralokasikan || 0));
+                            $('#row-totals th[data-col="maks-kirim"]').text(formatNumber(totals.maksimal_total_eksemplar_nasional || 0));
+                            $('#row-totals th[data-col="sisa-kuota"]').text(formatNumber(totals.sisa_kuota_eksemplar || 0));
+                            $('#row-totals th[data-col="sisa-stock-pusat"]').text(formatNumber(totals.sisa_stock_pusat || 0));
+                            var pctTrgt = totals.pct_stock_pusat_target_nasional_avg;
+                            $('#row-totals th[data-col="pct-stock-pusat-target"]').text(pctTrgt != null && !isNaN(pctTrgt) ? (Number(pctTrgt).toFixed(2) + '%') : '—');
+                            var pctSp = totals.pct_stock_pusat_sp_avg;
+                            $('#row-totals th[data-col="pct-stock-pusat-sp"]').text(pctSp != null && !isNaN(pctSp) ? (Number(pctSp).toFixed(2) + '%') : '—');
                             $('#row-totals th[data-col="sp"]').text(formatNumber(totals.sp || 0));
                             $('#row-totals th[data-col="faktur"]').text(formatNumber(totals.faktur || 0));
                             $('#row-totals th[data-col="stock-cabang"]').text(formatNumber(totals.stock_cabang ||
@@ -1109,6 +1129,10 @@
                             $('#row-totals th[data-col="kurang-sp"]').text(formatNumber(totals.sisa_sp || 0));
                             $('#row-totals th[data-col="kurang-sp-nasional"]').text(formatNumber(totals
                                 .sisa_sp_nasional || 0));
+                            var pctFtrSp = totals.pct_faktur_stock_total_vs_sp_avg;
+                            $('#row-totals th[data-col="pct-ftr-stk-vs-sp"]').text(pctFtrSp != null && !isNaN(pctFtrSp) ? (Number(pctFtrSp).toFixed(2) + '%') : '—');
+                            var pctFtrTgt = totals.pct_faktur_stock_total_vs_target_avg;
+                            $('#row-totals th[data-col="pct-ftr-stk-vs-target"]').text(pctFtrTgt != null && !isNaN(pctFtrTgt) ? (Number(pctFtrTgt).toFixed(2) + '%') : '—');
                             $('#row-totals th[data-col="koli"]').text(formatNumber(totals.koli || 0));
                             $('#row-totals th[data-col="eceran"]').text(formatNumber(totals.pls || 0));
                             $('#row-totals th[data-col="total"]').text(formatNumber(totals.exp || 0));
@@ -1510,15 +1534,25 @@
                 searchTimeout = setTimeout(applyFilterSearch, 500);
             });
 
-            // Ketika Volume diubah: Koli = floor(Kurang SP / Volume), Eceran = Kurang SP % Volume
+            // Ketika Volume (Isi) diubah: pertahankan Total Eksemplar kalau sudah diisi, lalu hitung ulang Koli & Eceran
             function recalcFromVolume($row) {
                 const bookCode = $row.data('book-code');
                 const sisaSp = parseFloat($row.data('sisa-sp')) || 0;
                 const volume = parseFloat($row.find('.input-volume').val()) || 0;
+                const totalSudahDiisi = parseFloat($row.find('.input-exp').val()) || 0;
 
-                const koli = volume > 0 ? Math.floor(sisaSp / volume) : 0;
-                const eceran = volume > 0 ? sisaSp % volume : sisaSp;
-                const totalEksemplar = sisaSp;
+                let koli, eceran, totalEksemplar;
+                if (totalSudahDiisi > 0) {
+                    // User sudah isi Total/Koli/Eceran: pertahankan Total, hitung ulang Koli & Eceran dengan Isi baru
+                    totalEksemplar = totalSudahDiisi;
+                    koli = volume > 0 ? Math.floor(totalEksemplar / volume) : 0;
+                    eceran = volume > 0 ? totalEksemplar % volume : totalEksemplar;
+                } else {
+                    // Belum diisi: isi dari Kurang SP seperti sebelumnya
+                    koli = volume > 0 ? Math.floor(sisaSp / volume) : 0;
+                    eceran = volume > 0 ? sisaSp % volume : sisaSp;
+                    totalEksemplar = sisaSp;
+                }
 
                 $row.find('.input-koli').val(koli);
                 $row.find('.input-pls').val(eceran);

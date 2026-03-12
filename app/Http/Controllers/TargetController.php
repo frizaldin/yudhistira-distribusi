@@ -328,17 +328,12 @@ class TargetController extends Controller
             }
             Cache::forget('sync_targets_progress');
 
-            $deletedCount = Target::count();
-            Target::truncate();
-
-            Log::info("Cleared {$deletedCount} targets before synchronization");
-
-            SynchronizeTargetsJob::dispatch(true)
+            SynchronizeTargetsJob::dispatch()
                 ->onQueue('default');
 
             Log::info('Target clear and synchronization job dispatched to queue');
 
-            return redirect()->back()->with('success', "Semua data target ({$deletedCount} data) telah dihapus. Sinkronisasi data sedang diproses di background.");
+            return redirect()->back()->with('success', 'Sinkronisasi target dimulai. Data di tabel targets akan dihapus lalu diisi ulang dari sumber.');
         } catch (\Exception $e) {
             Cache::forget('sync_targets_lock');
             Log::error('Clear and Sync Error: ' . $e->getMessage(), [

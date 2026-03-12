@@ -27,4 +27,8 @@ class Branch extends Model
     ];
 
     public $timestamps = false;
+
+    protected $primaryKey = 'branch_code';
+    public $incrementing = false;
+    protected $keyType = 'string';
 }

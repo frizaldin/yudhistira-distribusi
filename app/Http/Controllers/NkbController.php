@@ -329,13 +329,20 @@ class NkbController extends Controller
             return redirect()->route('nkb.index')->with('error', 'NKB ini sudah dipakai di Surat Jalan (Delivery Order). Batalkan/hapus Surat Jalan terlebih dahulu.');
         }
 
-        DB::transaction(function () use ($nkb) {
+        $nppbCode = $nkb->nppb_code;
+
+        DB::transaction(function () use ($nkb, $nppbCode) {
             CentralStockDeduction::where('source_type', CentralStockDeduction::SOURCE_NKB)
                 ->where('source_id', $nkb->number)
                 ->delete();
 
             NkbItem::where('nkb_code', $nkb->number)->delete();
             $nkb->delete();
+
+            // Tandai dokumen NPPB bahwa NKB-nya dibatalkan → baris di preparation-notes jadi merah
+            if ($nppbCode) {
+                NppbDocument::where('number', $nppbCode)->update(['nkb_cancelled_at' => now()]);
+            }
         });
 
         return redirect()->route('nkb.index')->with('success', 'NKB ' . $nkb->number . ' berhasil dibatalkan. Pengurangan stock pusat telah dikembalikan.');

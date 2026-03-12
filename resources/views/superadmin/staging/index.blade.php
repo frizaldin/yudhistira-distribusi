@@ -275,7 +275,7 @@
                 let progressPollInterval = null;
                 const PROGRESS_POLL_MS = 1000;
 
-                function updateCardProgress(card, progress) {
+                function updateCardProgress(card, progress, type) {
                     if (!progress) return;
                     const pct = (progress.percentage != null) ? progress.percentage : 0;
                     const processed = progress.processed != null ? progress.processed : 0;
@@ -308,6 +308,32 @@
                                 '<small><i class="bi bi-' + (isError ? 'exclamation-circle' : 'check-circle') + '"></i> ' +
                                 (isError ? 'Terjadi error' : 'Sinkronisasi selesai') + '</small></div>'
                             );
+                            // Modal kode buku / kode cabang tidak ditemukan (Staging Target & SP Branch, sekali per selesai)
+                            const missingBookCodes = progress.missing_book_codes || [];
+                            const missingBranchCodes = progress.missing_branch_codes || [];
+                            const hasMissing = missingBookCodes.length > 0 || missingBranchCodes.length > 0;
+                            if ((type === 'target' || type === 'sp_branch') && hasMissing && !card.attr('data-missing-codes-modal-shown')) {
+                                card.attr('data-missing-codes-modal-shown', '1');
+                                let html = '';
+                                if (missingBookCodes.length > 0) {
+                                    const bookList = Array.isArray(missingBookCodes) ? missingBookCodes.join(', ') : String(missingBookCodes);
+                                    html += '<p class="mb-1"><strong>Kode buku</strong> tidak ada di master Buku:</p>' +
+                                        '<p class="small bg-light p-2 rounded text-start mb-3" style="max-height: 120px; overflow-y: auto;">' + bookList + '</p>';
+                                }
+                                if (missingBranchCodes.length > 0) {
+                                    const branchList = Array.isArray(missingBranchCodes) ? missingBranchCodes.join(', ') : String(missingBranchCodes);
+                                    html += '<p class="mb-1"><strong>Kode cabang</strong> tidak ada di master Cabang:</p>' +
+                                        '<p class="small bg-light p-2 rounded text-start mb-3" style="max-height: 120px; overflow-y: auto;">' + branchList + '</p>';
+                                }
+                                html += '<p class="text-muted small mb-0">Silakan Sinkron Staging Buku / Staging Cabang atau Hubungi Tim Developer.</p>';
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: 'Kode Tidak Ditemukan',
+                                    html: html,
+                                    confirmButtonText: 'OK',
+                                    width: '500px'
+                                });
+                            }
                         }
                         card.find('.synchronize-btn').prop('disabled', false).html('<i class="bi bi-arrow-repeat"></i> Synchronize');
                     }
@@ -323,7 +349,7 @@
                         $.get('{{ route('staging.progress') }}', { type: type }).done(function(response) {
                             const card = section.closest('.card');
                             if (response.success && response.progress) {
-                                updateCardProgress(card, response.progress);
+                                updateCardProgress(card, response.progress, type);
                             }
                         });
                     });
@@ -343,7 +369,7 @@
                             $.get('{{ route('staging.progress') }}', { type: type }).done(function(response) {
                                 const card = section.closest('.card');
                                 if (response.success && response.progress) {
-                                    updateCardProgress(card, response.progress);
+                                    updateCardProgress(card, response.progress, type);
                                 }
                             });
                         });
@@ -397,6 +423,7 @@
                                     btn.html('<i class="bi bi-check-circle"></i> Dimulai');
                                     $('.progress-section').show();
                                     $('.progress-section').removeAttr('data-polling-done');
+                                    $('.progress-section[data-type="target"]').closest('.card').removeAttr('data-missing-codes-modal-shown');
                                     startProgressPolling();
                                     Swal.fire({
                                         icon: 'success',
@@ -466,6 +493,7 @@
                                     type + '"]');
                                 if (progressSection.length) {
                                     progressSection.show().removeAttr('data-polling-done');
+                                    card.removeAttr('data-missing-codes-modal-shown');
                                     card.find('.alert-completed-placeholder').empty();
                                     const progressBar = card.find('.progress-bar');
                                     const progressText = card.find('.progress-text');

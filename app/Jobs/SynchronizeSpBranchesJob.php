@@ -34,6 +34,8 @@ class SynchronizeSpBranchesJob implements ShouldQueue
         $totalProcessed = 0;
         $created = 0;
         $errors = [];
+        $missingBranchCodes = [];
+        $missingBookCodes = [];
 
         try {
             Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL', [
@@ -55,15 +57,11 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 'percentage' => 0
             ], now()->addHours(2));
 
-            // Clear all data first if requested
             if ($this->clearFirst) {
                 Log::info('SynchronizeSpBranchesJob: Clearing all existing data');
                 SpBranch::truncate();
-            } else {
-                // Set all existing data to active_data = 'no' before sync
-                Log::info('SynchronizeSpBranchesJob: Setting all existing data to active_data = no');
-                SpBranch::where('active_data', 'yes')->update(['active_data' => 'no']);
             }
+            // Tanpa clearFirst: upsert saja (satu baris per branch_code + book_code, selalu active_data = yes)
 
             $validBranches = Branch::pluck('branch_code')->flip()->all();
             $validBooks = Product::pluck('book_code')->flip()->all();
@@ -115,6 +113,12 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                         continue;
                     }
                     if (!isset($validBranches[$branchCode]) || !isset($validBooks[$bookCode])) {
+                        if (!isset($validBranches[$branchCode])) {
+                            $missingBranchCodes[$branchCode] = true;
+                        }
+                        if (!isset($validBooks[$bookCode])) {
+                            $missingBookCodes[$bookCode] = true;
+                        }
                         $totalProcessed++;
                         continue;
                     }
@@ -142,7 +146,10 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 if (!empty($batch)) {
                     try {
                         DB::transaction(function () use ($batch) {
-                            DB::table('sp_branches')->insert($batch);
+                            DB::table('sp_branches')->upsert($batch, ['branch_code', 'book_code'], [
+                                'ex_sp', 'ex_ftr', 'ex_ret', 'ex_rec_pst', 'ex_rec_gdg', 'ex_stock',
+                                'trans_date', 'active_data', 'updated_at'
+                            ]);
                         });
                         $created += count($batch);
                     } catch (\Exception $e) {
@@ -170,13 +177,22 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 }
             }
 
+            $missingBranchList = array_keys($missingBranchCodes);
+            $missingBookList = array_keys($missingBookCodes);
+            if (count($missingBranchList) > 0 || count($missingBookList) > 0) {
+                Log::warning('SynchronizeSpBranchesJob: Kode tidak ditemukan di referensi', [
+                    'missing_branch_codes' => $missingBranchList,
+                    'missing_book_codes' => $missingBookList,
+                ]);
+            }
+
             Log::info('SynchronizeSpBranchesJob: Synchronization completed', [
                 'created' => $created,
                 'errors_count' => count($errors),
                 'total_processed' => $totalProcessed
             ]);
 
-            // Mark as completed
+            // Mark as completed (termasuk list kode yang tidak ditemukan untuk alert di UI)
             Cache::put($cacheKey, [
                 'status' => 'completed',
                 'total' => $totalRecords,
@@ -185,7 +201,9 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 'updated' => 0,
                 'errors' => count($errors),
                 'percentage' => 100,
-                'completed_at' => now()->toDateTimeString()
+                'completed_at' => now()->toDateTimeString(),
+                'missing_branch_codes' => $missingBranchList,
+                'missing_book_codes' => $missingBookList,
             ], now()->addHours(2));
 
             Cache::forget('sync_sp_branches_lock');

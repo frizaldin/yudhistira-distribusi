@@ -192,10 +192,13 @@ class ApiController extends Controller
         $perPageRaw = (int)$request->get('per_page', 100);
         $allowedPerPage = [50, 100, 150, 250, 500];
         $perPage = in_array($perPageRaw, $allowedPerPage) ? $perPageRaw : 100;
+        $perPage = min($perPage, 500); // batasi maksimal 500 per halaman agar response cepat
         $searchBookCode = $request->get('search_book_code', '');
         $searchBookName = $request->get('search_book_name', '');
         $percentageRaw = (int)$request->get('percentage', 100);
         $percentage = max(1, min(100, $percentageRaw));
+        $skipTotals = $request->boolean('skip_totals');
+        $totalsOnly = $request->boolean('totals_only');
 
         if (!$branchCode) {
             return response()->json([
@@ -219,6 +222,22 @@ class ApiController extends Controller
             ]);
         }
 
+        // Totals only: kembalikan hanya totals untuk seluruh data (tanpa filter) — dipanggil sesi ke-2
+        if ($totalsOnly) {
+            $activeCutoff = CutoffData::where('status', 'active')->first();
+            $productsQueryFull = Product::select('book_code', 'book_title')->orderBy('book_code');
+            $totalFull = $productsQueryFull->count();
+            $totals = $this->getNppbCentralTotals($branchCode, $activeCutoff, $currentYear, $percentage, $productsQueryFull);
+            return response()->json([
+                'results' => [],
+                'totals' => $totals,
+                'current_page' => 1,
+                'last_page' => 1,
+                'total' => $totalFull,
+                'per_page' => $perPage
+            ]);
+        }
+
         // Get all products; optional filter: hanya list marketing (is_marketing_list = Y)
         $marketingListOnly = $request->boolean('marketing_list_only');
         $productsQuery = Product::select('book_code', 'book_title');
@@ -233,13 +252,38 @@ class ApiController extends Controller
             $productsQuery->where('book_title', 'like', '%' . $searchBookName . '%');
         }
 
-        $products = $productsQuery->orderBy('book_code')->get();
+        // Clone query untuk totals (seluruh halaman) sebelum dipakai untuk pagination — hanya dipakai jika !skip_totals
+        $productsQueryForTotals = clone $productsQuery;
 
-        // Get central stocks (total stock pusat per book_code, tidak berdasarkan branch)
+        // Paginate products: hanya ambil 1 halaman agar query lookup kecil (bukan load semua produk)
+        $totalProducts = $productsQuery->count();
+        $lastPage = $totalProducts > 0 ? (int) ceil($totalProducts / $perPage) : 1;
+        $page = max(1, min($page, $lastPage));
+        $products = $productsQuery->orderBy('book_code')->skip(($page - 1) * $perPage)->take($perPage)->get();
+
+        // Check if there's an active cutoff_data (perlu sebelum empty return)
+        $activeCutoff = CutoffData::where('status', 'active')->first();
+
+        if ($products->isEmpty()) {
+            $totals = $skipTotals ? null : $this->getNppbCentralTotals($branchCode, $activeCutoff, $currentYear, $percentage, $productsQueryForTotals);
+            return response()->json([
+                'results' => [],
+                'totals' => $totals,
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'total' => 0,
+                'per_page' => $perPage
+            ]);
+        }
+
+        $bookCodesPage = $products->pluck('book_code');
+
+        // Get central stocks (total stock pusat per book_code) - hanya untuk book_code di halaman ini
         $centralStocks = CentralStock::select([
             'book_code',
             DB::raw('SUM(exemplar) as total_stock_pusat')
         ])
+            ->whereIn('book_code', $bookCodesPage)
             ->groupBy('book_code')
             ->get()
             ->keyBy('book_code');
@@ -248,15 +292,11 @@ class ApiController extends Controller
         $centralStockDeductions = CentralStockDeduction::select([
             'book_code',
             DB::raw('SUM(quantity) as total_deducted')
-        ])->groupBy('book_code')->get()->keyBy('book_code');
-
-        // Check if there's an active cutoff_data
-        $activeCutoff = CutoffData::where('status', 'active')->first();
+        ])->whereIn('book_code', $bookCodesPage)->groupBy('book_code')->get()->keyBy('book_code');
 
         $lastSpBranchSync = Cache::get('sync_sp_branches_progress_last_sync');
 
-        // Get existing NPPB data for this branch and year
-        // Group by book_code and sum the values; MAX(updated_at) untuk deteksi baris kuning (saved after last r_sp_faktur_stok sync)
+        // Get existing NPPB data for this branch and year - hanya untuk book di halaman ini
         $existingNppbQuery = NppbCentral::select([
             'book_code',
             DB::raw('SUM(koli) as koli'),
@@ -264,9 +304,9 @@ class ApiController extends Controller
             DB::raw('SUM(pls) as pls'),
             DB::raw('MAX(updated_at) as nppb_updated_at'),
         ])
-            ->where('branch_code', $branchCode);
+            ->where('branch_code', $branchCode)
+            ->whereIn('book_code', $bookCodesPage);
 
-        // Filter by date range if there's an active cutoff_data (start_date null = data <= end_date)
         if ($activeCutoff) {
             if ($activeCutoff->start_date !== null) {
                 $existingNppbQuery->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date]);
@@ -282,16 +322,17 @@ class ApiController extends Controller
             ->get()
             ->keyBy('book_code');
 
-        // Get SP, Faktur, and Stock Cabang from sp_branches - hanya data aktif
+        // Get SP, Faktur, and Stock Cabang from sp_branches - hanya book di halaman ini
         // Use the same $activeCutoff variable from above
         $spBranchQuery = SpBranch::select([
             'book_code',
-            DB::raw('SUM(ex_sp) as sp'), // SP = ex_sp
-            DB::raw('SUM(ex_ftr) as faktur'), // Faktur = ex_ftr
-            DB::raw('SUM(ex_stock) as stock_cabang'), // Stock Cabang = ex_stock
+            DB::raw('SUM(ex_sp) as sp'),
+            DB::raw('SUM(ex_ftr) as faktur'),
+            DB::raw('SUM(ex_stock) as stock_cabang'),
         ])
             ->where('active_data', 'yes')
-            ->where('branch_code', $branchCode);
+            ->where('branch_code', $branchCode)
+            ->whereIn('book_code', $bookCodesPage);
 
         // Filter by trans_date if there's an active cutoff_data
         if ($activeCutoff) {
@@ -307,26 +348,28 @@ class ApiController extends Controller
             ->get()
             ->keyBy('book_code');
 
-        // Eksemplar NPPB yang sudah diapprove (punya document_id) per cabang+book → ditambahkan ke stock cabang
+        // Eksemplar NPPB yang sudah diapprove (punya document_id) per cabang+book
         $nppbApprovedExpByBook = NppbCentral::select([
             'book_code',
             DB::raw('SUM(COALESCE(exp, 0)) as nppb_approved_exp'),
         ])
             ->where('branch_code', $branchCode)
+            ->whereIn('book_code', $bookCodesPage)
             ->whereNotNull('document_id')
             ->where('document_id', '!=', 0)
             ->groupBy('book_code')
             ->get()
             ->keyBy('book_code');
 
-        // Stock Nasional & SP Nasional & Faktur Nasional: dari sp_branches seluruh cabang (group by book_code saja)
+        // Stock Nasional & SP Nasional & Faktur Nasional - hanya book di halaman ini
         $spBranchNasionalQuery = SpBranch::select([
             'book_code',
             DB::raw('SUM(ex_stock) as stock_nasional'),
             DB::raw('SUM(ex_sp) as sp_nasional'),
             DB::raw('SUM(ex_ftr) as faktur_nasional'),
         ])
-            ->where('active_data', 'yes');
+            ->where('active_data', 'yes')
+            ->whereIn('book_code', $bookCodesPage);
         if ($activeCutoff) {
             if ($activeCutoff->start_date !== null) {
                 $spBranchNasionalQuery->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date]);
@@ -355,6 +398,7 @@ class ApiController extends Controller
                     DB::raw('SUM(exemplar) as total_intransit')
                 ])
                     ->whereIn('nota_kirim_cab', $deliveryNotesNasional)
+                    ->whereIn('book_code', $bookCodesPage)
                     ->whereNotNull('book_code')
                     ->groupBy('book_code')
                     ->get()
@@ -362,11 +406,12 @@ class ApiController extends Controller
             }
         }
 
-        // NPPB Central yang telah disetujui (nasional, seluruh cabang) untuk % vs Target
+        // NPPB Central yang telah disetujui (nasional) - hanya book di halaman ini
         $nppbApprovedExpNasionalQuery = NppbCentral::select([
             'book_code',
             DB::raw('SUM(COALESCE(exp, 0)) as nppb_approved_exp'),
         ])
+            ->whereIn('book_code', $bookCodesPage)
             ->whereNotNull('document_id')
             ->where('document_id', '!=', 0)
             ->groupBy('book_code');
@@ -381,11 +426,11 @@ class ApiController extends Controller
         }
         $nppbApprovedExpNasional = $nppbApprovedExpNasionalQuery->get()->keyBy('book_code');
 
-        // Stock Teralokasikan: total eksemplar NPPB seluruh cabang (dari nppb_centrals)
+        // Stock Teralokasikan: total eksemplar NPPB seluruh cabang - hanya book di halaman ini
         $stockTeralokasikanQuery = NppbCentral::select([
             'book_code',
             DB::raw('SUM(COALESCE(exp, 0)) as stock_teralokasikan')
-        ])->groupBy('book_code');
+        ])->whereIn('book_code', $bookCodesPage)->groupBy('book_code');
         if ($activeCutoff) {
             if ($activeCutoff->start_date !== null) {
                 $stockTeralokasikanQuery->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date]);
@@ -416,7 +461,7 @@ class ApiController extends Controller
         }
 
         // Pre-load all CentralStockKoli data untuk menghindari N+1 query problem
-        // Group by branch_code dan book_code, ambil volume terbesar per book_code
+        // Group by branch_code dan book_code, ambil volume terbesar per book_code (untuk kalkulasi koli/pls)
         $allStockKolis = CentralStockKoli::select([
             'branch_code',
             'book_code',
@@ -425,6 +470,14 @@ class ApiController extends Controller
             ->whereIn('book_code', $products->pluck('book_code'))
             ->groupBy('branch_code', 'book_code')
             ->get();
+
+        // Semua row central_stock_kolis per book_code untuk pilihan Isi (dropdown)
+        $allStockKolisRows = CentralStockKoli::select(['branch_code', 'book_code', 'volume', 'koli'])
+            ->whereIn('book_code', $products->pluck('book_code'))
+            ->orderBy('book_code')
+            ->orderByDesc('volume')
+            ->get();
+        $volumeOptionsByBook = $allStockKolisRows->groupBy('book_code');
 
         // Buat 2 lookup maps: satu untuk branch-specific, satu untuk general (tanpa branch)
         $stockKolisByBranch = $allStockKolis
@@ -456,6 +509,7 @@ class ApiController extends Controller
                     DB::raw('SUM(exemplar) as total_intransit')
                 ])
                     ->whereIn('nota_kirim_cab', $deliveryNotes)
+                    ->whereIn('book_code', $bookCodesPage)
                     ->whereNotNull('book_code')
                     ->groupBy('book_code');
 
@@ -464,7 +518,7 @@ class ApiController extends Controller
         }
 
         // Combine data
-        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductions, $existingNppb, $spBranchData, $spBranchNasional, $stockTeralokasikanData, $targetNasional, $branchCode, $stockKolisByBranch, $stockKolisGeneral, $intransitData, $nppbApprovedExpByBook, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
+        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductions, $existingNppb, $spBranchData, $spBranchNasional, $stockTeralokasikanData, $targetNasional, $branchCode, $stockKolisByBranch, $stockKolisGeneral, $volumeOptionsByBook, $intransitData, $nppbApprovedExpByBook, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $spBranch = $spBranchData->get($product->book_code);
@@ -532,31 +586,38 @@ class ApiController extends Controller
                 $stockKoli = $stockKolisGeneral->get($product->book_code);
             }
 
-            // Isi/volume_used selalu dari central_stock_kolis bila ada (tidak tergantung stock pusat atau exp)
-            if ($stockKoli && $stockKoli->volume > 0) {
+            // Pilihan Isi: semua row central_stock_kolis untuk book ini; default = volume terbesar
+            $opts = $volumeOptionsByBook->get($product->book_code) ?? collect();
+            $volumeOptions = $opts->sortByDesc('volume')->values()->map(function ($r) {
+                $v = (float) $r->volume;
+                $koliVal = isset($r->koli) ? (int) $r->koli : null;
+                $label = (string) (int) $v . ($koliVal !== null ? ' (' . $koliVal . ')' : '');
+                return ['value' => $v, 'label' => $label];
+            })->values()->toArray();
+            $volumeUsed = $opts->isEmpty() ? 0 : (float) $opts->max('volume');
+            if ($stockKoli && $stockKoli->volume > 0 && $volumeUsed <= 0) {
                 $volumeUsed = (float)$stockKoli->volume;
             }
 
-            // Jika belum ada data di database, lakukan perhitungan
+            // Jika belum ada data di database, lakukan perhitungan (seperti semula)
             if (!$hasExistingData) {
                 // Eksemplar diambil dari sisa SP
                 $exp = $sisaSp;
+                $koli = 0;
+                $pls = 0;
 
-                // Hitung koli dari eksemplar dibagi volume (modulo)
-                // Koli = eksemplar / volume (pembulatan ke bawah)
-                // Pls = eksemplar % volume (sisa pembagian)
-
-                if ($stockKoli && $stockKoli->volume > 0 && $exp > 0) {
-                    $volume = (float)$stockKoli->volume;
-
-                    $koli = floor($exp / $volume);
-                    $pls = $exp % $volume;
+                // Hitung koli dari eksemplar dibagi volume (modulo); pakai volume_used (default = max dari central_stock_kolis)
+                if ($volumeUsed > 0 && $exp > 0) {
+                    $koli = (int) floor($exp / $volumeUsed);
+                    $pls = (int) ($exp % $volumeUsed);
                 }
             }
 
             // Kurang SP Nasional = max(0, SP Nasional - Faktur Nasional - Stock Cabang Nasional - Stock Pusat)
             $kurangSpNasional = max(0, $spNasional - $fakturNasional - $stockCabangNasional - $stockPusat);
-            $pctSpVsStock = $stockPusat > 0 ? round(($kurangSpNasional / $stockPusat) * 100, 2) : 0;
+            // Persentase SP (Stock Pusat vs Kurang SP) = sisa_sp / stock_pusat × 100 (per cabang)
+            $pctSpVsStock = $stockPusat > 0 ? round(($sisaSp / $stockPusat) * 100, 2) : 0;
+            // Hanya izinkan rencana kirim jika % Stk/Kur SP >= Persentase Penentuan Rencana Kirim
             $allowRencanaKirim = ($pctSpVsStock >= $percentage);
             if (!$allowRencanaKirim) {
                 $koli = 0;
@@ -597,6 +658,7 @@ class ApiController extends Controller
                 'pct_faktur_stock_total_vs_target' => $pctFakturStockTotalVsTarget,
                 'intransit' => $totalIntransit,
                 'volume_used' => $volumeUsed,
+                'volume_options' => $volumeOptions,
                 'maksimal_total_eksemplar_nasional' => $maksimalTotalEksemplarNasional,
                 'sisa_kuota_eksemplar' => $sisaKuotaEksemplar,
                 'row_highlight_yellow' => $rowHighlightYellow,
@@ -630,32 +692,174 @@ class ApiController extends Controller
             }
         }
 
-        // Paginate results
-        $total = $results->count();
-        $lastPage = (int)ceil($total / $perPage);
-        $offset = ($page - 1) * $perPage;
-        $paginatedResults = $results->slice($offset, $perPage)->values();
-
-        // Total keseluruhan (seluruh data di semua halaman) untuk baris total
-        $totals = [
-            'sp' => $results->sum('sp'),
-            'faktur' => $results->sum('faktur'),
-            'stock_cabang' => $results->sum('stock_cabang'),
-            'sisa_sp' => $results->sum('sisa_sp'),
-            'sisa_sp_nasional' => $results->sum('kurang_sp_nasional'),
-            'koli' => $results->sum('koli'),
-            'pls' => $results->sum('pls'),
-            'exp' => $results->sum('exp'),
-        ];
+        // Totals hanya dihitung jika tidak skip_totals (sesi 1 load rows saja; totals di sesi 2)
+        $totals = $skipTotals ? null : $this->getNppbCentralTotals($branchCode, $activeCutoff, $currentYear, $percentage, $productsQueryForTotals);
 
         return response()->json([
-            'results' => $paginatedResults,
+            'results' => $results->values(),
             'totals' => $totals,
             'current_page' => $page,
             'last_page' => $lastPage,
-            'total' => $total,
+            'total' => $totalProducts,
             'per_page' => $perPage
         ]);
+    }
+
+    /**
+     * Hitung totals NPPB Central (untuk baris Total) via query agregat - tanpa load semua baris ke memory
+     */
+    protected function getNppbCentralTotals(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage, $productsQuery): array
+    {
+        $allBookCodes = (clone $productsQuery)->orderBy('book_code')->pluck('book_code');
+        if ($allBookCodes->isEmpty()) {
+            return [
+                'stock_pusat' => 0, 'stock_nasional' => 0, 'sp_nasional' => 0,
+                'stock_teralokasikan' => 0, 'maksimal_total_eksemplar_nasional' => 0, 'sisa_kuota_eksemplar' => 0,
+                'sisa_stock_pusat' => 0, 'sp' => 0, 'faktur' => 0, 'stock_cabang' => 0,
+                'sisa_sp' => 0, 'sisa_sp_nasional' => 0, 'koli' => 0, 'pls' => 0, 'exp' => 0,
+                'pct_stock_pusat_target_nasional_avg' => 0, 'pct_stock_pusat_sp_avg' => 0,
+                'pct_faktur_stock_total_vs_sp_avg' => 0, 'pct_faktur_stock_total_vs_target_avg' => 0,
+            ];
+        }
+
+        $totalStockPusat = CentralStock::whereIn('book_code', $allBookCodes)->sum('exemplar');
+        $totalDeducted = CentralStockDeduction::whereIn('book_code', $allBookCodes)->sum('quantity');
+        $stockPusatTotal = max(0, $totalStockPusat - $totalDeducted);
+
+        $spBranchBase = SpBranch::where('active_data', 'yes')->where('branch_code', $branchCode)->whereIn('book_code', $allBookCodes);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $spBranchBase->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $spBranchBase->where('trans_date', '<=', $activeCutoff->end_date);
+        }
+        $spTotal = (clone $spBranchBase)->sum('ex_sp');
+        $fakturTotal = (clone $spBranchBase)->sum('ex_ftr');
+        $stockCabangTotal = (clone $spBranchBase)->sum('ex_stock');
+
+        $spNasionalBase = SpBranch::where('active_data', 'yes')->whereIn('book_code', $allBookCodes);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $spNasionalBase->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $spNasionalBase->where('trans_date', '<=', $activeCutoff->end_date);
+        }
+        $stockNasionalTotal = (clone $spNasionalBase)->sum('ex_stock');
+        $spNasionalTotal = (clone $spNasionalBase)->sum('ex_sp');
+
+        $stockTeralokasikanQuery = NppbCentral::whereIn('book_code', $allBookCodes);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $stockTeralokasikanQuery->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $stockTeralokasikanQuery->where('date', '<=', $activeCutoff->end_date);
+        } else {
+            $stockTeralokasikanQuery->whereYear('date', $currentYear);
+        }
+        $stockTeralokasikanTotal = (clone $stockTeralokasikanQuery)->sum('exp');
+
+        $nppbCentralBranchQ = NppbCentral::where('branch_code', $branchCode)->whereIn('book_code', $allBookCodes);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $nppbCentralBranchQ->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $nppbCentralBranchQ->where('date', '<=', $activeCutoff->end_date);
+        } else {
+            $nppbCentralBranchQ->whereYear('date', $currentYear);
+        }
+        $existingNppbSums = $nppbCentralBranchQ->selectRaw('book_code, SUM(koli) as koli, SUM(exp) as exp, SUM(pls) as pls')->groupBy('book_code')->get();
+
+        // Sisa SP & Kurang SP Nasional: butuh per-book, dihitung via agregat ringan (tanpa load semua baris)
+        $sisaSpTotal = 0;
+        $kurangSpNasionalTotal = 0;
+
+        // Rata-rata persen: hitung dari agregat per book (agar sesuai kolom di tabel)
+        $pctStockTargetAvg = 0;
+        $pctStockSpAvg = 0;
+        $pctFtrSpAvg = 0; // avg dari % (Ftr+Stk+Kirim vs SP)
+        $pctFtrTargetAvg = 0;
+
+        // Avg % (Ftr+Stk+Kirim vs SP) per book: ((faktur + stock_cabang + intransit + nppb_approved) / sp) * 100
+        $spBranchPerBookQ = SpBranch::select([
+            'book_code',
+            DB::raw('SUM(ex_sp) as sp'),
+            DB::raw('SUM(ex_ftr) as faktur'),
+            DB::raw('SUM(ex_stock) as stock_cabang'),
+        ])->where('active_data', 'yes')
+            ->where('branch_code', $branchCode)
+            ->whereIn('book_code', $allBookCodes);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $spBranchPerBookQ->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $spBranchPerBookQ->where('trans_date', '<=', $activeCutoff->end_date);
+        }
+        $spBranchPerBook = $spBranchPerBookQ->groupBy('book_code')->get()->keyBy('book_code');
+
+        // Intransit per book untuk cabang (tujuan delivery_notes.branch_code)
+        $intransitPerBook = collect();
+        $intransitQuery = DeliveryNoteDetail::select([
+            'delivery_note_details.book_code',
+            DB::raw('SUM(exemplar) as total_intransit')
+        ])->join('delivery_notes', 'delivery_notes.id', '=', 'delivery_note_details.delivery_note_id')
+            ->where('delivery_notes.branch_code', $branchCode)
+            ->whereIn('delivery_note_details.book_code', $allBookCodes);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $intransitQuery->whereBetween('delivery_notes.trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $intransitQuery->where('delivery_notes.trans_date', '<=', $activeCutoff->end_date);
+        } else {
+            $intransitQuery->whereYear('delivery_notes.trans_date', $currentYear);
+        }
+        $intransitPerBook = $intransitQuery->groupBy('delivery_note_details.book_code')->get()->keyBy('book_code');
+
+        // NPPB Central yang sudah disetujui (punya document_id) per book cabang
+        $nppbApprovedPerBook = NppbCentral::select([
+            'book_code',
+            DB::raw('SUM(COALESCE(exp, 0)) as nppb_approved_exp'),
+        ])->where('branch_code', $branchCode)
+            ->whereIn('book_code', $allBookCodes)
+            ->whereNotNull('document_id')
+            ->where('document_id', '!=', 0);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $nppbApprovedPerBook->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $nppbApprovedPerBook->where('date', '<=', $activeCutoff->end_date);
+        } else {
+            $nppbApprovedPerBook->whereYear('date', $currentYear);
+        }
+        $nppbApprovedPerBook = $nppbApprovedPerBook->groupBy('book_code')->get()->keyBy('book_code');
+
+        $pctVals = [];
+        foreach ($allBookCodes as $bc) {
+            $row = $spBranchPerBook->get($bc);
+            if (!$row) continue;
+            $sp = (float) ($row->sp ?? 0);
+            if ($sp <= 0) continue;
+            $ftr = (float) ($row->faktur ?? 0);
+            $stk = (float) ($row->stock_cabang ?? 0);
+            $intr = (float) (($intransitPerBook->get($bc)->total_intransit ?? 0) ?: 0);
+            $apr = (float) (($nppbApprovedPerBook->get($bc)->nppb_approved_exp ?? 0) ?: 0);
+            $pctVals[] = (($ftr + $stk + $intr + $apr) / $sp) * 100;
+        }
+        $pctFtrSpAvg = count($pctVals) ? round(array_sum($pctVals) / count($pctVals), 2) : 0;
+
+        return [
+            'stock_pusat' => $stockPusatTotal,
+            'stock_nasional' => $stockNasionalTotal,
+            'sp_nasional' => $spNasionalTotal,
+            'stock_teralokasikan' => $stockTeralokasikanTotal,
+            'maksimal_total_eksemplar_nasional' => (int) floor(($percentage / 100) * $stockPusatTotal),
+            'sisa_kuota_eksemplar' => max(0, (int) floor(($percentage / 100) * $stockPusatTotal) - $stockTeralokasikanTotal),
+            'sisa_stock_pusat' => max(0, $stockPusatTotal - $stockTeralokasikanTotal),
+            'sp' => $spTotal,
+            'faktur' => $fakturTotal,
+            'stock_cabang' => $stockCabangTotal,
+            'sisa_sp' => $sisaSpTotal,
+            'sisa_sp_nasional' => $kurangSpNasionalTotal,
+            'koli' => $existingNppbSums->sum('koli'),
+            'pls' => $existingNppbSums->sum('pls'),
+            'exp' => $existingNppbSums->sum('exp'),
+            'pct_stock_pusat_target_nasional_avg' => $pctStockTargetAvg,
+            'pct_stock_pusat_sp_avg' => $pctStockSpAvg,
+            'pct_faktur_stock_total_vs_sp_avg' => $pctFtrSpAvg,
+            'pct_faktur_stock_total_vs_target_avg' => $pctFtrTargetAvg,
+        ];
     }
 
     /**
@@ -802,6 +1006,14 @@ class ApiController extends Controller
             ->get()
             ->keyBy('book_code');
 
+        // Semua row central_stock_kolis per book_code untuk pilihan Isi (dropdown)
+        $allStockKolisRowsWarehouse = CentralStockKoli::select(['branch_code', 'book_code', 'volume', 'koli'])
+            ->whereIn('book_code', $products->pluck('book_code'))
+            ->orderBy('book_code')
+            ->orderByDesc('volume')
+            ->get();
+        $volumeOptionsByBookWarehouse = $allStockKolisRowsWarehouse->groupBy('book_code');
+
         // Data nasional (seluruh cabang) untuk % (Ftr+Stk+Kirim vs Target) dan Kurang SP Nasional
         $spBranchNasionalQuery = SpBranch::select([
             'book_code',
@@ -874,7 +1086,7 @@ class ApiController extends Controller
                 ->keyBy('book_code');
         }
 
-        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductionsWarehouse, $existingNppb, $spBranchData, $intransitData, $allStockKolis, $nppbApprovedExpByBook, $targetNasional, $spBranchNasional, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
+        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductionsWarehouse, $existingNppb, $spBranchData, $intransitData, $allStockKolis, $volumeOptionsByBookWarehouse, $nppbApprovedExpByBook, $targetNasional, $spBranchNasional, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $hasExistingData = ($nppb !== null);
@@ -905,8 +1117,19 @@ class ApiController extends Controller
             $exp = $nppb->exp ?? 0;
             $koli = $nppb->koli ?? 0;
             $pls = $nppb->pls ?? 0;
+            // Pilihan Isi: semua row central_stock_kolis untuk book ini; default = volume terbesar
+            $optsWh = $volumeOptionsByBookWarehouse->get($product->book_code) ?? collect();
+            $volumeOptionsWh = $optsWh->sortByDesc('volume')->values()->map(function ($r) {
+                $v = (float) $r->volume;
+                $koliVal = isset($r->koli) ? (int) $r->koli : null;
+                $label = (string) (int) $v . ($koliVal !== null ? ' (' . $koliVal . ')' : '');
+                return ['value' => $v, 'label' => $label];
+            })->values()->toArray();
+            $volumeUsed = $optsWh->isEmpty() ? 0 : (float) $optsWh->max('volume');
             $stockKoli = $allStockKolis->get($product->book_code);
-            $volumeUsed = $stockKoli ? (float)$stockKoli->volume : 0;
+            if ($volumeUsed <= 0 && $stockKoli) {
+                $volumeUsed = (float)$stockKoli->volume;
+            }
 
             $intransit = $intransitData->get($product->book_code);
             $totalIntransit = $intransit ? ($intransit->total_intransit ?? 0) : 0;
@@ -932,6 +1155,8 @@ class ApiController extends Controller
             $pctFakturStockTotalVsSp = $sp > 0 ? round((($faktur + $stockCabang) / $sp) * 100, 2) : 0;
             $pctFakturStockTotalVsTarget = $targetNasionalVal > 0 ? round((($fakturNasional + $stockCabangNasional) / $targetNasionalVal) * 100, 2) : 0;
 
+            $stockNasional = $spNasionalRow->stock_nasional ?? 0;
+
             return [
                 'book_code' => $product->book_code,
                 'book_name' => $product->book_title,
@@ -942,6 +1167,8 @@ class ApiController extends Controller
                 'pct_sp_vs_stock' => $pctSpVsStock,
                 'allow_rencana_kirim' => $allowRencanaKirim,
                 'stock_pusat' => $stockPusat,
+                'stock_nasional' => $stockNasional,
+                'sp_nasional' => $spNasional,
                 'sp' => $sp,
                 'faktur' => $faktur,
                 'stock_cabang' => $stockCabang,
@@ -951,6 +1178,7 @@ class ApiController extends Controller
                 'target_nasional' => $targetNasionalVal,
                 'intransit' => $totalIntransit,
                 'volume_used' => $volumeUsed,
+                'volume_options' => $volumeOptionsWh,
                 'row_highlight_yellow' => $rowHighlightYellow,
             ];
         });
@@ -987,8 +1215,15 @@ class ApiController extends Controller
         $offset = ($page - 1) * $perPage;
         $paginatedResults = $results->slice($offset, $perPage)->values();
 
-        // Total keseluruhan (seluruh data di semua halaman) untuk baris total
+        // Total keseluruhan (seluruh data di semua halaman) untuk baris total; kolom persen = rata-rata
         $totals = [
+            'stock_pusat' => $results->sum('stock_pusat'),
+            'stock_nasional' => $results->sum('stock_nasional'),
+            'sp_nasional' => $results->sum('sp_nasional'),
+            'stock_teralokasikan' => $results->sum('stock_teralokasikan'),
+            'maksimal_total_eksemplar_nasional' => $results->sum('maksimal_total_eksemplar_nasional'),
+            'sisa_kuota_eksemplar' => $results->sum('sisa_kuota_eksemplar'),
+            'sisa_stock_pusat' => $results->sum('sisa_stock_pusat'),
             'sp' => $results->sum('sp'),
             'faktur' => $results->sum('faktur'),
             'stock_cabang' => $results->sum('stock_cabang'),
@@ -997,6 +1232,10 @@ class ApiController extends Controller
             'koli' => $results->sum('koli'),
             'pls' => $results->sum('pls'),
             'exp' => $results->sum('exp'),
+            'pct_stock_pusat_target_nasional_avg' => round((float) $results->avg('pct_stock_pusat_target_nasional'), 2),
+            'pct_stock_pusat_sp_avg' => round((float) $results->avg('pct_stock_pusat_sp'), 2),
+            'pct_faktur_stock_total_vs_sp_avg' => round((float) $results->avg('pct_faktur_stock_total_vs_sp'), 2),
+            'pct_faktur_stock_total_vs_target_avg' => round((float) $results->avg('pct_faktur_stock_total_vs_target'), 2),
         ];
 
         return response()->json([

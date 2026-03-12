@@ -184,10 +184,10 @@
     <div class="row g-3">
         <!-- Kolom Kiri -->
         <div class="col-lg-4">
-            <!-- Target vs Rencana Kirim (Line Chart) -->
+            <!-- Rencana Kirim vs SP (Line Chart) -->
             <div class="card mb-3 border-0 shadow-sm">
                 <div class="card-header bg-white">
-                    <strong>Target vs Rencana Kirim</strong>
+                    <strong>Rencana Kirim vs SP</strong>
                 </div>
                 <div class="card-body">
                     <div class="chart-wrapper">
@@ -244,6 +244,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Baris chart tambahan: Realisasi Thn Lalu/Target/SP/Faktur, Kurang SP vs Stock Pusat, SP vs Faktur, Faktur per tahun, Stock Pusat vs Target % -->
+        <div class="row g-3 mt-0">
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white"><strong>Realisasi Tahun Lalu, Target, SP, Faktur</strong></div>
+                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartRealisasiTargetSpFaktur" height="200"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white"><strong>Kurang SP vs Stock Pusat</strong></div>
+                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartKurangSpVsStockPusat" height="200"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white"><strong>SP vs Faktur</strong></div>
+                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartSpVsFaktur" height="200"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white"><strong>Faktur per Tahun</strong></div>
+                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartFakturPerTahun" height="200"></canvas></div></div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-header bg-white"><strong>Stock Pusat vs Target (Persentase)</strong></div>
+                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartStockPusatVsTargetPct" height="200"></canvas></div></div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-md-6">
             <!-- Grafik Faktur (Per Bulan) -->
             <div class="card mb-3 border-0 shadow-sm">
@@ -730,10 +765,13 @@
 
                     <h6 class="text-primary mt-3 mb-2">Grafik</h6>
                     <ul class="mb-0">
-                        <li><strong>Target vs Rencana Kirim</strong> → Target per tahun vs total SP (Rencana kirim)
-                            per tahun.</li>
-                        <li><strong>Grafik Faktur (Per Bulan)</strong> → Total Faktur per bulan dalam periode yang
-                            dipilih.</li>
+                        <li><strong>Rencana Kirim vs SP</strong> → Rencana kirim dari NPPB yang sudah disetujui (total eksemplar per tahun) vs SP (Stok Pusat) per tahun.</li>
+                        <li><strong>Realisasi Tahun Lalu, Target, SP, Faktur</strong> → Perbandingan empat metrik per tahun (bar); Realisasi Tahun Lalu = Faktur tahun sebelumnya.</li>
+                        <li><strong>Kurang SP vs Stock Pusat</strong> → Sisa SP (SP − Faktur) per tahun vs Stok Pusat per tahun.</li>
+                        <li><strong>SP vs Faktur</strong> → Total SP dan total Faktur per tahun.</li>
+                        <li><strong>Faktur per Tahun</strong> → Total Faktur per tahun.</li>
+                        <li><strong>Stock Pusat vs Target (Persentase)</strong> → (Stok Pusat ÷ Target) × 100% per tahun.</li>
+                        <li><strong>Grafik Faktur (Per Bulan)</strong> → Total Faktur per bulan dalam periode yang dipilih.</li>
                         <li><strong>SP Per Tahun</strong> → Total SP per tahun.</li>
                         <li><strong>Stok Pusat vs Target</strong> → Stok pusat vs total target (per tahun).</li>
                     </ul>
@@ -877,18 +915,18 @@
             ];
             $chartData = $monthlySalesData ?? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-            // Get yearly target and Rencana kirim data from controller
-            $targetChartData = $yearlyTargetData ?? [];
-            $realisasiKirimChartData = $yearlyRealisasiKirimData ?? [];
+            // Rencana Kirim = NPPB yang sudah disetujui (eksemplar per tahun), SP = Stok Pusat per tahun
+            $nppbRencanaKirimChartData = $yearlyNppbRencanaKirimData ?? [];
+            $spForRencanaChartData = $yearlySpDataForRencanaChart ?? [];
             $yearLabels = $yearlyLabels ?? [];
 
-            // Calculate max value for scaling chart
+            // Calculate max value for scaling chart (Rencana Kirim vs SP)
             $maxChartValue = 0;
-            if (!empty($targetChartData)) {
-                $maxChartValue = max($maxChartValue, max($targetChartData));
+            if (!empty($nppbRencanaKirimChartData)) {
+                $maxChartValue = max($maxChartValue, max($nppbRencanaKirimChartData));
             }
-            if (!empty($realisasiKirimChartData)) {
-                $maxChartValue = max($maxChartValue, max($realisasiKirimChartData));
+            if (!empty($spForRencanaChartData)) {
+                $maxChartValue = max($maxChartValue, max($spForRencanaChartData));
             }
             // Add 10% padding to max value
             $maxChartValue = $maxChartValue > 0 ? ceil($maxChartValue * 1.1) : 100;
@@ -920,12 +958,12 @@
         @endphp
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                // Target vs Rencana Kirim Chart (Line Chart - Yearly)
+                // Rencana Kirim vs SP Chart (Line Chart - Yearly). Rencana Kirim = NPPB yang sudah disetujui.
                 const targetRealisasiCtx = document.getElementById('targetRealisasiChart');
                 if (targetRealisasiCtx) {
                     const chartLabels = @json($yearLabels ?? []);
-                    const targetData = @json($targetChartData ?? []);
-                    const realisasiData = @json($realisasiKirimChartData ?? []);
+                    const nppbRencanaData = @json($nppbRencanaKirimChartData ?? []);
+                    const spData = @json($spForRencanaChartData ?? []);
                     const maxValue = @json($maxChartValue ?? 100);
 
                     new Chart(targetRealisasiCtx, {
@@ -933,21 +971,21 @@
                         data: {
                             labels: chartLabels,
                             datasets: [{
-                                label: 'Target',
-                                data: targetData,
-                                borderColor: 'rgb(34, 197, 94)',
-                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                                tension: 0.4,
-                                pointStyle: 'circle',
-                                pointRadius: 5,
-                                pointHoverRadius: 7
-                            }, {
-                                label: 'Rencana Kirim',
-                                data: realisasiData,
+                                label: 'Rencana Kirim (NPPB disetujui)',
+                                data: nppbRencanaData,
                                 borderColor: 'rgb(59, 130, 246)',
                                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                 tension: 0.4,
                                 pointStyle: 'rect',
+                                pointRadius: 5,
+                                pointHoverRadius: 7
+                            }, {
+                                label: 'SP',
+                                data: spData,
+                                borderColor: 'rgb(34, 197, 94)',
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                tension: 0.4,
+                                pointStyle: 'circle',
                                 pointRadius: 5,
                                 pointHoverRadius: 7
                             }]
@@ -1259,6 +1297,122 @@
                                     }
                                 }
                             }
+                        }
+                    });
+                }
+
+                // 1. Realisasi Tahun Lalu, Target, SP, Faktur (Bar/Line)
+                const ctx1 = document.getElementById('chartRealisasiTargetSpFaktur');
+                if (ctx1) {
+                    const labels1 = @json($yearlyLabels ?? []);
+                    const realisasiThnLalu = @json($chartRealisasiTahunLaluData ?? []);
+                    const targetData = @json($chartTargetDataForCharts ?? []);
+                    const spData = @json($chartSpDataForCharts ?? []);
+                    const fakturData = @json($chartFakturData ?? []);
+                    new Chart(ctx1, {
+                        type: 'bar',
+                        data: {
+                            labels: labels1,
+                            datasets: [
+                                { label: 'Realisasi Thn Lalu', data: realisasiThnLalu, backgroundColor: 'rgba(156, 163, 175, 0.7)', borderColor: '#6B7280', borderWidth: 1 },
+                                { label: 'Target', data: targetData, backgroundColor: 'rgba(34, 197, 94, 0.6)', borderColor: '#16a34a', borderWidth: 1 },
+                                { label: 'SP', data: spData, backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 },
+                                { label: 'Faktur', data: fakturData, backgroundColor: 'rgba(249, 115, 22, 0.6)', borderColor: '#ea580c', borderWidth: 1 }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
+                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
+                        }
+                    });
+                }
+
+                // 2. Kurang SP vs Stock Pusat
+                const ctx2 = document.getElementById('chartKurangSpVsStockPusat');
+                if (ctx2) {
+                    const labels2 = @json($yearlyLabels ?? []);
+                    const kurangSp = @json($chartKurangSpData ?? []);
+                    const stockPusat = @json($chartStockPusatData ?? []);
+                    new Chart(ctx2, {
+                        type: 'line',
+                        data: {
+                            labels: labels2,
+                            datasets: [
+                                { label: 'Kurang SP', data: kurangSp, borderColor: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.4, fill: true },
+                                { label: 'Stock Pusat', data: stockPusat, borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.1)', tension: 0.4, fill: true }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
+                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
+                        }
+                    });
+                }
+
+                // 4. SP vs Faktur
+                const ctx4 = document.getElementById('chartSpVsFaktur');
+                if (ctx4) {
+                    const labels4 = @json($yearlyLabels ?? []);
+                    const spData4 = @json($chartSpDataForCharts ?? []);
+                    const fakturData4 = @json($chartFakturData ?? []);
+                    new Chart(ctx4, {
+                        type: 'line',
+                        data: {
+                            labels: labels4,
+                            datasets: [
+                                { label: 'SP', data: spData4, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.4, fill: true },
+                                { label: 'Faktur', data: fakturData4, borderColor: '#ea580c', backgroundColor: 'rgba(234, 88, 12, 0.1)', tension: 0.4, fill: true }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
+                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
+                        }
+                    });
+                }
+
+                // 5. Faktur per Tahun
+                const ctx5 = document.getElementById('chartFakturPerTahun');
+                if (ctx5) {
+                    const labels5 = @json($yearlyLabels ?? []);
+                    const fakturTahun = @json($chartFakturData ?? []);
+                    new Chart(ctx5, {
+                        type: 'bar',
+                        data: {
+                            labels: labels5,
+                            datasets: [{ label: 'Faktur', data: fakturTahun, backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
+                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
+                        }
+                    });
+                }
+
+                // 6. Stock Pusat vs Target (Persentase)
+                const ctx6 = document.getElementById('chartStockPusatVsTargetPct');
+                if (ctx6) {
+                    const labels6 = @json($yearlyLabels ?? []);
+                    const pctData = @json($chartStockPusatVsTargetPct ?? []);
+                    new Chart(ctx6, {
+                        type: 'bar',
+                        data: {
+                            labels: labels6,
+                            datasets: [{ label: 'Stock Pusat vs Target (%)', data: pctData, backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: '#7c3aed', borderWidth: 1 }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } } },
+                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } } }
                         }
                     });
                 }

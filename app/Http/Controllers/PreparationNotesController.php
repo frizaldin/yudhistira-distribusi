@@ -88,16 +88,29 @@ class PreparationNotesController extends Controller
 
         $groupedByStack = $rows->groupBy('stack');
 
-        // List ringkas per stack: stack, tanggal (max date), jumlah baris, nama pembuat, sudah disetujui atau belum
-        $stackList = $stacksForPage->map(function ($stack) use ($groupedByStack) {
+        // Doc id → nkb_cancelled_at (untuk baris merah: NKB dari NPPB ini pernah dibatalkan)
+        $documentIds = $rows->pluck('document_id')->filter()->unique()->values()->all();
+        $docNkbCancelled = collect();
+        if (!empty($documentIds)) {
+            $docNkbCancelled = NppbDocument::whereIn('id', $documentIds)
+                ->get()
+                ->keyBy('id')
+                ->map(fn ($d) => $d->nkb_cancelled_at);
+        }
+
+        // List ringkas per stack: stack, tanggal, jumlah, pembuat, sudah disetujui, NKB pernah dibatalkan
+        $stackList = $stacksForPage->map(function ($stack) use ($groupedByStack, $docNkbCancelled) {
             $rowsInStack = $groupedByStack[$stack] ?? collect();
             $firstRow = $rowsInStack->first();
+            $documentId = $firstRow && $firstRow->document_id ? $firstRow->document_id : null;
+            $nkbCancelledAt = $documentId ? ($docNkbCancelled->get($documentId) ?? null) : null;
             return (object)[
                 'stack' => $stack,
                 'date' => $rowsInStack->max('date'),
                 'count' => $rowsInStack->count(),
                 'creator_name' => $firstRow && $firstRow->creator ? $firstRow->creator->name : '-',
                 'has_document' => $rowsInStack->contains(fn ($r) => !empty($r->document_id)),
+                'nkb_was_cancelled' => $nkbCancelledAt !== null,
             ];
         });
 
@@ -361,7 +374,8 @@ class PreparationNotesController extends Controller
     }
 
     /**
-     * Batalkan/hapus rencana (seluruh stack). Hanya untuk stack yang belum disetujui (belum punya dokumen).
+     * Batalkan/hapus rencana (seluruh stack). Boleh untuk stack belum disetujui maupun sudah disetujui.
+     * Jika sudah disetujui: dokumen NPPB ikut dihapus.
      */
     public function cancelRencana(Request $request)
     {
@@ -372,18 +386,31 @@ class PreparationNotesController extends Controller
         $stack = $request->input('stack');
         $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
 
-        $query = NppbCentral::where('stack', $stack)->whereNull('document_id');
+        $query = NppbCentral::where('stack', $stack);
         if ($filteredBranchCodes !== null) {
             $query->whereIn('branch_code', $filteredBranchCodes);
         }
-        if ($query->count() === 0) {
+        $rows = $query->get();
+        if ($rows->isEmpty()) {
             return redirect()->route('preparation_notes.index')
-                ->with('error', 'Rencana tidak ditemukan atau sudah disetujui. Hanya rencana yang belum disetujui yang dapat dibatalkan.');
+                ->with('error', 'Rencana tidak ditemukan.');
         }
 
-        $deleted = $query->delete();
-        return redirect()->route('preparation_notes.index')
-            ->with('success', 'Rencana ' . $stack . ' berhasil dibatalkan (' . $deleted . ' baris dihapus).');
+        $documentId = $rows->first()->document_id;
+
+        DB::transaction(function () use ($query, $documentId) {
+            $query->delete();
+            if ($documentId) {
+                NppbDocument::where('id', $documentId)->delete();
+            }
+        });
+
+        $deleted = $rows->count();
+        $msg = 'Rencana ' . $stack . ' berhasil dibatalkan (' . $deleted . ' baris dihapus).';
+        if ($documentId) {
+            $msg .= ' Dokumen NPPB terkait juga telah dihapus.';
+        }
+        return redirect()->route('preparation_notes.index')->with('success', $msg);
     }
 
     /**
@@ -717,6 +744,9 @@ class PreparationNotesController extends Controller
                     'volume' => $edit->volume,
                 ]);
             }
+
+            // NKB baru dibuat → hilangkan tanda "NKB dibatalkan" agar baris di preparation-notes tidak merah lagi
+            $document->update(['nkb_cancelled_at' => null]);
 
             // Kurangi stock pusat: catat deduction per book_code (eksemplar NKB) agar tampil di nppb-central/nppb-warehouse
             $expByBook = $rowsWithEdits->groupBy('row.book_code')->map(fn ($items) => $items->sum('exp'));

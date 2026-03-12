@@ -25,6 +25,7 @@ class NppbDocument extends Model
         'creator_name',
         'known_name',
         'created_by',
+        'nkb_cancelled_at',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class NppbDocument extends Model
         'total_type_books' => 'integer',
         'total_exemplar' => 'integer',
         'created_by' => 'integer',
+        'nkb_cancelled_at' => 'datetime',
     ];
 
     public function creator()

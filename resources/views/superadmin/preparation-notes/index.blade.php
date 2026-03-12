@@ -61,7 +61,7 @@
                     </thead>
                     <tbody>
                         @forelse($stackList ?? [] as $item)
-                            <tr>
+                            <tr class="{{ !empty($item->nkb_was_cancelled) ? 'table-danger' : '' }}">
                                 <td><code>{{ $item->stack }}</code></td>
                                 <td>{{ $item->date ? \Carbon\Carbon::parse($item->date)->format('d/m/Y') : '-' }}</td>
                                 <td>{{ $item->creator_name ?? '-' }}</td>
@@ -71,16 +71,14 @@
                                         class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-list-ul me-1"></i>Detail
                                     </a>
-                                    @if (empty($item->has_document))
-                                        <form method="POST" action="{{ route('preparation_notes.cancel_rencana') }}"
-                                            class="d-inline form-cancel-rencana" data-stack="{{ $item->stack }}">
-                                            @csrf
-                                            <input type="hidden" name="stack" value="{{ $item->stack }}" />
-                                            <button type="button" class="btn btn-sm btn-outline-danger ms-1 btn-cancel-rencana">
-                                                <i class="bi bi-x-circle me-1"></i>Batalkan Rencana
-                                            </button>
-                                        </form>
-                                    @endif
+                                    <form method="POST" action="{{ route('preparation_notes.cancel_rencana') }}"
+                                        class="d-inline form-cancel-rencana" data-stack="{{ $item->stack }}">
+                                        @csrf
+                                        <input type="hidden" name="stack" value="{{ $item->stack }}" />
+                                        <button type="button" class="btn btn-sm btn-outline-danger ms-1 btn-cancel-rencana">
+                                            <i class="bi bi-x-circle me-1"></i>Batalkan Rencana
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         @empty

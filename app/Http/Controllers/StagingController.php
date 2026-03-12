@@ -309,7 +309,7 @@ class StagingController extends Controller
                         break;
                     case 'target':
                         if (Cache::add('sync_targets_lock', true, now()->addHours(2))) {
-                            SynchronizeTargetsJob::dispatch(false);
+                            SynchronizeTargetsJob::dispatch();
                         }
                         break;
                     case 'period':
@@ -374,14 +374,14 @@ class StagingController extends Controller
                     }
                     SynchronizeCentralStocksJob::dispatch();
                     break;
-                case 'target':
+                    case 'target':
                     if (!Cache::add('sync_targets_lock', true, now()->addHours(2))) {
                         return response()->json([
                             'success' => false,
                             'message' => 'Job sinkron target masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
                         ], 409);
                     }
-                    SynchronizeTargetsJob::dispatch($clearFirst);
+                    SynchronizeTargetsJob::dispatch();
                     break;
                 case 'period':
                     SynchronizePeriodesJob::dispatch();

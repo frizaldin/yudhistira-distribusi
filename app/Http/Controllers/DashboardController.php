@@ -553,6 +553,58 @@ class DashboardController extends Controller
             }
         }
 
+        // Faktur per tahun (ex_ftr) untuk chart SP vs Faktur, Faktur per tahun, Realisasi Thn Lalu
+        $yearlyFakturQuery = SpBranch::select([
+            DB::raw('YEAR(trans_date) as year'),
+            DB::raw('SUM(ex_ftr) as total_faktur'),
+        ])
+            ->where('active_data', 'yes')
+            ->whereNotNull('trans_date');
+        if ($startDate !== null) {
+            $yearlyFakturQuery->whereBetween('trans_date', [$startDate, $endDate]);
+        } else {
+            $yearlyFakturQuery->where('trans_date', '<=', $endDate);
+        }
+        $yearlyFakturRaw = $yearlyFakturQuery
+            ->whereIn(DB::raw('YEAR(trans_date)'), $yearsRange)
+            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+            ->groupBy(DB::raw('YEAR(trans_date)'))
+            ->orderBy('year')
+            ->get()
+            ->keyBy('year');
+
+        $yearlyFakturData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyFakturData[$y] = 0;
+        }
+        foreach ($yearlyFakturRaw as $row) {
+            if (in_array($row->year, $yearsRange)) {
+                $yearlyFakturData[$row->year] = (int) ($row->total_faktur ?? 0);
+            }
+        }
+
+        // Kurang SP (Sisa SP) per tahun = SP - Faktur
+        $yearlyKurangSpData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyKurangSpData[$y] = max(0, ($yearlySpChartData[$y] ?? 0) - ($yearlyFakturData[$y] ?? 0));
+        }
+
+        // Realisasi tahun lalu = Faktur tahun sebelumnya (untuk tiap tahun)
+        $yearlyRealisasiTahunLaluData = [];
+        foreach ($yearsRange as $i => $y) {
+            $prevYear = $yearsRange[$i - 1] ?? null;
+            $yearlyRealisasiTahunLaluData[$y] = $prevYear !== null ? ($yearlyFakturData[$prevYear] ?? 0) : 0;
+        }
+
+        // Stock Pusat vs Target (persentase) per tahun
+        $yearlyStockPusatVsTargetPct = [];
+        foreach ($yearsRange as $y) {
+            $targetY = $yearlyTargetData[$y] ?? 0;
+            $stockY = $yearlyStokPusatData[$y] ?? 0;
+            $yearlyStockPusatVsTargetPct[$y] = $targetY > 0 ? round(($stockY / $targetY) * 100, 1) : 0;
+        }
+
         // Get Stok Pusat per year from CentralStock
         // Note: CentralStock doesn't have year field, so we'll use created_at or get all data
         // For now, we'll get all stok pusat and distribute evenly or use a different approach
@@ -593,13 +645,63 @@ class DashboardController extends Controller
             }
         }
 
+        // NPPB yang sudah disetujui (document_id terisi) — total eksemplar per tahun untuk chart Rencana Kirim vs SP
+        $yearlyNppbApprovedQuery = NppbCentral::select([
+            DB::raw('YEAR(date) as year'),
+            DB::raw('COALESCE(SUM(exp), 0) as total_exp'),
+        ])
+            ->whereNotNull('document_id')
+            ->where('document_id', '!=', 0)
+            ->whereNotNull('date');
+        if ($startDate !== null) {
+            $yearlyNppbApprovedQuery->whereBetween('date', [$startDate, $endDate]);
+        } else {
+            $yearlyNppbApprovedQuery->where('date', '<=', $endDate);
+        }
+        $yearlyNppbApproved = $yearlyNppbApprovedQuery
+            ->whereIn(DB::raw('YEAR(date)'), $yearsRange)
+            ->when($userBranchCode, function ($query) use ($userBranchCode) {
+                return $query->where('branch_code', $userBranchCode);
+            })
+            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
+                return $query->whereIn('branch_code', $filteredBranchCodes);
+            })
+            ->groupBy(DB::raw('YEAR(date)'))
+            ->orderBy('year')
+            ->get()
+            ->keyBy('year');
+
+        $yearlyNppbRencanaData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyNppbRencanaData[$y] = 0;
+        }
+        foreach ($yearlyNppbApproved as $row) {
+            if (in_array($row->year, $yearsRange)) {
+                $yearlyNppbRencanaData[$row->year] = (int) ($row->total_exp ?? 0);
+            }
+        }
+
         $chartTargetData = [];
         $chartRealisasiKirimData = [];
+        $chartNppbRencanaKirimData = []; // NPPB disetujui (eksemplar) per tahun untuk chart Rencana Kirim vs SP
+        $chartSpDataForRencanaChart = []; // SP (Stok Pusat) per tahun
+        $chartRealisasiTahunLaluData = [];
+        $chartKurangSpData = [];
+        $chartFakturData = [];
+        $chartSpData = []; // SP (ex_sp) per tahun untuk chart SP vs Faktur
+        $chartStockPusatVsTargetPct = [];
         $chartYearLabels = [];
         foreach ($yearsRange as $y) {
             $chartYearLabels[] = (string)$y;
             $chartTargetData[] = $yearlyTargetData[$y] ?? 0;
             $chartRealisasiKirimData[] = $yearlyRealisasiData[$y] ?? 0;
+            $chartNppbRencanaKirimData[] = $yearlyNppbRencanaData[$y] ?? 0;
+            $chartSpDataForRencanaChart[] = $yearlyStokPusatData[$y] ?? 0;
+            $chartRealisasiTahunLaluData[] = $yearlyRealisasiTahunLaluData[$y] ?? 0;
+            $chartKurangSpData[] = $yearlyKurangSpData[$y] ?? 0;
+            $chartFakturData[] = $yearlyFakturData[$y] ?? 0;
+            $chartSpData[] = $yearlySpChartData[$y] ?? 0;
+            $chartStockPusatVsTargetPct[] = $yearlyStockPusatVsTargetPct[$y] ?? 0;
         }
 
         $branchInfo = null;
@@ -713,8 +815,17 @@ class DashboardController extends Controller
             'monthlySalesData' => $chartData, // Data penjualan per bulan
             'yearlyTargetData' => $chartTargetData, // Data target per tahun (5 tahun)
             'yearlyRealisasiKirimData' => $chartRealisasiKirimData, // Data realisasi kirim per tahun (pesanan_1)
-            'yearlyLabels' => $chartYearLabels, // Labels tahun untuk chart
-            'yearlySpData' => $yearlySpChartData, // Data SP per tahun untuk chart SP Per Tahun
+            'yearlyNppbRencanaKirimData' => $chartNppbRencanaKirimData,
+            'yearlySpDataForRencanaChart' => $chartSpDataForRencanaChart,
+            'yearlyLabels' => $chartYearLabels,
+            'yearlySpData' => $yearlySpChartData,
+            'chartRealisasiTahunLaluData' => $chartRealisasiTahunLaluData,
+            'chartTargetDataForCharts' => $chartTargetData,
+            'chartSpDataForCharts' => $chartSpData,
+            'chartFakturData' => $chartFakturData,
+            'chartKurangSpData' => $chartKurangSpData,
+            'chartStockPusatData' => $chartSpDataForRencanaChart,
+            'chartStockPusatVsTargetPct' => $chartStockPusatVsTargetPct,
             'yearlyStokPusatData' => $yearlyStokPusatData, // Data Stok Pusat per tahun
             'yearlyTargetChartData' => $yearlyTargetChartData, // Data Target per tahun untuk chart
             'totalBranches' => $spBranches->count(),

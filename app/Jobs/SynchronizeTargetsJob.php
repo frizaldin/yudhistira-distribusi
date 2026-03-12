@@ -2,10 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\Branch;
-use App\Models\Periode;
-use App\Models\Product;
-use App\Models\Target;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -21,25 +17,22 @@ class SynchronizeTargetsJob implements ShouldQueue
     /** Tidak dibatasi waktu (0 = sampai selesai). Default 60 detik bikin job sync 170k+ data terpotong. */
     public int $timeout = 0;
 
-    protected $clearFirst;
+    /** Jumlah percobaan ulang jika job gagal (timeout/error sementara). */
+    public int $tries = 3;
 
-    public function __construct($clearFirst = false)
-    {
-        $this->clearFirst = $clearFirst;
-    }
+    /** Detik jeda sebelum retry. */
+    public int $backOff = 60;
+
+    public function __construct() {}
 
     public function handle(): void
     {
         $cacheKey = 'sync_targets_progress';
 
         try {
-            Log::info('SynchronizeTargetsJob: Starting synchronization from PostgreSQL');
-
-            // Clear data first if requested
-            if ($this->clearFirst) {
-                Target::truncate();
-                Log::info('SynchronizeTargetsJob: Cleared all targets data');
-            }
+            // Hanya error yang dicatat ke log; tidak ada log untuk alur sukses.
+            // Hapus semua data di targets dulu, baru create dari sumber
+            DB::table('targets')->truncate();
 
             $totalRecords = DB::connection('pgsql')->table('r_target_buku')->count();
 
@@ -57,6 +50,8 @@ class SynchronizeTargetsJob implements ShouldQueue
             $created = 0;
             $updated = 0;
             $errors = [];
+            $missingBookCodesAll = [];
+            $missingBranchCodesAll = [];
 
             $removeQuotes = function ($value) {
                 if (empty($value)) return $value;
@@ -64,15 +59,6 @@ class SynchronizeTargetsJob implements ShouldQueue
                 $value = preg_replace('/^[\'"`]+|[\'"`]+$/u', '', $value);
                 return trim($value);
             };
-
-            $validBranches = Branch::pluck('branch_code')->flip()->all();
-            $validBooks = Product::pluck('book_code')->flip()->all();
-            $validPeriods = Periode::pluck('period_code')->flip()->all();
-            Log::info('SynchronizeTargetsJob: Pre-loaded referensi', [
-                'branches' => count($validBranches),
-                'books' => count($validBooks),
-                'periods' => count($validPeriods),
-            ]);
 
             $offset = 0;
             $totalProcessed = 0;
@@ -102,9 +88,6 @@ class SynchronizeTargetsJob implements ShouldQueue
                     if (empty($branchCode) || empty($bookCode) || empty($periodCode)) {
                         continue;
                     }
-                    if (!isset($validBranches[$branchCode]) || !isset($validBooks[$bookCode]) || !isset($validPeriods[$periodCode])) {
-                        continue;
-                    }
 
                     $batch[] = [
                         'branch_code' => $branchCode,
@@ -128,10 +111,50 @@ class SynchronizeTargetsJob implements ShouldQueue
                         $totalProcessed += count($batch);
                         $created += count($batch);
                     } catch (\Exception $e) {
-                        Log::error('SynchronizeTargetsJob chunk error: ' . $e->getMessage());
-                        $errors[] = $e->getMessage();
+                        // Kalau batch gagal (FK constraint): list book_code & branch_code yang tidak ada, lalu fallback per-row
+                        $bookCodesInBatch = array_unique(array_column($batch, 'book_code'));
+                        $existingInBooks = DB::table('books')->whereIn('book_code', $bookCodesInBatch)->pluck('book_code')->toArray();
+                        $missingBookCodes = array_values(array_diff($bookCodesInBatch, $existingInBooks));
+                        if (!empty($missingBookCodes)) {
+                            Log::warning('SynchronizeTargetsJob: book_codes not in books: ' . implode(',', $missingBookCodes));
+                            $missingBookCodesAll = array_values(array_unique(array_merge($missingBookCodesAll, $missingBookCodes)));
+                        }
+                        $branchCodesInBatch = array_unique(array_column($batch, 'branch_code'));
+                        $existingInBranches = DB::table('branches')->whereIn('branch_code', $branchCodesInBatch)->pluck('branch_code')->toArray();
+                        $missingBranchCodes = array_values(array_diff($branchCodesInBatch, $existingInBranches));
+                        if (!empty($missingBranchCodes)) {
+                            Log::warning('SynchronizeTargetsJob: branch_codes not in branches: ' . implode(',', $missingBranchCodes));
+                            $missingBranchCodesAll = array_values(array_unique(array_merge($missingBranchCodesAll, $missingBranchCodes)));
+                        }
+                        $errMsg = $e->getMessage();
+                        if (!empty($missingBookCodes)) {
+                            $errMsg = 'Chunk: book_codes not in books: ' . implode(',', $missingBookCodes);
+                        } elseif (!empty($missingBranchCodes)) {
+                            $errMsg = 'Chunk: branch_codes not in branches: ' . implode(',', $missingBranchCodes);
+                        }
+                        $errors[] = $errMsg;
                         foreach ($batch as $row) {
-                            $totalProcessed++;
+                            try {
+                                DB::table('targets')->upsert(
+                                    [$row],
+                                    ['branch_code', 'book_code', 'period_code'],
+                                    ['exemplar', 'updated_at']
+                                );
+                                $created++;
+                            } catch (\Exception $eRow) {
+                                $isFkBookCode = str_contains($eRow->getMessage(), 'targets_book_code_foreign');
+                                $isFkBranchCode = str_contains($eRow->getMessage(), 'targets_branch_code_foreign');
+                                if (!$isFkBookCode && !$isFkBranchCode) {
+                                    $errors[] = $eRow->getMessage();
+                                    Log::error('SynchronizeTargetsJob row error: ' . $eRow->getMessage(), [
+                                        'branch_code' => $row['branch_code'] ?? null,
+                                        'book_code' => $row['book_code'] ?? null,
+                                        'period_code' => $row['period_code'] ?? null,
+                                    ]);
+                                }
+                            } finally {
+                                $totalProcessed++;
+                            }
                         }
                     }
                 }
@@ -148,10 +171,6 @@ class SynchronizeTargetsJob implements ShouldQueue
                     'errors' => count($errors),
                     'percentage' => $percentage
                 ], now()->addHours(2));
-
-                if ($totalProcessed > 0 && $totalProcessed % 10000 == 0) {
-                    Log::info("SynchronizeTargetsJob: Processed {$totalProcessed}/{$totalRecords} records ({$percentage}%)");
-                }
             }
 
             Cache::put($cacheKey, [
@@ -162,19 +181,15 @@ class SynchronizeTargetsJob implements ShouldQueue
                 'updated' => $updated,
                 'errors' => count($errors),
                 'percentage' => 100,
-                'completed_at' => now()->toDateTimeString()
+                'completed_at' => now()->toDateTimeString(),
+                'missing_book_codes' => array_values(array_unique($missingBookCodesAll)),
+                'missing_branch_codes' => array_values(array_unique($missingBranchCodesAll)),
             ], now()->addHours(2));
 
             Cache::forget('sync_targets_lock');
 
             // Save last sync timestamp
             Cache::put($cacheKey . '_last_sync', now()->toDateTimeString(), now()->addDays(30));
-
-            Log::info('SynchronizeTargetsJob: Synchronization completed', [
-                'created' => $created,
-                'updated' => $updated,
-                'errors_count' => count($errors)
-            ]);
 
             if (count($errors) > 0) {
                 Log::warning('SynchronizeTargetsJob errors: ', $errors);

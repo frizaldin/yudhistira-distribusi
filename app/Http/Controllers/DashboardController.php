@@ -40,55 +40,17 @@ class DashboardController extends Controller
 
     public function index(Request $request)
     {
-        // Check if date range is set in session
+        $ctx = $this->getDashboardContext($request);
+        $startDate = $ctx['startDate'];
+        $endDate = $ctx['endDate'];
+        $year = $ctx['year'];
+        $selectedBranchCode = $ctx['selectedBranchCode'];
+        $userBranchCode = $ctx['userBranchCode'];
+        $filteredBranchCodes = $ctx['filteredBranchCodes'];
+
         $dateRange = session('date_range_global');
-        
-        // Check if there's an active cutoff_data
         $activeCutoff = CutoffData::where('status', 'active')->first();
-        $usingCutoffData = false;
-
-        // Get date range priority:
-        // 1. If date_range_global is set in session, use that (user override)
-        // 2. Else if there's an active cutoff_data, use that
-        // 3. Else use default (current month)
-        if ($dateRange) {
-            // User has set date_range_global, use that (override cutoff_datas)
-            $startDate = $dateRange['start_date'];
-            $endDate = $dateRange['end_date'];
-        } elseif ($activeCutoff) {
-            $endDate = $activeCutoff->end_date->format('Y-m-d');
-            $startDate = $activeCutoff->start_date ? $activeCutoff->start_date->format('Y-m-d') : null;
-            $usingCutoffData = true;
-        } else {
-            // Default: current month
-            $startDate = date('Y-m-01'); // First day of current month
-            $endDate = date('Y-m-t'); // Last day of current month
-        }
-
-        // Get year from request or use current year
-        $year = $request->input('year', date('Y'));
-
-        // Get branch filter from request
-        $selectedBranchCode = $request->input('branch', null);
-
-        $userBranchCode = null;
-        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
-        if ($this->role == 2 && Auth::check()) {
-            $userBranchCode = Auth::user()->branch_code ?? null;
-            $filteredBranchCodes = null;
-        } else {
-            $filteredBranchCodes = null; // superadmin & ADP: akses global
-        }
-
-        // Hanya role cabang dan superadmin yang bisa pilih branch dari request; ADP selalu global
-        if ($this->role != 3) {
-            if ($selectedBranchCode) {
-                $filteredBranchCodes = [$selectedBranchCode];
-                $userBranchCode = null;
-            } elseif ($userBranchCode) {
-                $filteredBranchCodes = [$userBranchCode];
-            }
-        }
+        $usingCutoffData = (bool) $activeCutoff && !$dateRange;
 
         // Query untuk targets - mulai dari Branch, lalu left join dengan Target
         $targets = Branch::select([
@@ -409,226 +371,6 @@ class DashboardController extends Controller
             }
         }
 
-        $monthlySalesQuery = SpBranch::select([
-            DB::raw('MONTH(trans_date) as month'),
-            DB::raw('SUM(ex_ftr) as total_faktur'),
-        ])
-            ->where('active_data', 'yes')
-            ->whereNotNull('trans_date');
-        if ($startDate !== null) {
-            $monthlySalesQuery->whereBetween('trans_date', [$startDate, $endDate]);
-        } else {
-            $monthlySalesQuery->where('trans_date', '<=', $endDate);
-        }
-        $monthlySales = $monthlySalesQuery
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('branch_code', $filteredBranchCodes);
-            })
-            ->groupBy(DB::raw('MONTH(trans_date)'))
-            ->orderBy('month')
-            ->get();
-
-        $monthlyData = [];
-        $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-
-        for ($i = 1; $i <= 12; $i++) {
-            $monthlyData[$i] = 0;
-        }
-
-        foreach ($monthlySales as $sale) {
-            if ($sale->month >= 1 && $sale->month <= 12) {
-                $monthlyData[$sale->month] = $sale->total_faktur ?? 0;
-            }
-        }
-
-        $chartData = [];
-        $chartLabels = [];
-        foreach ($monthlyData as $monthNum => $total) {
-            $chartLabels[] = $monthNames[$monthNum - 1];
-            $chartData[] = $total;
-        }
-
-        $currentYear = (int)$year;
-        $yearsRange = [];
-        for ($i = 4; $i >= 0; $i--) {
-            $yearsRange[] = $currentYear - $i;
-        }
-
-        $yearlyTargetData = [];
-        $allTargetsSumQuery = Target::select([
-            DB::raw('SUM(targets.exemplar) as total_target'),
-        ])
-            ->join('periods', 'targets.period_code', '=', 'periods.period_code');
-        if ($startDate !== null) {
-            $allTargetsSumQuery->where('periods.from_date', '<=', $endDate)->where('periods.to_date', '>=', $startDate);
-        } else {
-            $allTargetsSumQuery->where('periods.to_date', '<=', $endDate);
-        }
-        $allTargetsSum = $allTargetsSumQuery
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('targets.branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('targets.branch_code', $filteredBranchCodes);
-            })
-            ->first();
-
-        $totalAllTargets = $allTargetsSum->total_target ?? 0;
-
-        foreach ($yearsRange as $y) {
-            $yearlyTargetData[$y] = $totalAllTargets;
-        }
-
-        // Satu query tahunan SpBranch: SP + Faktur per tahun (menggantikan 3 query terpisah)
-        $yearlySpFakturQuery = SpBranch::select([
-            DB::raw('YEAR(trans_date) as year'),
-            DB::raw('COALESCE(SUM(ex_sp), 0) as total_sp'),
-            DB::raw('COALESCE(SUM(ex_ftr), 0) as total_faktur'),
-        ])
-            ->where('active_data', 'yes')
-            ->whereNotNull('trans_date');
-        if ($startDate !== null) {
-            $yearlySpFakturQuery->whereBetween('trans_date', [$startDate, $endDate]);
-        } else {
-            $yearlySpFakturQuery->where('trans_date', '<=', $endDate);
-        }
-        $yearlySpFaktur = $yearlySpFakturQuery
-            ->whereIn(DB::raw('YEAR(trans_date)'), $yearsRange)
-            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
-            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
-            ->groupBy(DB::raw('YEAR(trans_date)'))
-            ->orderBy('year')
-            ->get()
-            ->keyBy('year');
-
-        $yearlySpChartData = [];
-        $yearlyFakturData = [];
-        foreach ($yearsRange as $y) {
-            $yearlySpChartData[$y] = 0;
-            $yearlyFakturData[$y] = 0;
-        }
-        foreach ($yearlySpFaktur as $row) {
-            if (in_array($row->year, $yearsRange)) {
-                $yearlySpChartData[$row->year] = (float) ($row->total_sp ?? 0);
-                $yearlyFakturData[$row->year] = (int) ($row->total_faktur ?? 0);
-            }
-        }
-
-        // Realisasi kirim = ex_sp (sama dengan SP), sudah ada di yearlySpChartData
-        $yearlyRealisasiData = $yearlySpChartData;
-
-        // Kurang SP (Sisa SP) per tahun = SP - Faktur
-        $yearlyKurangSpData = [];
-        foreach ($yearsRange as $y) {
-            $yearlyKurangSpData[$y] = max(0, ($yearlySpChartData[$y] ?? 0) - ($yearlyFakturData[$y] ?? 0));
-        }
-
-        // Realisasi tahun lalu = Faktur tahun sebelumnya (untuk tiap tahun)
-        $yearlyRealisasiTahunLaluData = [];
-        foreach ($yearsRange as $i => $y) {
-            $prevYear = $yearsRange[$i - 1] ?? null;
-            $yearlyRealisasiTahunLaluData[$y] = $prevYear !== null ? ($yearlyFakturData[$prevYear] ?? 0) : 0;
-        }
-
-        // Stock Pusat vs Target (persentase) per tahun
-        $yearlyStockPusatVsTargetPct = [];
-        foreach ($yearsRange as $y) {
-            $targetY = $yearlyTargetData[$y] ?? 0;
-            $stockY = $yearlyStokPusatData[$y] ?? 0;
-            $yearlyStockPusatVsTargetPct[$y] = $targetY > 0 ? round(($stockY / $targetY) * 100, 1) : 0;
-        }
-
-        // Get Stok Pusat per year from CentralStock
-        // Note: CentralStock doesn't have year field, so we'll use created_at or get all data
-        // For now, we'll get all stok pusat and distribute evenly or use a different approach
-        $yearlyStokPusatData = [];
-        $totalStokPusatAll = CentralStock::select([
-            DB::raw('SUM(exemplar) as total_stok_pusat'),
-        ])
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('branch_code', $filteredBranchCodes);
-            })
-            ->first();
-        
-        $totalStokPusatAllValue = $totalStokPusatAll->total_stok_pusat ?? 0;
-        
-        // For now, distribute total stok pusat evenly across years
-        // You can modify this logic if CentralStock has date field
-        foreach ($yearsRange as $y) {
-            $yearlyStokPusatData[$y] = $totalStokPusatAllValue; // Use same total for all years
-        }
-
-        // Get Target per year (already calculated above, but need to format for chart)
-        $yearlyTargetChartData = [];
-        foreach ($yearsRange as $y) {
-            $yearlyTargetChartData[$y] = $totalAllTargets; // Use same total for all years
-        }
-
-        // NPPB yang sudah disetujui (document_id terisi) — total eksemplar per tahun untuk chart Rencana Kirim vs SP
-        $yearlyNppbApprovedQuery = NppbCentral::select([
-            DB::raw('YEAR(date) as year'),
-            DB::raw('COALESCE(SUM(exp), 0) as total_exp'),
-        ])
-            ->whereNotNull('document_id')
-            ->where('document_id', '!=', 0)
-            ->whereNotNull('date');
-        if ($startDate !== null) {
-            $yearlyNppbApprovedQuery->whereBetween('date', [$startDate, $endDate]);
-        } else {
-            $yearlyNppbApprovedQuery->where('date', '<=', $endDate);
-        }
-        $yearlyNppbApproved = $yearlyNppbApprovedQuery
-            ->whereIn(DB::raw('YEAR(date)'), $yearsRange)
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('branch_code', $filteredBranchCodes);
-            })
-            ->groupBy(DB::raw('YEAR(date)'))
-            ->orderBy('year')
-            ->get()
-            ->keyBy('year');
-
-        $yearlyNppbRencanaData = [];
-        foreach ($yearsRange as $y) {
-            $yearlyNppbRencanaData[$y] = 0;
-        }
-        foreach ($yearlyNppbApproved as $row) {
-            if (in_array($row->year, $yearsRange)) {
-                $yearlyNppbRencanaData[$row->year] = (int) ($row->total_exp ?? 0);
-            }
-        }
-
-        $chartTargetData = [];
-        $chartRealisasiKirimData = [];
-        $chartNppbRencanaKirimData = []; // NPPB disetujui (eksemplar) per tahun untuk chart Rencana Kirim vs SP
-        $chartSpDataForRencanaChart = []; // SP (Stok Pusat) per tahun
-        $chartRealisasiTahunLaluData = [];
-        $chartKurangSpData = [];
-        $chartFakturData = [];
-        $chartSpData = []; // SP (ex_sp) per tahun untuk chart SP vs Faktur
-        $chartStockPusatVsTargetPct = [];
-        $chartYearLabels = [];
-        foreach ($yearsRange as $y) {
-            $chartYearLabels[] = (string)$y;
-            $chartTargetData[] = $yearlyTargetData[$y] ?? 0;
-            $chartRealisasiKirimData[] = $yearlyRealisasiData[$y] ?? 0;
-            $chartNppbRencanaKirimData[] = $yearlyNppbRencanaData[$y] ?? 0;
-            $chartSpDataForRencanaChart[] = $yearlyStokPusatData[$y] ?? 0;
-            $chartRealisasiTahunLaluData[] = $yearlyRealisasiTahunLaluData[$y] ?? 0;
-            $chartKurangSpData[] = $yearlyKurangSpData[$y] ?? 0;
-            $chartFakturData[] = $yearlyFakturData[$y] ?? 0;
-            $chartSpData[] = $yearlySpChartData[$y] ?? 0;
-            $chartStockPusatVsTargetPct[] = $yearlyStockPusatVsTargetPct[$y] ?? 0;
-        }
-
         $branchInfo = null;
         if ($this->role == 2 && $userBranchCode) {
             $branchInfo = Branch::where('branch_code', $userBranchCode)->first();
@@ -739,23 +481,7 @@ class DashboardController extends Controller
             'topProducts' => $topProducts,
             'nppbPerBranch' => $nppbPerBranch, // NPPB per branch untuk kolom plastik
             'segmentRanking' => $segmentData, // Array dengan key = segment name, value = total_faktur
-            'monthlySalesLabels' => $chartLabels, // Labels untuk chart (Jan, Feb, etc.)
-            'monthlySalesData' => $chartData, // Data penjualan per bulan
-            'yearlyTargetData' => $chartTargetData, // Data target per tahun (5 tahun)
-            'yearlyRealisasiKirimData' => $chartRealisasiKirimData, // Data realisasi kirim per tahun (pesanan_1)
-            'yearlyNppbRencanaKirimData' => $chartNppbRencanaKirimData,
-            'yearlySpDataForRencanaChart' => $chartSpDataForRencanaChart,
-            'yearlyLabels' => $chartYearLabels,
-            'yearlySpData' => $yearlySpChartData,
-            'chartRealisasiTahunLaluData' => $chartRealisasiTahunLaluData,
-            'chartTargetDataForCharts' => $chartTargetData,
-            'chartSpDataForCharts' => $chartSpData,
-            'chartFakturData' => $chartFakturData,
-            'chartKurangSpData' => $chartKurangSpData,
-            'chartStockPusatData' => $chartSpDataForRencanaChart,
-            'chartStockPusatVsTargetPct' => $chartStockPusatVsTargetPct,
-            'yearlyStokPusatData' => $yearlyStokPusatData, // Data Stok Pusat per tahun
-            'yearlyTargetChartData' => $yearlyTargetChartData, // Data Target per tahun untuk chart
+            'chartDataUrl' => route('dashboard.chart-data', ['year' => $year, 'branch' => $selectedBranchCode]),
             'totalBranches' => $totalBranchesCount,
             'branchInfo' => $branchInfo,
             'realisasi2024' => $realisasi2024,
@@ -854,6 +580,241 @@ class DashboardController extends Controller
 
         // Default
         return 'Nasional';
+    }
+
+    /**
+     * Konteks dashboard (date range, year, branch filter) — dipakai index() dan chartData().
+     */
+    private function getDashboardContext(Request $request): array
+    {
+        $dateRange = session('date_range_global');
+        $activeCutoff = CutoffData::where('status', 'active')->first();
+        if ($dateRange) {
+            $startDate = $dateRange['start_date'];
+            $endDate = $dateRange['end_date'];
+        } elseif ($activeCutoff) {
+            $endDate = $activeCutoff->end_date->format('Y-m-d');
+            $startDate = $activeCutoff->start_date ? $activeCutoff->start_date->format('Y-m-d') : null;
+        } else {
+            $startDate = date('Y-m-01');
+            $endDate = date('Y-m-t');
+        }
+        $year = $request->input('year', date('Y'));
+        $selectedBranchCode = $request->input('branch', null);
+        $userBranchCode = null;
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+        if ($this->role == 2 && Auth::check()) {
+            $userBranchCode = Auth::user()->branch_code ?? null;
+            $filteredBranchCodes = null;
+        } else {
+            $filteredBranchCodes = null;
+        }
+        if ($this->role != 3) {
+            if ($selectedBranchCode) {
+                $filteredBranchCodes = [$selectedBranchCode];
+                $userBranchCode = null;
+            } elseif ($userBranchCode) {
+                $filteredBranchCodes = [$userBranchCode];
+            }
+        }
+        return compact('startDate', 'endDate', 'year', 'selectedBranchCode', 'userBranchCode', 'filteredBranchCodes');
+    }
+
+    /**
+     * Data chart untuk dashboard (dipanggil via AJAX agar load halaman tidak berat).
+     */
+    public function chartData(Request $request)
+    {
+        $ctx = $this->getDashboardContext($request);
+        $startDate = $ctx['startDate'];
+        $endDate = $ctx['endDate'];
+        $year = $ctx['year'];
+        $userBranchCode = $ctx['userBranchCode'];
+        $filteredBranchCodes = $ctx['filteredBranchCodes'];
+
+        $monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+        // Faktur per bulan
+        $monthlySalesQuery = SpBranch::select([
+            DB::raw('MONTH(trans_date) as month'),
+            DB::raw('SUM(ex_ftr) as total_faktur'),
+        ])->where('active_data', 'yes')->whereNotNull('trans_date');
+        if ($startDate !== null) {
+            $monthlySalesQuery->whereBetween('trans_date', [$startDate, $endDate]);
+        } else {
+            $monthlySalesQuery->where('trans_date', '<=', $endDate);
+        }
+        $monthlySales = $monthlySalesQuery
+            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+            ->groupBy(DB::raw('MONTH(trans_date)'))
+            ->orderBy('month')
+            ->get();
+        $monthlyData = array_fill(1, 12, 0);
+        foreach ($monthlySales as $sale) {
+            if ($sale->month >= 1 && $sale->month <= 12) {
+                $monthlyData[$sale->month] = $sale->total_faktur ?? 0;
+            }
+        }
+        $monthlySalesLabels = $monthNames;
+        $monthlySalesData = array_values(array_map(fn ($m) => $monthlyData[$m], range(1, 12)));
+
+        $currentYear = (int) $year;
+        $yearsRange = [];
+        for ($i = 4; $i >= 0; $i--) {
+            $yearsRange[] = $currentYear - $i;
+        }
+
+        $yearlyTargetData = [];
+        $allTargetsSum = Target::select([DB::raw('SUM(targets.exemplar) as total_target')])
+            ->join('periods', 'targets.period_code', '=', 'periods.period_code');
+        if ($startDate !== null) {
+            $allTargetsSum->where('periods.from_date', '<=', $endDate)->where('periods.to_date', '>=', $startDate);
+        } else {
+            $allTargetsSum->where('periods.to_date', '<=', $endDate);
+        }
+        $allTargetsSum = $allTargetsSum
+            ->when($userBranchCode, fn ($q) => $q->where('targets.branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('targets.branch_code', $filteredBranchCodes))
+            ->first();
+        $totalAllTargets = $allTargetsSum->total_target ?? 0;
+        foreach ($yearsRange as $y) {
+            $yearlyTargetData[$y] = $totalAllTargets;
+        }
+
+        $yearlySpFaktur = SpBranch::select([
+            DB::raw('YEAR(trans_date) as year'),
+            DB::raw('COALESCE(SUM(ex_sp), 0) as total_sp'),
+            DB::raw('COALESCE(SUM(ex_ftr), 0) as total_faktur'),
+        ])->where('active_data', 'yes')->whereNotNull('trans_date');
+        if ($startDate !== null) {
+            $yearlySpFaktur->whereBetween('trans_date', [$startDate, $endDate]);
+        } else {
+            $yearlySpFaktur->where('trans_date', '<=', $endDate);
+        }
+        $yearlySpFaktur = $yearlySpFaktur
+            ->whereIn(DB::raw('YEAR(trans_date)'), $yearsRange)
+            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+            ->groupBy(DB::raw('YEAR(trans_date)'))
+            ->orderBy('year')
+            ->get()
+            ->keyBy('year');
+
+        $yearlySpChartData = [];
+        $yearlyFakturData = [];
+        foreach ($yearsRange as $y) {
+            $yearlySpChartData[$y] = 0;
+            $yearlyFakturData[$y] = 0;
+        }
+        foreach ($yearlySpFaktur as $row) {
+            if (in_array($row->year, $yearsRange)) {
+                $yearlySpChartData[$row->year] = (float) ($row->total_sp ?? 0);
+                $yearlyFakturData[$row->year] = (int) ($row->total_faktur ?? 0);
+            }
+        }
+
+        $yearlyKurangSpData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyKurangSpData[$y] = max(0, ($yearlySpChartData[$y] ?? 0) - ($yearlyFakturData[$y] ?? 0));
+        }
+        $yearlyRealisasiTahunLaluData = [];
+        foreach ($yearsRange as $i => $y) {
+            $prevYear = $yearsRange[$i - 1] ?? null;
+            $yearlyRealisasiTahunLaluData[$y] = $prevYear !== null ? ($yearlyFakturData[$prevYear] ?? 0) : 0;
+        }
+
+        $totalStokPusatAll = CentralStock::select([DB::raw('SUM(exemplar) as total_stok_pusat')])
+            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+            ->first();
+        $totalStokPusatAllValue = $totalStokPusatAll->total_stok_pusat ?? 0;
+        $yearlyStokPusatData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyStokPusatData[$y] = $totalStokPusatAllValue;
+        }
+        $yearlyTargetChartData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyTargetChartData[$y] = $totalAllTargets;
+        }
+        $yearlyStockPusatVsTargetPct = [];
+        foreach ($yearsRange as $y) {
+            $targetY = $yearlyTargetData[$y] ?? 0;
+            $stockY = $yearlyStokPusatData[$y] ?? 0;
+            $yearlyStockPusatVsTargetPct[$y] = $targetY > 0 ? round(($stockY / $targetY) * 100, 1) : 0;
+        }
+
+        $yearlyNppbApproved = NppbCentral::select([
+            DB::raw('YEAR(date) as year'),
+            DB::raw('COALESCE(SUM(exp), 0) as total_exp'),
+        ])->whereNotNull('document_id')->where('document_id', '!=', 0)->whereNotNull('date');
+        if ($startDate !== null) {
+            $yearlyNppbApproved->whereBetween('date', [$startDate, $endDate]);
+        } else {
+            $yearlyNppbApproved->where('date', '<=', $endDate);
+        }
+        $yearlyNppbApproved = $yearlyNppbApproved
+            ->whereIn(DB::raw('YEAR(date)'), $yearsRange)
+            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+            ->groupBy(DB::raw('YEAR(date)'))
+            ->orderBy('year')
+            ->get()
+            ->keyBy('year');
+        $yearlyNppbRencanaData = [];
+        foreach ($yearsRange as $y) {
+            $yearlyNppbRencanaData[$y] = 0;
+        }
+        foreach ($yearlyNppbApproved as $row) {
+            if (in_array($row->year, $yearsRange)) {
+                $yearlyNppbRencanaData[$row->year] = (int) ($row->total_exp ?? 0);
+            }
+        }
+
+        $chartYearLabels = array_map('strval', $yearsRange);
+        $chartTargetData = array_map(fn ($y) => $yearlyTargetData[$y] ?? 0, $yearsRange);
+        $chartRealisasiKirimData = array_map(fn ($y) => $yearlySpChartData[$y] ?? 0, $yearsRange);
+        $chartNppbRencanaKirimData = array_map(fn ($y) => $yearlyNppbRencanaData[$y] ?? 0, $yearsRange);
+        $chartSpDataForRencanaChart = array_map(fn ($y) => $yearlyStokPusatData[$y] ?? 0, $yearsRange);
+        $chartRealisasiTahunLaluData = array_map(fn ($y) => $yearlyRealisasiTahunLaluData[$y] ?? 0, $yearsRange);
+        $chartKurangSpData = array_map(fn ($y) => $yearlyKurangSpData[$y] ?? 0, $yearsRange);
+        $chartFakturData = array_map(fn ($y) => $yearlyFakturData[$y] ?? 0, $yearsRange);
+        $chartSpData = array_map(fn ($y) => $yearlySpChartData[$y] ?? 0, $yearsRange);
+        $chartStockPusatVsTargetPct = array_map(fn ($y) => $yearlyStockPusatVsTargetPct[$y] ?? 0, $yearsRange);
+
+        $nppbRencanaKirimChartData = $chartNppbRencanaKirimData;
+        $spForRencanaChartData = $chartSpDataForRencanaChart;
+        $maxChartValue = 0;
+        if (!empty($nppbRencanaKirimChartData)) {
+            $maxChartValue = max($maxChartValue, max($nppbRencanaKirimChartData));
+        }
+        if (!empty($spForRencanaChartData)) {
+            $maxChartValue = max($maxChartValue, max($spForRencanaChartData));
+        }
+        $maxChartValue = $maxChartValue > 0 ? ceil($maxChartValue * 1.1) : 100;
+
+        return response()->json([
+            'monthlySalesLabels' => $monthlySalesLabels,
+            'monthlySalesData' => $monthlySalesData,
+            'yearlyLabels' => $chartYearLabels,
+            'yearlyTargetData' => $chartTargetData,
+            'yearlyRealisasiKirimData' => $chartRealisasiKirimData,
+            'yearlyNppbRencanaKirimData' => $chartNppbRencanaKirimData,
+            'yearlySpDataForRencanaChart' => $chartSpDataForRencanaChart,
+            'yearlySpData' => $chartSpData,
+            'chartRealisasiTahunLaluData' => $chartRealisasiTahunLaluData,
+            'chartTargetDataForCharts' => $chartTargetData,
+            'chartSpDataForCharts' => $chartSpData,
+            'chartFakturData' => $chartFakturData,
+            'chartKurangSpData' => $chartKurangSpData,
+            'chartStockPusatData' => $chartSpDataForRencanaChart,
+            'chartStockPusatVsTargetPct' => $chartStockPusatVsTargetPct,
+            'yearlyStokPusatData' => array_values(array_map(fn ($y) => $yearlyStokPusatData[$y] ?? 0, $yearsRange)),
+            'yearlyTargetChartData' => array_values(array_map(fn ($y) => $yearlyTargetChartData[$y] ?? 0, $yearsRange)),
+            'nppbRencanaKirimChartData' => $nppbRencanaKirimChartData,
+            'spForRencanaChartData' => $spForRencanaChartData,
+            'maxChartValue' => $maxChartValue,
+        ]);
     }
 
     /**

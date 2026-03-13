@@ -38,7 +38,7 @@ class SynchronizeTargetsJob implements ShouldQueue, ShouldBeUnique
 
         try {
             // Hanya error yang dicatat ke log; tidak ada log untuk alur sukses.
-            // Hapus semua data di targets dulu, baru create dari sumber
+            // Hapus semua data di targets dulu, baru isi dari sumber pakai upsert (data sama = update, tidak create duplikat)
             DB::table('targets')->truncate();
 
             $totalRecords = DB::connection('pgsql')->table('r_target_buku')->count();

@@ -898,524 +898,145 @@
                 });
             });
         </script>
-        @php
-            $chartLabels = $monthlySalesLabels ?? [
-                'Jan',
-                'Feb',
-                'Mar',
-                'Apr',
-                'Mei',
-                'Jun',
-                'Jul',
-                'Agu',
-                'Sep',
-                'Okt',
-                'Nov',
-                'Des',
-            ];
-            $chartData = $monthlySalesData ?? [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-            // Rencana Kirim = NPPB yang sudah disetujui (eksemplar per tahun), SP = Stok Pusat per tahun
-            $nppbRencanaKirimChartData = $yearlyNppbRencanaKirimData ?? [];
-            $spForRencanaChartData = $yearlySpDataForRencanaChart ?? [];
-            $yearLabels = $yearlyLabels ?? [];
-
-            // Calculate max value for scaling chart (Rencana Kirim vs SP)
-            $maxChartValue = 0;
-            if (!empty($nppbRencanaKirimChartData)) {
-                $maxChartValue = max($maxChartValue, max($nppbRencanaKirimChartData));
-            }
-            if (!empty($spForRencanaChartData)) {
-                $maxChartValue = max($maxChartValue, max($spForRencanaChartData));
-            }
-            // Add 10% padding to max value
-            $maxChartValue = $maxChartValue > 0 ? ceil($maxChartValue * 1.1) : 100;
-
-            // Calculate NPPB percentages from nppb_centrals with target tahun ini
-            // Persentase dihitung dari exp di nppb_centrals dengan target tahun ini
-            $totalTargetYear = $totalTargetYear ?? 0;
-            $totalNppbPls = $totalNppbPls ?? 0;
-            $totalNppbExp = $totalNppbExp ?? 0;
-            $totalNppbKoli = $totalNppbKoli ?? 0;
-
-            // Eceran: pls / target * 100
-            $nppbPlastikPercent = 0;
-            if ($totalTargetYear > 0 && $totalNppbPls > 0) {
-                $nppbPlastikPercent = min(($totalNppbPls / $totalTargetYear) * 100, 100);
-            }
-
-            // Eks: exp / target * 100 (menggunakan exp sebagai referensi)
-            $nppbEksPercent = 0;
-            if ($totalTargetYear > 0 && $totalNppbExp > 0) {
-                $nppbEksPercent = min(($totalNppbExp / $totalTargetYear) * 100, 100);
-            }
-
-            // Koli: koli / target * 100
-            $nppbKoliPercent = 0;
-            if ($totalTargetYear > 0 && $totalNppbKoli > 0) {
-                $nppbKoliPercent = min(($totalNppbKoli / $totalTargetYear) * 100, 100);
-            }
-        @endphp
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                // Rencana Kirim vs SP Chart (Line Chart - Yearly). Rencana Kirim = NPPB yang sudah disetujui.
-                const targetRealisasiCtx = document.getElementById('targetRealisasiChart');
-                if (targetRealisasiCtx) {
-                    const chartLabels = @json($yearLabels ?? []);
-                    const nppbRencanaData = @json($nppbRencanaKirimChartData ?? []);
-                    const spData = @json($spForRencanaChartData ?? []);
-                    const maxValue = @json($maxChartValue ?? 100);
-
-                    new Chart(targetRealisasiCtx, {
-                        type: 'line',
-                        data: {
-                            labels: chartLabels,
-                            datasets: [{
-                                label: 'Rencana Kirim (NPPB disetujui)',
-                                data: nppbRencanaData,
-                                borderColor: 'rgb(59, 130, 246)',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                tension: 0.4,
-                                pointStyle: 'rect',
-                                pointRadius: 5,
-                                pointHoverRadius: 7
-                            }, {
-                                label: 'SP',
-                                data: spData,
-                                borderColor: 'rgb(34, 197, 94)',
-                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                                tension: 0.4,
-                                pointStyle: 'circle',
-                                pointRadius: 5,
-                                pointHoverRadius: 7
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'top',
-                                    labels: {
-                                        font: {
-                                            family: 'monospace',
-                                            size: 10
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    titleFont: {
-                                        family: 'monospace',
-                                        size: 10
-                                    },
-                                    bodyFont: {
-                                        family: 'monospace',
-                                        size: 10
-                                    },
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.dataset.label + ': ' +
-                                                new Intl.NumberFormat('id-ID').format(context.parsed.y);
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                x: {
-                                    ticks: {
-                                        font: {
-                                            family: 'monospace',
-                                            size: 10
-                                        }
-                                    }
-                                },
-                                y: {
-                                    beginAtZero: true,
-                                    max: maxValue,
-                                    ticks: {
-                                        font: {
-                                            family: 'monospace',
-                                            size: 10
-                                        },
-                                        callback: function(value) {
-                                            return new Intl.NumberFormat('id-ID').format(value);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
+                const chartDataUrl = @json($chartDataUrl ?? '');
+                if (!chartDataUrl) {
+                    return;
                 }
+                fetch(chartDataUrl)
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        const fmt = function(v) { return new Intl.NumberFormat('id-ID').format(v); };
+                        const yearlyLabels = d.yearlyLabels || [];
+                        const maxValue = d.maxChartValue || 100;
 
-                // Grafik Faktur Per Bulan (Bar Chart)
-                const fakturPerBulanCtx = document.getElementById('fakturPerBulanChart');
-                if (fakturPerBulanCtx) {
-                    const fakturBulanLabels = @json($chartLabels);
-                    const fakturBulanData = @json($chartData);
-
-                    new Chart(fakturPerBulanCtx, {
-                        type: 'bar',
-                        data: {
-                            labels: fakturBulanLabels,
-                            datasets: [{
-                                label: 'Faktur',
-                                data: fakturBulanData,
-                                backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                                borderColor: 'rgb(59, 130, 246)',
-                                borderWidth: 1
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'top'
+                        // Rencana Kirim vs SP
+                        const targetRealisasiCtx = document.getElementById('targetRealisasiChart');
+                        if (targetRealisasiCtx) {
+                            new Chart(targetRealisasiCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [
+                                        { label: 'Rencana Kirim (NPPB disetujui)', data: d.nppbRencanaKirimChartData || [], borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.4, pointStyle: 'rect', pointRadius: 5, pointHoverRadius: 7 },
+                                        { label: 'SP', data: d.spForRencanaChartData || [], borderColor: 'rgb(34, 197, 94)', backgroundColor: 'rgba(34, 197, 94, 0.1)', tension: 0.4, pointStyle: 'circle', pointRadius: 5, pointHoverRadius: 7 }
+                                    ]
                                 },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.dataset.label + ': ' +
-                                                new Intl.NumberFormat('id-ID').format(context.parsed.y);
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                x: {
-                                    ticks: {
-                                        font: {
-                                            size: 10
-                                        }
-                                    }
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: { font: { family: 'monospace', size: 10 } } }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { family: 'monospace', size: 10 } } }, y: { beginAtZero: true, max: maxValue, ticks: { callback: function(v) { return fmt(v); } } } } }
+                            });
+                        }
+
+                        // Faktur Per Bulan
+                        const fakturPerBulanCtx = document.getElementById('fakturPerBulanChart');
+                        if (fakturPerBulanCtx) {
+                            new Chart(fakturPerBulanCtx, {
+                                type: 'bar',
+                                data: { labels: d.monthlySalesLabels || [], datasets: [{ label: 'Faktur', data: d.monthlySalesData || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 }] },
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                            });
+                        }
+
+                        // SP Per Tahun (yearlySpData = array values dari backend)
+                        const spPerTahunCtx = document.getElementById('spPerTahunChart');
+                        if (spPerTahunCtx) {
+                            const yearlySpData = Array.isArray(d.yearlySpData) ? d.yearlySpData : (d.yearlySpData && typeof d.yearlySpData === 'object' ? Object.values(d.yearlySpData) : []);
+                            new Chart(spPerTahunCtx, {
+                                type: 'bar',
+                                data: { labels: yearlyLabels, datasets: [{ label: 'SP', data: yearlySpData, backgroundColor: '#D6E0FF', borderColor: '#829BFF', borderWidth: 2, borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 }, borderSkipped: false }] },
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return 'SP: ' + fmt(c.parsed.y); } } } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } }, x: { grid: { display: false } } } }
+                            });
+                        }
+
+                        // Stok Pusat vs Target
+                        const stokPusatTargetCtx = document.getElementById('stokPusatTargetChart');
+                        if (stokPusatTargetCtx) {
+                            const yearlyStok = d.yearlyStokPusatData || [];
+                            const yearlyTarget = d.yearlyTargetChartData || [];
+                            new Chart(stokPusatTargetCtx, {
+                                type: 'line',
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [
+                                        { label: 'Stok Pusat', data: yearlyStok, borderColor: '#829BFF', backgroundColor: 'rgba(130, 155, 255, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 },
+                                        { label: 'Target', data: yearlyTarget, borderColor: '#F97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 }
+                                    ]
                                 },
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value) {
-                                            return new Intl.NumberFormat('id-ID').format(value);
-                                        }
-                                    }
-                                }
-                            }
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return (c.dataset.label || '') + ': ' + fmt(c.parsed.y); } } } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } }, x: { grid: { display: false } } } }
+                            });
                         }
-                    });
-                }
 
-                // SP Per Tahun Chart (Vertical Bar)
-                const spPerTahunCtx = document.getElementById('spPerTahunChart');
-                if (spPerTahunCtx) {
-                    const yearlySpLabels = @json($yearlyLabels ?? []);
-                    const yearlySpData = @json(array_values($yearlySpData ?? []));
-
-                    new Chart(spPerTahunCtx, {
-                        type: 'bar',
-                        data: {
-                            labels: yearlySpLabels,
-                            datasets: [{
-                                label: 'SP',
-                                data: yearlySpData,
-                                backgroundColor: '#D6E0FF',
-                                borderColor: '#829BFF',
-                                borderWidth: 2,
-                                borderRadius: {
-                                    topLeft: 8,
-                                    topRight: 8,
-                                    bottomLeft: 0,
-                                    bottomRight: 0
+                        // 1. Realisasi Thn Lalu, Target, SP, Faktur
+                        const ctx1 = document.getElementById('chartRealisasiTargetSpFaktur');
+                        if (ctx1) {
+                            new Chart(ctx1, {
+                                type: 'bar',
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [
+                                        { label: 'Realisasi Thn Lalu', data: d.chartRealisasiTahunLaluData || [], backgroundColor: 'rgba(156, 163, 175, 0.7)', borderColor: '#6B7280', borderWidth: 1 },
+                                        { label: 'Target', data: d.chartTargetDataForCharts || [], backgroundColor: 'rgba(34, 197, 94, 0.6)', borderColor: '#16a34a', borderWidth: 1 },
+                                        { label: 'SP', data: d.chartSpDataForCharts || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 },
+                                        { label: 'Faktur', data: d.chartFakturData || [], backgroundColor: 'rgba(249, 115, 22, 0.6)', borderColor: '#ea580c', borderWidth: 1 }
+                                    ]
                                 },
-                                borderSkipped: false
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: false
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                            });
+                        }
+
+                        // 2. Kurang SP vs Stock Pusat
+                        const ctx2 = document.getElementById('chartKurangSpVsStockPusat');
+                        if (ctx2) {
+                            new Chart(ctx2, {
+                                type: 'line',
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [
+                                        { label: 'Kurang SP', data: d.chartKurangSpData || [], borderColor: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.4, fill: true },
+                                        { label: 'Stock Pusat', data: d.chartStockPusatData || [], borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.1)', tension: 0.4, fill: true }
+                                    ]
                                 },
-                                tooltip: {
-                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                    padding: 12,
-                                    titleFont: {
-                                        size: 13,
-                                        weight: 'bold'
-                                    },
-                                    bodyFont: {
-                                        size: 12
-                                    },
-                                    callbacks: {
-                                        label: function(context) {
-                                            return 'SP: ' + new Intl.NumberFormat('id-ID').format(context
-                                                .parsed.y);
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value) {
-                                            return new Intl.NumberFormat('id-ID').format(value);
-                                        },
-                                        font: {
-                                            size: 11,
-                                            family: "'Inter', 'Segoe UI', sans-serif"
-                                        },
-                                        color: '#6B7280'
-                                    },
-                                    grid: {
-                                        color: 'rgba(0, 0, 0, 0.08)',
-                                        drawBorder: false
-                                    }
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                            });
+                        }
+
+                        // 4. SP vs Faktur
+                        const ctx4 = document.getElementById('chartSpVsFaktur');
+                        if (ctx4) {
+                            new Chart(ctx4, {
+                                type: 'line',
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [
+                                        { label: 'SP', data: d.chartSpDataForCharts || [], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.4, fill: true },
+                                        { label: 'Faktur', data: d.chartFakturData || [], borderColor: '#ea580c', backgroundColor: 'rgba(234, 88, 12, 0.1)', tension: 0.4, fill: true }
+                                    ]
                                 },
-                                x: {
-                                    ticks: {
-                                        font: {
-                                            size: 11,
-                                            family: "'Inter', 'Segoe UI', sans-serif"
-                                        },
-                                        color: '#6B7280'
-                                    },
-                                    grid: {
-                                        display: false,
-                                        drawBorder: false
-                                    }
-                                }
-                            }
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                            });
                         }
-                    });
-                }
 
-                // Stok Pusat vs Target Chart (Line Chart)
-                const stokPusatTargetCtx = document.getElementById('stokPusatTargetChart');
-                if (stokPusatTargetCtx) {
-                    const yearlyLabels = @json($yearlyLabels ?? []);
-                    const yearlyStokPusatData = @json(array_values($yearlyStokPusatData ?? []));
-                    const yearlyTargetData = @json(array_values($yearlyTargetChartData ?? []));
-
-                    new Chart(stokPusatTargetCtx, {
-                        type: 'line',
-                        data: {
-                            labels: yearlyLabels,
-                            datasets: [{
-                                label: 'Stok Pusat',
-                                data: yearlyStokPusatData,
-                                borderColor: '#829BFF',
-                                backgroundColor: 'rgba(130, 155, 255, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 4,
-                                pointHoverRadius: 6,
-                                pointBackgroundColor: '#829BFF',
-                                pointBorderColor: '#fff',
-                                pointBorderWidth: 2
-                            }, {
-                                label: 'Target',
-                                data: yearlyTargetData,
-                                borderColor: '#F97316',
-                                backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4,
-                                pointRadius: 4,
-                                pointHoverRadius: 6,
-                                pointBackgroundColor: '#F97316',
-                                pointBorderColor: '#fff',
-                                pointBorderWidth: 2
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'top',
-                                    labels: {
-                                        usePointStyle: true,
-                                        padding: 15,
-                                        font: {
-                                            size: 12,
-                                            family: "'Inter', 'Segoe UI', sans-serif"
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                    padding: 12,
-                                    titleFont: {
-                                        size: 13,
-                                        weight: 'bold'
-                                    },
-                                    bodyFont: {
-                                        size: 12
-                                    },
-                                    callbacks: {
-                                        label: function(context) {
-                                            const label = context.dataset.label || '';
-                                            const value = new Intl.NumberFormat('id-ID').format(context
-                                                .parsed.y);
-                                            return label + ': ' + value;
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value) {
-                                            return new Intl.NumberFormat('id-ID').format(value);
-                                        },
-                                        font: {
-                                            size: 11,
-                                            family: "'Inter', 'Segoe UI', sans-serif"
-                                        },
-                                        color: '#6B7280'
-                                    },
-                                    grid: {
-                                        color: 'rgba(0, 0, 0, 0.08)',
-                                        drawBorder: false
-                                    }
-                                },
-                                x: {
-                                    ticks: {
-                                        font: {
-                                            size: 11,
-                                            family: "'Inter', 'Segoe UI', sans-serif"
-                                        },
-                                        color: '#6B7280'
-                                    },
-                                    grid: {
-                                        display: false,
-                                        drawBorder: false
-                                    }
-                                }
-                            }
+                        // 5. Faktur per Tahun
+                        const ctx5 = document.getElementById('chartFakturPerTahun');
+                        if (ctx5) {
+                            new Chart(ctx5, {
+                                type: 'bar',
+                                data: { labels: yearlyLabels, datasets: [{ label: 'Faktur', data: d.chartFakturData || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 }] },
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                            });
                         }
-                    });
-                }
 
-                // 1. Realisasi Tahun Lalu, Target, SP, Faktur (Bar/Line)
-                const ctx1 = document.getElementById('chartRealisasiTargetSpFaktur');
-                if (ctx1) {
-                    const labels1 = @json($yearlyLabels ?? []);
-                    const realisasiThnLalu = @json($chartRealisasiTahunLaluData ?? []);
-                    const targetData = @json($chartTargetDataForCharts ?? []);
-                    const spData = @json($chartSpDataForCharts ?? []);
-                    const fakturData = @json($chartFakturData ?? []);
-                    new Chart(ctx1, {
-                        type: 'bar',
-                        data: {
-                            labels: labels1,
-                            datasets: [
-                                { label: 'Realisasi Thn Lalu', data: realisasiThnLalu, backgroundColor: 'rgba(156, 163, 175, 0.7)', borderColor: '#6B7280', borderWidth: 1 },
-                                { label: 'Target', data: targetData, backgroundColor: 'rgba(34, 197, 94, 0.6)', borderColor: '#16a34a', borderWidth: 1 },
-                                { label: 'SP', data: spData, backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 },
-                                { label: 'Faktur', data: fakturData, backgroundColor: 'rgba(249, 115, 22, 0.6)', borderColor: '#ea580c', borderWidth: 1 }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
-                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
+                        // 6. Stock Pusat vs Target (%)
+                        const ctx6 = document.getElementById('chartStockPusatVsTargetPct');
+                        if (ctx6) {
+                            new Chart(ctx6, {
+                                type: 'bar',
+                                data: { labels: yearlyLabels, datasets: [{ label: 'Stock Pusat vs Target (%)', data: d.chartStockPusatVsTargetPct || [], backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: '#7c3aed', borderWidth: 1 }] },
+                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } } } }
+                            });
                         }
-                    });
-                }
-
-                // 2. Kurang SP vs Stock Pusat
-                const ctx2 = document.getElementById('chartKurangSpVsStockPusat');
-                if (ctx2) {
-                    const labels2 = @json($yearlyLabels ?? []);
-                    const kurangSp = @json($chartKurangSpData ?? []);
-                    const stockPusat = @json($chartStockPusatData ?? []);
-                    new Chart(ctx2, {
-                        type: 'line',
-                        data: {
-                            labels: labels2,
-                            datasets: [
-                                { label: 'Kurang SP', data: kurangSp, borderColor: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.4, fill: true },
-                                { label: 'Stock Pusat', data: stockPusat, borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.1)', tension: 0.4, fill: true }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
-                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
-                        }
-                    });
-                }
-
-                // 4. SP vs Faktur
-                const ctx4 = document.getElementById('chartSpVsFaktur');
-                if (ctx4) {
-                    const labels4 = @json($yearlyLabels ?? []);
-                    const spData4 = @json($chartSpDataForCharts ?? []);
-                    const fakturData4 = @json($chartFakturData ?? []);
-                    new Chart(ctx4, {
-                        type: 'line',
-                        data: {
-                            labels: labels4,
-                            datasets: [
-                                { label: 'SP', data: spData4, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.4, fill: true },
-                                { label: 'Faktur', data: fakturData4, borderColor: '#ea580c', backgroundColor: 'rgba(234, 88, 12, 0.1)', tension: 0.4, fill: true }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
-                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
-                        }
-                    });
-                }
-
-                // 5. Faktur per Tahun
-                const ctx5 = document.getElementById('chartFakturPerTahun');
-                if (ctx5) {
-                    const labels5 = @json($yearlyLabels ?? []);
-                    const fakturTahun = @json($chartFakturData ?? []);
-                    new Chart(ctx5, {
-                        type: 'bar',
-                        data: {
-                            labels: labels5,
-                            datasets: [{ label: 'Faktur', data: fakturTahun, backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + new Intl.NumberFormat('id-ID').format(c.parsed.y); } } } },
-                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return new Intl.NumberFormat('id-ID').format(v); } } } }
-                        }
-                    });
-                }
-
-                // 6. Stock Pusat vs Target (Persentase)
-                const ctx6 = document.getElementById('chartStockPusatVsTargetPct');
-                if (ctx6) {
-                    const labels6 = @json($yearlyLabels ?? []);
-                    const pctData = @json($chartStockPusatVsTargetPct ?? []);
-                    new Chart(ctx6, {
-                        type: 'bar',
-                        data: {
-                            labels: labels6,
-                            datasets: [{ label: 'Stock Pusat vs Target (%)', data: pctData, backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: '#7c3aed', borderWidth: 1 }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } } },
-                            scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } } }
-                        }
-                    });
-                }
+                    })
+                    .catch(function(err) { console.warn('Dashboard chart data load failed:', err); });
 
                 // Initialize Leaflet Map with Heatmap
                 const areaMapElement = document.getElementById('areaMap');

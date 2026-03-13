@@ -28,11 +28,11 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
     }
 
     /**
-     * @param bool $clearFirst Tidak dipakai lagi: job selalu hapus semua data MySQL dulu lalu isi ulang dari PostgreSQL.
+     * @param bool $clearFirst Tidak dipakai lagi: job selalu hapus semua data dulu lalu isi pakai upsert.
      */
     public function __construct($clearFirst = true)
     {
-        // Legacy: parameter diabaikan, selalu truncate lalu sync dari pgsql
+        // Legacy: parameter diabaikan
     }
 
     public function handle(): void
@@ -46,9 +46,9 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
         $missingBookCodes = [];
 
         try {
-            Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL (hapus semua data MySQL dulu, lalu isi dari pgsql)');
+            Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL (hapus semua data dulu, lalu isi pakai upsert)');
 
-            // Hapus semua data di MySQL dulu, baru create ulang dari PostgreSQL
+            // Hapus semua data di MySQL dulu, baru isi dari PostgreSQL pakai upsert (data sama = update, tidak create duplikat)
             Log::info('SynchronizeSpBranchesJob: Clearing all existing data');
             SpBranch::truncate();
 

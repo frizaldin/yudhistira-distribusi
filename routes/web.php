@@ -73,6 +73,7 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(DashboardController::class)->group(function () {
         Route::get('/dashboard', 'index')->name('dashboard');
+        Route::get('/dashboard/chart-data', 'chartData')->name('dashboard.chart-data');
         Route::get('/dashboard/adp-more', 'adpMore')->name('dashboard.adp-more');
         Route::get('/dashboard/kebutuhan-more', 'kebutuhanMore')->name('dashboard.kebutuhan-more');
         Route::post('/dashboard/set-date-range', 'setDateRange')->name('dashboard.set-date-range');
@@ -247,6 +248,7 @@ Route::middleware('auth')->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Queue flush dan queue clear telah dijalankan.',
+            'horizon' => Artisan::call('horizon'),
         ]);
     })->name('artisan.clear-job');
 

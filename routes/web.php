@@ -8,6 +8,7 @@ use App\Http\Controllers\CentralStockController;
 use App\Http\Controllers\SpBranchController;
 use App\Http\Controllers\RekapController;
 use App\Http\Controllers\RangkumanController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SpVStockController;
 use App\Http\Controllers\SpVTargetController;
 use App\Http\Controllers\StagingController;
@@ -62,6 +63,7 @@ Route::middleware('auth')->group(function () {
     Route::controller(ApiController::class)->group(function () {
         Route::get('/api/branches', 'getBranches')->name('api.branches');
         Route::get('/api/branches-by-warehouse', 'getBranchesByWarehouse')->name('api.branches-by-warehouse');
+        Route::get('/api/report/branches-by-area', 'getReportBranchesByArea')->name('api.report.branches-by-area');
         Route::get('/api/warehouse-codes', 'getWarehouseCodes')->name('api.warehouse-codes');
         Route::get('/api/products', 'getProducts')->name('api.products');
         Route::get('/api/areas', 'getAreas')->name('api.areas');
@@ -131,6 +133,10 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(RangkumanController::class)->group(function () {
         Route::get('/rangkuman', 'index')->name('rangkuman.index');
+    });
+
+    Route::controller(ReportController::class)->group(function () {
+        Route::get('/report', 'index')->name('report.index');
     });
 
     Route::controller(SpVStockController::class)->group(function () {
@@ -248,7 +254,6 @@ Route::middleware('auth')->group(function () {
         return response()->json([
             'success' => true,
             'message' => 'Queue flush dan queue clear telah dijalankan.',
-            'horizon' => Artisan::call('horizon'),
         ]);
     })->name('artisan.clear-job');
 

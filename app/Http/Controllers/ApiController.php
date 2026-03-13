@@ -82,6 +82,26 @@ class ApiController extends Controller
     }
 
     /**
+     * Get branches by warehouse_code untuk filter Cabang di Report (list penuh, bukan Select2).
+     * Query: Branches where warehouse_code == warehouse_code (area yang dipilih).
+     */
+    public function getReportBranchesByArea(Request $request): JsonResponse
+    {
+        $warehouseCode = $request->get('warehouse_code', '');
+        if ($warehouseCode === '' || $warehouseCode === null) {
+            return response()->json(['branches' => []]);
+        }
+        $branches = Branch::query()
+            ->where('warehouse_code', $warehouseCode)
+            ->orderBy('branch_name')
+            ->get(['branch_code', 'branch_name']);
+        $list = $branches->map(function ($b) {
+            return ['branch_code' => $b->branch_code, 'branch_name' => $b->branch_name];
+        })->values();
+        return response()->json(['branches' => $list]);
+    }
+
+    /**
      * Get NKB detail (koli, ex, total_ex) untuk auto-fill form Surat Jalan.
      */
     public function getNkbDetail(Request $request, $id): JsonResponse

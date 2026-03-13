@@ -37,8 +37,7 @@ class SynchronizeTargetsJob implements ShouldQueue, ShouldBeUnique
         $cacheKey = 'sync_targets_progress';
 
         try {
-            // Hanya error yang dicatat ke log; tidak ada log untuk alur sukses.
-            // Hapus semua data di targets dulu, baru isi dari sumber pakai upsert (data sama = update, tidak create duplikat)
+            // Truncate dulu, lalu isi dari sumber. Indikasi 3 kolom: jika (branch_code, book_code, period_code) sudah ada jangan create ulang, update saja.
             DB::table('targets')->truncate();
 
             $totalRecords = DB::connection('pgsql')->table('r_target_buku')->count();
@@ -108,46 +107,68 @@ class SynchronizeTargetsJob implements ShouldQueue, ShouldBeUnique
 
                 if (!empty($batch)) {
                     try {
-                        DB::transaction(function () use ($batch, $now) {
-                            DB::table('targets')->upsert(
-                                $batch,
-                                ['branch_code', 'book_code', 'period_code'],
-                                ['exemplar', 'updated_at']
-                            );
+                        DB::transaction(function () use ($batch, &$created, &$updated) {
+                            $existingSet = [];
+                            $uniqueTriples = [];
+                            foreach ($batch as $r) {
+                                $key = $r['branch_code'] . "\0" . $r['book_code'] . "\0" . $r['period_code'];
+                                $uniqueTriples[$key] = [$r['branch_code'], $r['book_code'], $r['period_code']];
+                            }
+                            $uniqueTriples = array_values($uniqueTriples);
+                            foreach (array_chunk($uniqueTriples, 200) as $chunk) {
+                                $q = DB::table('targets')->select('branch_code', 'book_code', 'period_code');
+                                $q->where(function ($w) use ($chunk) {
+                                    foreach ($chunk as $triple) {
+                                        $w->orWhere(function ($w2) use ($triple) {
+                                            $w2->where('branch_code', $triple[0])
+                                                ->where('book_code', $triple[1])
+                                                ->where('period_code', $triple[2]);
+                                        });
+                                    }
+                                });
+                                foreach ($q->get() as $row) {
+                                    $existingSet[$row->branch_code . "\0" . $row->book_code . "\0" . $row->period_code] = true;
+                                }
+                            }
+                            $toInsert = [];
+                            $toUpdate = [];
+                            foreach ($batch as $r) {
+                                $key = $r['branch_code'] . "\0" . $r['book_code'] . "\0" . $r['period_code'];
+                                if (!empty($existingSet[$key])) {
+                                    $toUpdate[] = $r;
+                                } else {
+                                    $toInsert[] = $r;
+                                }
+                            }
+                            if (!empty($toInsert)) {
+                                DB::table('targets')->insert($toInsert);
+                                $created += count($toInsert);
+                            }
+                            foreach ($toUpdate as $r) {
+                                DB::table('targets')
+                                    ->where('branch_code', $r['branch_code'])
+                                    ->where('book_code', $r['book_code'])
+                                    ->where('period_code', $r['period_code'])
+                                    ->update(['exemplar' => $r['exemplar'], 'updated_at' => $r['updated_at']]);
+                                $updated += 1;
+                            }
                         });
                         $totalProcessed += count($batch);
-                        $created += count($batch);
                     } catch (\Exception $e) {
-                        // Kalau batch gagal (FK constraint): list book_code & branch_code yang tidak ada, lalu fallback per-row
-                        $bookCodesInBatch = array_unique(array_column($batch, 'book_code'));
-                        $existingInBooks = DB::table('books')->whereIn('book_code', $bookCodesInBatch)->pluck('book_code')->toArray();
-                        $missingBookCodes = array_values(array_diff($bookCodesInBatch, $existingInBooks));
-                        if (!empty($missingBookCodes)) {
-                            Log::warning('SynchronizeTargetsJob: book_codes not in books: ' . implode(',', $missingBookCodes));
-                            $missingBookCodesAll = array_values(array_unique(array_merge($missingBookCodesAll, $missingBookCodes)));
-                        }
-                        $branchCodesInBatch = array_unique(array_column($batch, 'branch_code'));
-                        $existingInBranches = DB::table('branches')->whereIn('branch_code', $branchCodesInBatch)->pluck('branch_code')->toArray();
-                        $missingBranchCodes = array_values(array_diff($branchCodesInBatch, $existingInBranches));
-                        if (!empty($missingBranchCodes)) {
-                            Log::warning('SynchronizeTargetsJob: branch_codes not in branches: ' . implode(',', $missingBranchCodes));
-                            $missingBranchCodesAll = array_values(array_unique(array_merge($missingBranchCodesAll, $missingBranchCodes)));
-                        }
-                        $errMsg = $e->getMessage();
-                        if (!empty($missingBookCodes)) {
-                            $errMsg = 'Chunk: book_codes not in books: ' . implode(',', $missingBookCodes);
-                        } elseif (!empty($missingBranchCodes)) {
-                            $errMsg = 'Chunk: branch_codes not in branches: ' . implode(',', $missingBranchCodes);
-                        }
-                        $errors[] = $errMsg;
+                        // Fallback: per-row updateOrInsert (indikasi 3 kolom: ada = update, tidak ada = insert)
                         foreach ($batch as $row) {
                             try {
-                                DB::table('targets')->upsert(
-                                    [$row],
-                                    ['branch_code', 'book_code', 'period_code'],
-                                    ['exemplar', 'updated_at']
-                                );
-                                $created++;
+                                $affected = DB::table('targets')
+                                    ->where('branch_code', $row['branch_code'])
+                                    ->where('book_code', $row['book_code'])
+                                    ->where('period_code', $row['period_code'])
+                                    ->update(['exemplar' => $row['exemplar'], 'updated_at' => $row['updated_at']]);
+                                if ($affected > 0) {
+                                    $updated++;
+                                } else {
+                                    DB::table('targets')->insert($row);
+                                    $created++;
+                                }
                             } catch (\Exception $eRow) {
                                 $isFkBookCode = str_contains($eRow->getMessage(), 'targets_book_code_foreign');
                                 $isFkBranchCode = str_contains($eRow->getMessage(), 'targets_branch_code_foreign');

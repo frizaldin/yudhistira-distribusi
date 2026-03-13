@@ -303,11 +303,13 @@ class StagingController extends Controller
                         SynchronizeBranchesJob::dispatch();
                         break;
                     case 'central_stock':
+                        $this->clearStaleSyncLock('sync_central_stocks_lock', 'sync_central_stocks_progress');
                         if (Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
                             SynchronizeCentralStocksJob::dispatch();
                         }
                         break;
                     case 'target':
+                        $this->clearStaleSyncLock('sync_targets_lock', 'sync_targets_progress');
                         if (Cache::add('sync_targets_lock', true, now()->addHours(2))) {
                             SynchronizeTargetsJob::dispatch();
                         }
@@ -316,11 +318,14 @@ class StagingController extends Controller
                         SynchronizePeriodesJob::dispatch();
                         break;
                     case 'sp_branch':
+                        $this->clearStaleSyncLock('sync_sp_branches_lock', 'sync_sp_branches_progress');
                         if (Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
                             SynchronizeSpBranchesJob::dispatch();
                         }
                         break;
                     case 'delivery_notes':
+                        $this->clearStaleSyncLock('sync_delivery_notes_lock', 'sync_delivery_notes_progress');
+                        $this->clearStaleSyncLock('sync_delivery_note_details_lock', 'sync_delivery_note_details_progress');
                         if (Cache::add('sync_delivery_notes_lock', true, now()->addHours(2))) {
                             SynchronizeDeliveryNotesJob::dispatch();
                         }
@@ -366,6 +371,7 @@ class StagingController extends Controller
                     SynchronizeBranchesJob::dispatch();
                     break;
                 case 'central_stock':
+                    $this->clearStaleSyncLock('sync_central_stocks_lock', 'sync_central_stocks_progress');
                     if (!Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
                         return response()->json([
                             'success' => false,
@@ -374,7 +380,8 @@ class StagingController extends Controller
                     }
                     SynchronizeCentralStocksJob::dispatch();
                     break;
-                    case 'target':
+                case 'target':
+                    $this->clearStaleSyncLock('sync_targets_lock', 'sync_targets_progress');
                     if (!Cache::add('sync_targets_lock', true, now()->addHours(2))) {
                         return response()->json([
                             'success' => false,
@@ -387,6 +394,7 @@ class StagingController extends Controller
                     SynchronizePeriodesJob::dispatch();
                     break;
                 case 'sp_branch':
+                    $this->clearStaleSyncLock('sync_sp_branches_lock', 'sync_sp_branches_progress');
                     if (!Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
                         return response()->json([
                             'success' => false,
@@ -397,6 +405,8 @@ class StagingController extends Controller
                     break;
                 case 'delivery_notes':
                     // Sinkron delivery_notes (m_kirim_cabang) dan delivery_note_details (d_kirim_cabang) sekaligus
+                    $this->clearStaleSyncLock('sync_delivery_notes_lock', 'sync_delivery_notes_progress');
+                    $this->clearStaleSyncLock('sync_delivery_note_details_lock', 'sync_delivery_note_details_progress');
                     if (!Cache::add('sync_delivery_notes_lock', true, now()->addHours(2))) {
                         return response()->json([
                             'success' => false,
@@ -533,6 +543,23 @@ class StagingController extends Controller
             'success' => true,
             'progress' => $progress,
         ]);
+    }
+
+    /**
+     * Hapus lock yang tertinggal jika job sudah selesai/error (progress status completed/error/failed).
+     * Jadi kalau job SP Branch/Target/dll. dulu gagal atau worker mati tanpa sempat clear lock,
+     * user tetap bisa sinkron lagi dari halaman staging.
+     */
+    private function clearStaleSyncLock(string $lockKey, string $progressKey): void
+    {
+        $progress = Cache::get($progressKey);
+        if (!is_array($progress ?? null)) {
+            return;
+        }
+        $status = $progress['status'] ?? null;
+        if (in_array($status, ['completed', 'error', 'failed'], true)) {
+            Cache::forget($lockKey);
+        }
     }
 
     /**

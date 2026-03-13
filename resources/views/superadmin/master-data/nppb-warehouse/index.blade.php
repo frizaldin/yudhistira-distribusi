@@ -15,7 +15,7 @@
 
     <style>
         .table-responsive {
-            max-height: 650px;
+            max-height: 550px;
             overflow: auto;
         }
 
@@ -353,7 +353,8 @@
                                     <th class="text-center" style="width: 70px;" data-col="checklist">Checklist
                                     </th>
                                     <th class="text-center nppb-col-tooltip" style="width: 90px;"
-                                        data-col="pct-perencanaan" title="(Faktur + Stock Cabang + NPPB disetujui + Total) ÷ SP"
+                                        data-col="pct-perencanaan"
+                                        title="(Faktur + Stock Cabang + NPPB disetujui + Total) ÷ SP"
                                         data-bs-toggle="tooltip" data-bs-trigger="hover click">% Rencana</th>
                                 </tr>
                                 <tr id="row-totals" class="table-secondary fw-bold nppb-thead-row-totals">
@@ -704,15 +705,27 @@
                     $(this).toggle(vis[col] !== false);
                 });
                 // Sticky kolom: posisi left dinamis agar kolom pertama yang terlihat di kiri tanpa bolong
-                var stickyCols = [
-                    { key: 'no', width: 50, className: 'sticky-col-1' },
-                    { key: 'kode-buku', width: 200, className: 'sticky-col-2' },
-                    { key: 'stock-pusat', width: 60, className: 'sticky-col-3' }
+                var stickyCols = [{
+                        key: 'no',
+                        width: 50,
+                        className: 'sticky-col-1'
+                    },
+                    {
+                        key: 'kode-buku',
+                        width: 200,
+                        className: 'sticky-col-2'
+                    },
+                    {
+                        key: 'stock-pusat',
+                        width: 60,
+                        className: 'sticky-col-3'
+                    }
                 ];
                 var left = 0;
                 stickyCols.forEach(function(c) {
                     if (vis[c.key] !== false) {
-                        $('#nppb-products-table thead th.' + c.className + ', #row-totals th.' + c.className + ', #nppb-products-table tbody td.' + c.className).css('left', left + 'px');
+                        $('#nppb-products-table thead th.' + c.className + ', #row-totals th.' + c.className +
+                            ', #nppb-products-table tbody td.' + c.className).css('left', left + 'px');
                         left += c.width;
                     }
                 });
@@ -991,7 +1004,9 @@
                                 html += '<tr class="' + (product.row_highlight_yellow ? 'table-warning' :
                                         '') + '" data-book-code="' + (product.book_code || '') +
                                     '" data-sisa-sp="' + (product.sisa_sp || 0) + '" data-stock-pusat="' +
-                                    stockPusat + '" data-sp="' + (product.sp || 0) + '" data-faktur="' + (product.faktur || 0) + '" data-stock-cabang="' + (product.stock_cabang || 0) + '">';
+                                    stockPusat + '" data-sp="' + (product.sp || 0) + '" data-faktur="' + (
+                                        product.faktur || 0) + '" data-stock-cabang="' + (product
+                                        .stock_cabang || 0) + '">';
                                 html += '<td class="text-center sticky-col sticky-col-1" data-col="no">' + (
                                     startNumber +
                                     index) + '</td>';
@@ -1057,14 +1072,18 @@
                                             .pct_faktur_stock_total_vs_target).toFixed(2) + '%') : '-') +
                                     '</td>';
                                 html +=
-                                var volumeOptions = product.volume_options || [];
-                                var volSelect = '<select class="form-control form-control-sm text-center input-volume" style="width: 90px; display: inline-block; padding: 0.2rem 0.4rem;" data-book-code="' + product.book_code + '">';
+                                    var volumeOptions = product.volume_options || [];
+                                var volSelect =
+                                    '<select class="form-control form-control-sm text-center input-volume" style="width: 90px; display: inline-block; padding: 0.2rem 0.4rem;" data-book-code="' +
+                                    product.book_code + '">';
                                 if (volumeOptions.length === 0) {
                                     volSelect += '<option value="0">0</option>';
                                 } else {
                                     volumeOptions.forEach(function(opt) {
-                                        var sel = (parseFloat(opt.value) === parseFloat(volume)) ? ' selected' : '';
-                                        volSelect += '<option value="' + opt.value + '"' + sel + '>' + (opt.label || opt.value) + '</option>';
+                                        var sel = (parseFloat(opt.value) === parseFloat(volume)) ?
+                                            ' selected' : '';
+                                        volSelect += '<option value="' + opt.value + '"' + sel +
+                                            '>' + (opt.label || opt.value) + '</option>';
                                     });
                                 }
                                 volSelect += '</select>';
@@ -1105,23 +1124,32 @@
                                 var stkVal = product.stock_cabang || 0;
                                 var num = ftrVal + stkVal + exp;
                                 var pctRencana = spVal > 0 ? (num / spVal * 100) : 0;
-                                html += '<td class="text-center" data-col="pct-perencanaan">' + (spVal > 0 ? (pctRencana.toFixed(2) + '%') : '—') + '</td>';
+                                html += '<td class="text-center" data-col="pct-perencanaan">' + (spVal > 0 ?
+                                    (pctRencana.toFixed(2) + '%') : '—') + '</td>';
                                 html += '</tr>';
                             });
 
                             var totals = response.totals || {};
                             $('#row-totals th[data-col="stock-pusat"]').text(formatNumber(totals.stock_pusat || 0));
-                            $('#row-totals th[data-col="stock-nasional"]').text(formatNumber(totals.stock_nasional || 0));
+                            $('#row-totals th[data-col="stock-nasional"]').text(formatNumber(totals
+                                .stock_nasional || 0));
                             $('#row-totals th[data-col="sp-nasional"]').text(formatNumber(totals.sp_nasional || 0));
-                            $('#row-totals th[data-col="total-eksemplar-nasional"]').text(formatNumber(totals.stock_teralokasikan || 0));
-                            $('#row-totals th[data-col="stock-teralokasikan"]').text(formatNumber(totals.stock_teralokasikan || 0));
-                            $('#row-totals th[data-col="maks-kirim"]').text(formatNumber(totals.maksimal_total_eksemplar_nasional || 0));
-                            $('#row-totals th[data-col="sisa-kuota"]').text(formatNumber(totals.sisa_kuota_eksemplar || 0));
-                            $('#row-totals th[data-col="sisa-stock-pusat"]').text(formatNumber(totals.sisa_stock_pusat || 0));
+                            $('#row-totals th[data-col="total-eksemplar-nasional"]').text(formatNumber(totals
+                                .stock_teralokasikan || 0));
+                            $('#row-totals th[data-col="stock-teralokasikan"]').text(formatNumber(totals
+                                .stock_teralokasikan || 0));
+                            $('#row-totals th[data-col="maks-kirim"]').text(formatNumber(totals
+                                .maksimal_total_eksemplar_nasional || 0));
+                            $('#row-totals th[data-col="sisa-kuota"]').text(formatNumber(totals
+                                .sisa_kuota_eksemplar || 0));
+                            $('#row-totals th[data-col="sisa-stock-pusat"]').text(formatNumber(totals
+                                .sisa_stock_pusat || 0));
                             var pctTrgt = totals.pct_stock_pusat_target_nasional_avg;
-                            $('#row-totals th[data-col="pct-stock-pusat-target"]').text(pctTrgt != null && !isNaN(pctTrgt) ? (Number(pctTrgt).toFixed(2) + '%') : '—');
+                            $('#row-totals th[data-col="pct-stock-pusat-target"]').text(pctTrgt != null && !isNaN(
+                                pctTrgt) ? (Number(pctTrgt).toFixed(2) + '%') : '—');
                             var pctSp = totals.pct_stock_pusat_sp_avg;
-                            $('#row-totals th[data-col="pct-stock-pusat-sp"]').text(pctSp != null && !isNaN(pctSp) ? (Number(pctSp).toFixed(2) + '%') : '—');
+                            $('#row-totals th[data-col="pct-stock-pusat-sp"]').text(pctSp != null && !isNaN(pctSp) ?
+                                (Number(pctSp).toFixed(2) + '%') : '—');
                             $('#row-totals th[data-col="sp"]').text(formatNumber(totals.sp || 0));
                             $('#row-totals th[data-col="faktur"]').text(formatNumber(totals.faktur || 0));
                             $('#row-totals th[data-col="stock-cabang"]').text(formatNumber(totals.stock_cabang ||
@@ -1130,15 +1158,18 @@
                             $('#row-totals th[data-col="kurang-sp-nasional"]').text(formatNumber(totals
                                 .sisa_sp_nasional || 0));
                             var pctFtrSp = totals.pct_faktur_stock_total_vs_sp_avg;
-                            $('#row-totals th[data-col="pct-ftr-stk-vs-sp"]').text(pctFtrSp != null && !isNaN(pctFtrSp) ? (Number(pctFtrSp).toFixed(2) + '%') : '—');
+                            $('#row-totals th[data-col="pct-ftr-stk-vs-sp"]').text(pctFtrSp != null && !isNaN(
+                                pctFtrSp) ? (Number(pctFtrSp).toFixed(2) + '%') : '—');
                             var pctFtrTgt = totals.pct_faktur_stock_total_vs_target_avg;
-                            $('#row-totals th[data-col="pct-ftr-stk-vs-target"]').text(pctFtrTgt != null && !isNaN(pctFtrTgt) ? (Number(pctFtrTgt).toFixed(2) + '%') : '—');
+                            $('#row-totals th[data-col="pct-ftr-stk-vs-target"]').text(pctFtrTgt != null && !isNaN(
+                                pctFtrTgt) ? (Number(pctFtrTgt).toFixed(2) + '%') : '—');
                             $('#row-totals th[data-col="koli"]').text(formatNumber(totals.koli || 0));
                             $('#row-totals th[data-col="eceran"]').text(formatNumber(totals.pls || 0));
                             $('#row-totals th[data-col="total"]').text(formatNumber(totals.exp || 0));
                             var sumSp = totals.sp || 0;
                             var sumNum = (totals.faktur || 0) + (totals.stock_cabang || 0) + (totals.exp || 0);
-                            $('#row-totals th[data-col="pct-perencanaan"]').text(sumSp > 0 ? (sumNum / sumSp * 100).toFixed(2) + '%' : '—');
+                            $('#row-totals th[data-col="pct-perencanaan"]').text(sumSp > 0 ? (sumNum / sumSp * 100)
+                                .toFixed(2) + '%' : '—');
 
                             // Generate pagination
                             generatePagination(page, lastPage);
@@ -1460,7 +1491,8 @@
                             }
                         });
                         var toExport = allProducts.filter(function(p) {
-                            return allProductsData[p.book_code] && allProductsData[p.book_code].checked === true;
+                            return allProductsData[p.book_code] && allProductsData[p.book_code].checked ===
+                                true;
                         });
                         const headers =
                             'NO,Kode Buku,Nama Buku,Stock Pusat,Stock Nasional,SP Nasional,% Stock Pusat thd Target Nasional,% Stock Pusat thd SP,Total Eksemplar Nasional,Stock Teralokasikan,Maks. Kirim,Sisa Kuota,Sisa Stock Pusat,SP,Faktur,Stock Cabang,Kurang SP,% (Ftr+Stk+Kirim vs SP),% (Ftr+Stk+Kirim vs Target),Isi,Koli,Eceran,Total';
@@ -1600,7 +1632,11 @@
                     if (checkedCount > MAX_CHECKLIST_ROWS) {
                         $cb.prop('checked', false);
                         if (typeof Swal !== 'undefined') {
-                            Swal.fire({ icon: 'warning', title: 'Batas checklist', text: 'Maksimal ' + MAX_CHECKLIST_ROWS + ' baris yang dapat dicentang.' });
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Batas checklist',
+                                text: 'Maksimal ' + MAX_CHECKLIST_ROWS + ' baris yang dapat dicentang.'
+                            });
                         } else {
                             alert('Maksimal ' + MAX_CHECKLIST_ROWS + ' baris yang dapat dicentang.');
                         }

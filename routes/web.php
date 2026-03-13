@@ -23,6 +23,7 @@ use App\Http\Controllers\ApiController;
 use App\Models\Staging\Master\Book;
 use App\Models\Staging\Master\Periode;
 use App\Models\Staging\Master\SpBranch;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -238,4 +239,23 @@ Route::middleware('auth')->group(function () {
         Route::put('/user-adp/{id}', 'updateAdp')->name('user-adp.update');
         Route::delete('/user-adp/{id}', 'destroyAdp')->name('user-adp.destroy');
     });
+
+    // Artisan: clear queue (flush failed + clear pending)
+    Route::get('/clear-job', function () {
+        Artisan::call('queue:flush');
+        Artisan::call('queue:clear');
+        return response()->json([
+            'success' => true,
+            'message' => 'Queue flush dan queue clear telah dijalankan.',
+        ]);
+    })->name('artisan.clear-job');
+
+    // Artisan: clear cache (optimize:clear)
+    Route::get('/clear-cache', function () {
+        Artisan::call('optimize:clear');
+        return response()->json([
+            'success' => true,
+            'message' => 'optimize:clear telah dijalankan.',
+        ]);
+    })->name('artisan.clear-cache');
 });

@@ -317,7 +317,7 @@ class StagingController extends Controller
                         break;
                     case 'sp_branch':
                         if (Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
-                            SynchronizeSpBranchesJob::dispatch(false);
+                            SynchronizeSpBranchesJob::dispatch();
                         }
                         break;
                     case 'delivery_notes':
@@ -393,7 +393,7 @@ class StagingController extends Controller
                             'message' => 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
                         ], 409);
                     }
-                    SynchronizeSpBranchesJob::dispatch($clearFirst);
+                    SynchronizeSpBranchesJob::dispatch();
                     break;
                 case 'delivery_notes':
                     // Sinkron delivery_notes (m_kirim_cabang) dan delivery_note_details (d_kirim_cabang) sekaligus

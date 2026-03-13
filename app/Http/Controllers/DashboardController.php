@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\CutoffData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -195,43 +196,40 @@ class DashboardController extends Controller
         $perPage = 15;
         $spBranchesPaginated = $spBranchesQuery->paginate($perPage, ['*'], 'kebutuhan_page')->withQueryString();
         
-        // Get all data for totals calculation (without pagination)
-        $spBranches = SpBranch::select([
-            'sp_branches.branch_code',
-            'branches.branch_name',
-            DB::raw('SUM(sp_branches.ex_sp) as total_sp'),
-            DB::raw('SUM(sp_branches.ex_ftr) as total_faktur'),
-            DB::raw('SUM(sp_branches.ex_ret) as total_ret'),
-            DB::raw('SUM(sp_branches.ex_ftr) - COALESCE(SUM(sp_branches.ex_ret), 0) as netto'),
-            DB::raw('SUM(sp_branches.ex_sp) - SUM(sp_branches.ex_ftr) as sisa_sp'),
-            DB::raw('SUM(sp_branches.ex_stock) as total_stok_cabang'),
-            DB::raw('COALESCE(SUM(sp_branches.ex_rec_pst), 0) as total_nkb'),
+        // Total agregat dari sp_branches (satu query, satu baris — jauh lebih cepat dari get() per cabang)
+        $spTotalsQuery = SpBranch::select([
+            DB::raw('COALESCE(SUM(ex_sp), 0) as total_sp'),
+            DB::raw('COALESCE(SUM(ex_ftr), 0) as total_faktur'),
+            DB::raw('COALESCE(SUM(ex_ret), 0) as total_ret'),
+            DB::raw('COALESCE(SUM(ex_ftr), 0) - COALESCE(SUM(ex_ret), 0) as netto'),
+            DB::raw('COALESCE(SUM(ex_sp), 0) - COALESCE(SUM(ex_ftr), 0) as sisa_sp'),
+            DB::raw('COALESCE(SUM(ex_stock), 0) as total_stok_cabang'),
+            DB::raw('COALESCE(SUM(ex_rec_pst), 0) as total_nkb'),
+            DB::raw('COUNT(DISTINCT branch_code) as total_branches'),
         ])
-            ->leftJoin('branches', 'sp_branches.branch_code', '=', 'branches.branch_code')
-            ->where('sp_branches.active_data', 'yes');
+            ->where('active_data', 'yes');
         if ($startDate !== null) {
-            $spBranches = $spBranches->whereBetween('sp_branches.trans_date', [$startDate, $endDate]);
+            $spTotalsQuery->whereBetween('trans_date', [$startDate, $endDate]);
         } else {
-            $spBranches = $spBranches->where('sp_branches.trans_date', '<=', $endDate);
+            $spTotalsQuery->where('trans_date', '<=', $endDate);
         }
-        $spBranches = $spBranches
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('sp_branches.branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('sp_branches.branch_code', $filteredBranchCodes);
-            })
-            ->groupBy('sp_branches.branch_code', 'branches.branch_name')
-            ->orderByDesc(DB::raw('SUM(sp_branches.ex_sp)'))
-            ->get();
+        $spTotalsQuery
+            ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes));
+        $spTotals = $spTotalsQuery->first();
 
-        $pusatStocks = CentralStock::select('exemplar')
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('branch_code', $filteredBranchCodes);
-            })
-            ->get();
+        $totalSp = (float) ($spTotals->total_sp ?? 0);
+        $totalFaktur = (float) ($spTotals->total_faktur ?? 0);
+        $totalRet = (float) ($spTotals->total_ret ?? 0);
+        $totalNetto = (float) ($spTotals->netto ?? 0);
+        $totalSisaSp = (float) ($spTotals->sisa_sp ?? 0);
+        $totalStokCabang = (float) ($spTotals->total_stok_cabang ?? 0);
+        $totalNkb = (float) ($spTotals->total_nkb ?? 0);
+        $totalBranchesCount = (int) ($spTotals->total_branches ?? 0);
 
-        $totalStockPusat = $pusatStocks->sum('exemplar');
+        $totalStockPusat = (float) CentralStock::query()
+            ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
+            ->sum('exemplar');
         
         // Total calculation - hanya dari cabang yang memiliki data (untuk akurasi)
         $totalTargetForCalculationQuery = Target::select([
@@ -252,14 +250,7 @@ class DashboardController extends Controller
             })
             ->first();
         $totalTarget = $totalTargetForCalculation->total_target ?? 0;
-        
-        $totalSp = $spBranches->sum('total_sp');
-        $totalFaktur = $spBranches->sum('total_faktur');
-        $totalRet = $spBranches->sum('total_ret');
-        $totalNetto = $spBranches->sum('netto');
-        $totalSisaSp = $spBranches->sum('sisa_sp');
-        $totalStokCabang = $spBranches->sum('total_stok_cabang');
-        $totalNkb = $spBranches->sum('total_nkb');
+
         $totalNppbKoli = is_object($nppbCentralTotal) ? ($nppbCentralTotal->total_koli ?? 0) : 0;
         $totalNppbPls = is_object($nppbCentralTotal) ? ($nppbCentralTotal->total_pls ?? 0) : 0;
         $totalNppbExp = is_object($nppbCentralTotal) ? ($nppbCentralTotal->total_exp ?? 0) : 0;
@@ -491,81 +482,20 @@ class DashboardController extends Controller
             $yearlyTargetData[$y] = $totalAllTargets;
         }
 
-        $yearlyRealisasiKirimQuery = SpBranch::select([
+        // Satu query tahunan SpBranch: SP + Faktur per tahun (menggantikan 3 query terpisah)
+        $yearlySpFakturQuery = SpBranch::select([
             DB::raw('YEAR(trans_date) as year'),
-            DB::raw('SUM(ex_sp) as total_pesanan'),
+            DB::raw('COALESCE(SUM(ex_sp), 0) as total_sp'),
+            DB::raw('COALESCE(SUM(ex_ftr), 0) as total_faktur'),
         ])
             ->where('active_data', 'yes')
             ->whereNotNull('trans_date');
         if ($startDate !== null) {
-            $yearlyRealisasiKirimQuery->whereBetween('trans_date', [$startDate, $endDate]);
+            $yearlySpFakturQuery->whereBetween('trans_date', [$startDate, $endDate]);
         } else {
-            $yearlyRealisasiKirimQuery->where('trans_date', '<=', $endDate);
+            $yearlySpFakturQuery->where('trans_date', '<=', $endDate);
         }
-        $yearlyRealisasiKirim = $yearlyRealisasiKirimQuery
-            ->whereIn(DB::raw('YEAR(trans_date)'), $yearsRange)
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('branch_code', $filteredBranchCodes);
-            })
-            ->groupBy(DB::raw('YEAR(trans_date)'))
-            ->orderBy('year')
-            ->get()
-            ->keyBy('year');
-
-        // Get SP per year from SpBranch (for Pemakaian Kuota NPPB chart)
-        $yearlySpDataQuery = SpBranch::select([
-            DB::raw('YEAR(trans_date) as year'),
-            DB::raw('SUM(ex_sp) as total_sp'),
-        ])
-            ->where('active_data', 'yes')
-            ->whereNotNull('trans_date');
-        if ($startDate !== null) {
-            $yearlySpDataQuery->whereBetween('trans_date', [$startDate, $endDate]);
-        } else {
-            $yearlySpDataQuery->where('trans_date', '<=', $endDate);
-        }
-        $yearlySpData = $yearlySpDataQuery
-            ->whereIn(DB::raw('YEAR(trans_date)'), $yearsRange)
-            ->when($userBranchCode, function ($query) use ($userBranchCode) {
-                return $query->where('branch_code', $userBranchCode);
-            })
-            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
-                return $query->whereIn('branch_code', $filteredBranchCodes);
-            })
-            ->groupBy(DB::raw('YEAR(trans_date)'))
-            ->orderBy('year')
-            ->get()
-            ->keyBy('year');
-
-        // Initialize array for all years with 0
-        $yearlySpChartData = [];
-        foreach ($yearsRange as $y) {
-            $yearlySpChartData[$y] = 0;
-        }
-
-        // Fill in actual data
-        foreach ($yearlySpData as $sp) {
-            if (in_array($sp->year, $yearsRange)) {
-                $yearlySpChartData[$sp->year] = $sp->total_sp ?? 0;
-            }
-        }
-
-        // Faktur per tahun (ex_ftr) untuk chart SP vs Faktur, Faktur per tahun, Realisasi Thn Lalu
-        $yearlyFakturQuery = SpBranch::select([
-            DB::raw('YEAR(trans_date) as year'),
-            DB::raw('SUM(ex_ftr) as total_faktur'),
-        ])
-            ->where('active_data', 'yes')
-            ->whereNotNull('trans_date');
-        if ($startDate !== null) {
-            $yearlyFakturQuery->whereBetween('trans_date', [$startDate, $endDate]);
-        } else {
-            $yearlyFakturQuery->where('trans_date', '<=', $endDate);
-        }
-        $yearlyFakturRaw = $yearlyFakturQuery
+        $yearlySpFaktur = $yearlySpFakturQuery
             ->whereIn(DB::raw('YEAR(trans_date)'), $yearsRange)
             ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
             ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
@@ -574,15 +504,21 @@ class DashboardController extends Controller
             ->get()
             ->keyBy('year');
 
+        $yearlySpChartData = [];
         $yearlyFakturData = [];
         foreach ($yearsRange as $y) {
+            $yearlySpChartData[$y] = 0;
             $yearlyFakturData[$y] = 0;
         }
-        foreach ($yearlyFakturRaw as $row) {
+        foreach ($yearlySpFaktur as $row) {
             if (in_array($row->year, $yearsRange)) {
+                $yearlySpChartData[$row->year] = (float) ($row->total_sp ?? 0);
                 $yearlyFakturData[$row->year] = (int) ($row->total_faktur ?? 0);
             }
         }
+
+        // Realisasi kirim = ex_sp (sama dengan SP), sudah ada di yearlySpChartData
+        $yearlyRealisasiData = $yearlySpChartData;
 
         // Kurang SP (Sisa SP) per tahun = SP - Faktur
         $yearlyKurangSpData = [];
@@ -632,17 +568,6 @@ class DashboardController extends Controller
         $yearlyTargetChartData = [];
         foreach ($yearsRange as $y) {
             $yearlyTargetChartData[$y] = $totalAllTargets; // Use same total for all years
-        }
-
-        $yearlyRealisasiData = [];
-        foreach ($yearsRange as $y) {
-            $yearlyRealisasiData[$y] = 0;
-        }
-
-        foreach ($yearlyRealisasiKirim as $realisasi) {
-            if (in_array($realisasi->year, $yearsRange)) {
-                $yearlyRealisasiData[$realisasi->year] = $realisasi->total_pesanan ?? 0;
-            }
         }
 
         // NPPB yang sudah disetujui (document_id terisi) — total eksemplar per tahun untuk chart Rencana Kirim vs SP
@@ -725,31 +650,34 @@ class DashboardController extends Controller
             $realisasi2025 = $r25->sum('ex_ftr') ?? 0;
         }
 
-        $allBranches = Branch::select('branch_name')->distinct()->get();
-        $areas = ['Nasional'];
-        $areaSet = ['Nasional'];
-        foreach ($allBranches as $branch) {
-            $areaName = $this->extractAreaFromBranch($branch->branch_name);
-            if (!in_array($areaName, $areaSet)) {
-                $areaSet[] = $areaName;
-                $areas[] = $areaName;
+        // Daftar area (cache 5 menit — jarang berubah)
+        $areas = Cache::remember('dashboard_areas_list', 300, function () {
+            $allBranches = Branch::select('branch_name')->distinct()->get();
+            $areasList = ['Nasional'];
+            $areaSet = ['Nasional'];
+            foreach ($allBranches as $branch) {
+                $areaName = $this->extractAreaFromBranch($branch->branch_name);
+                if (!in_array($areaName, $areaSet)) {
+                    $areaSet[] = $areaName;
+                    $areasList[] = $areaName;
+                }
             }
-        }
-        $otherAreas = array_filter($areas, function ($a) {
-            return $a !== 'Nasional';
+            $otherAreas = array_filter($areasList, fn ($a) => $a !== 'Nasional');
+            sort($otherAreas);
+            return array_merge(['Nasional'], $otherAreas);
         });
-        sort($otherAreas);
-        $areas = array_merge(['Nasional'], $otherAreas);
 
-        // Distinct category_manual dari product (books) + jumlah per kategori
-        $productCategoryManualCounts = Product::query()
-            ->select('category_manual')
-            ->selectRaw('count(*) as total')
-            ->whereNotNull('category_manual')
-            ->where('category_manual', '!=', '')
-            ->groupBy('category_manual')
-            ->orderByDesc('total')
-            ->get();
+        // Distinct category_manual dari product (cache 5 menit)
+        $productCategoryManualCounts = Cache::remember('dashboard_product_category_manual_counts', 300, function () {
+            return Product::query()
+                ->select('category_manual')
+                ->selectRaw('count(*) as total')
+                ->whereNotNull('category_manual')
+                ->where('category_manual', '!=', '')
+                ->groupBy('category_manual')
+                ->orderByDesc('total')
+                ->get();
+        });
 
         // Kategori Manual (books) + total SP dari sp_branches (periode & filter cabang sama)
         $categoryManualSpQuery = DB::table('sp_branches')
@@ -828,7 +756,7 @@ class DashboardController extends Controller
             'chartStockPusatVsTargetPct' => $chartStockPusatVsTargetPct,
             'yearlyStokPusatData' => $yearlyStokPusatData, // Data Stok Pusat per tahun
             'yearlyTargetChartData' => $yearlyTargetChartData, // Data Target per tahun untuk chart
-            'totalBranches' => $spBranches->count(),
+            'totalBranches' => $totalBranchesCount,
             'branchInfo' => $branchInfo,
             'realisasi2024' => $realisasi2024,
             'realisasi2025' => $realisasi2025,

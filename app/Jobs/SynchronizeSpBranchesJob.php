@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\SpBranch;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -13,18 +14,25 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
-class SynchronizeSpBranchesJob implements ShouldQueue
+class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
 {
     use Queueable, InteractsWithQueue, SerializesModels;
 
     /** Tidak dibatasi waktu (0 = sampai selesai). Default 60 detik bikin job sync 80k+ data terpotong. */
     public int $timeout = 0;
 
-    protected $clearFirst;
-
-    public function __construct($clearFirst = false)
+    /** Hanya satu job ini yang boleh ada di queue; mencegah double saat user sinkron berkali-kali sebelum worker jalan. */
+    public function uniqueId(): string
     {
-        $this->clearFirst = $clearFirst;
+        return 'sync_sp_branches';
+    }
+
+    /**
+     * @param bool $clearFirst Tidak dipakai lagi: job selalu hapus semua data MySQL dulu lalu isi ulang dari PostgreSQL.
+     */
+    public function __construct($clearFirst = true)
+    {
+        // Legacy: parameter diabaikan, selalu truncate lalu sync dari pgsql
     }
 
     public function handle(): void
@@ -38,9 +46,11 @@ class SynchronizeSpBranchesJob implements ShouldQueue
         $missingBookCodes = [];
 
         try {
-            Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL', [
-                'clear_first' => $this->clearFirst
-            ]);
+            Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL (hapus semua data MySQL dulu, lalu isi dari pgsql)');
+
+            // Hapus semua data di MySQL dulu, baru create ulang dari PostgreSQL
+            Log::info('SynchronizeSpBranchesJob: Clearing all existing data');
+            SpBranch::truncate();
 
             // Get total records first and initialize progress immediately
             $totalRecords = DB::connection('pgsql')->table('r_sp_faktur_stok')->count();
@@ -56,12 +66,6 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 'errors' => 0,
                 'percentage' => 0
             ], now()->addHours(2));
-
-            if ($this->clearFirst) {
-                Log::info('SynchronizeSpBranchesJob: Clearing all existing data');
-                SpBranch::truncate();
-            }
-            // Tanpa clearFirst: upsert saja (satu baris per branch_code + book_code, selalu active_data = yes)
 
             $validBranches = Branch::pluck('branch_code')->flip()->all();
             $validBooks = Product::pluck('book_code')->flip()->all();

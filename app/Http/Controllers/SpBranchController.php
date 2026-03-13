@@ -217,7 +217,7 @@ class SpBranchController extends Controller
                 return redirect()->back()->with('error', 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
             }
 
-            SynchronizeSpBranchesJob::dispatch(false)
+            SynchronizeSpBranchesJob::dispatch()
                 ->onQueue('default');
 
             return redirect()->back()->with('success', 'Sinkronisasi data sedang diproses di background. Data akan disinkronkan secara bertahap. Silakan refresh halaman beberapa saat kemudian untuk melihat hasil.');
@@ -238,16 +238,15 @@ class SpBranchController extends Controller
                 return redirect()->back()->with('error', 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.');
             }
 
-            // Count data before deletion
+            // Count data before deletion (job akan truncate lalu isi ulang dari PostgreSQL)
             $deletedCount = SpBranch::count();
 
-            // Delete all data (will be done in job, but we count here for message)
-            SynchronizeSpBranchesJob::dispatch(true)
+            SynchronizeSpBranchesJob::dispatch()
                 ->onQueue('default');
 
             Log::info("Cleared {$deletedCount} sp_branches before synchronization");
 
-            return redirect()->back()->with('success', "Semua data pesanan ({$deletedCount} data) telah dihapus. Sinkronisasi data sedang diproses di background.");
+            return redirect()->back()->with('success', "Semua data pesanan ({$deletedCount} data) akan dihapus lalu diisi ulang dari sumber. Sinkronisasi data sedang diproses di background.");
         } catch (\Exception $e) {
             Cache::forget('sync_sp_branches_lock');
             Log::error('SpBranch ClearAndSync Error: ' . $e->getMessage());

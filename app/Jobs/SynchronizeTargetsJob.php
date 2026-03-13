@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -10,9 +11,15 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
-class SynchronizeTargetsJob implements ShouldQueue
+class SynchronizeTargetsJob implements ShouldQueue, ShouldBeUnique
 {
     use Queueable, InteractsWithQueue, SerializesModels;
+
+    /** Hanya satu job ini yang boleh ada di queue; mencegah double saat user sinkron berkali-kali sebelum worker jalan. */
+    public function uniqueId(): string
+    {
+        return 'sync_targets';
+    }
 
     /** Tidak dibatasi waktu (0 = sampai selesai). Default 60 detik bikin job sync 170k+ data terpotong. */
     public int $timeout = 0;

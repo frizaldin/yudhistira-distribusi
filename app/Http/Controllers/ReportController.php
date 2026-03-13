@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\CentralStock;
 use App\Models\NppbCentral;
 use App\Models\Periode;
 use App\Models\Product;
@@ -157,43 +156,6 @@ class ReportController extends Controller
             ->get()
             ->keyBy(fn($r) => $r->segment . '|' . $r->kategori);
 
-        // Stock thd SP Lebih/Kurang: rumus sama seperti /recap (per branch+book lalu dijumlah)
-        // Lebih = SUM(GREATEST(0, stok - sp)), Kurang = SUM(GREATEST(0, sp - stok)) per segment+kategori
-        $spSubThd = SpBranch::query()
-            ->join('books', 'sp_branches.book_code', '=', 'books.book_code')
-            ->whereIn('books.jenjang', $segmentOrder)
-            ->whereIn('books.category_manual', $kategoriOrder)
-            ->where('sp_branches.active_data', 'yes')
-            ->whereBetween('sp_branches.trans_date', [$startDate, $endDate])
-            ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('sp_branches.branch_code', $filteredBranchCodes))
-            ->groupBy('sp_branches.branch_code', 'sp_branches.book_code', 'books.jenjang', 'books.category_manual')
-            ->select(
-                'sp_branches.branch_code',
-                'sp_branches.book_code',
-                'books.jenjang as segment',
-                'books.category_manual as kategori',
-                DB::raw('SUM(sp_branches.ex_stock) as stok'),
-                DB::raw('SUM(sp_branches.ex_sp) as sp')
-            );
-        $thdSpSql = 'SELECT s.segment, s.kategori, ' .
-            'SUM(GREATEST(0, s.stok - s.sp)) AS lebih, SUM(GREATEST(0, s.sp - s.stok)) AS kurang_pos FROM (' .
-            $spSubThd->toSql() . ') s GROUP BY s.segment, s.kategori';
-        $thdSpRows = collect(DB::select($thdSpSql, $spSubThd->getBindings()))->keyBy(fn($r) => $r->segment . '|' . $r->kategori);
-        // Stock Pusat: hanya untuk book yang jenjang+category_manual match
-        $stockPusatAgg = CentralStock::query()
-            ->join('books', 'central_stocks.book_code', '=', 'books.book_code')
-            ->whereIn('books.jenjang', $segmentOrder)
-            ->whereIn('books.category_manual', $kategoriOrder)
-            ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('central_stocks.branch_code', $filteredBranchCodes))
-            ->groupBy('books.jenjang', 'books.category_manual')
-            ->select(
-                'books.jenjang as segment',
-                'books.category_manual as kategori',
-                DB::raw('COALESCE(SUM(central_stocks.exemplar), 0) as stock_b_sp')
-            )
-            ->get()
-            ->keyBy(fn($r) => $r->segment . '|' . $r->kategori);
-
         // NPPB Eks: hanya untuk book yang jenjang+category_manual match
         $nppbAgg = NppbCentral::query()
             ->join('books', 'nppb_centrals.book_code', '=', 'books.book_code')
@@ -224,7 +186,6 @@ class ReportController extends Controller
                 $ta = $targetAgg->get($key);
                 $tp = $targetPusatAgg->get($key);
                 $sf = $spFaktur->get($key);
-                $st = $stockPusatAgg->get($key);
                 $np = $nppbAgg->get($key);
 
                 $realisasiPrevVal = $rp ? (float) $rp->realisasi_prev : 0;
@@ -233,16 +194,17 @@ class ReportController extends Controller
                 $spVal = $sf ? (float) $sf->sp : 0;
                 $fakturVal = $sf ? (float) $sf->faktur : 0;
                 $stockCabangVal = $sf ? (float) $sf->stock_cabang : 0;
-                $stockBSpVal = $st ? (float) $st->stock_b_sp : 0;
+                // Stock B' SP: minimum antara SP dan Stock Cabang per segment+kategori
+                // Contoh: SP=100, Stock Cabang=200 => Stock B' SP=100; SP=100, Stock Cabang=80 => Stock B' SP=80.
+                $stockBSpVal = min($spVal, $stockCabangVal);
                 $nppbEksVal = $np ? (float) $np->nppb_eks : 0;
 
                 $pctSp = $targetCabangVal > 0 ? round(($spVal / $targetCabangVal) * 100, 0) : 0;
                 $pctFaktur = $spVal > 0 ? round(($fakturVal / $spVal) * 100, 0) : 0;
                 $pctStockFaktur = $spVal > 0 ? round((($stockBSpVal + $fakturVal) / $spVal) * 100, 0) : 0;
-                // Stock thd SP Lebih/Kurang: rumus sama seperti /recap (per branch+book lalu dijumlah)
-                $thdRow = $thdSpRows->get($key);
-                $lebih = $thdRow ? (float) $thdRow->lebih : 0;
-                $kurang = $thdRow ? -(float) $thdRow->kurang_pos : 0; // simpan negatif agar view tampil konsisten
+                // Stock thd SP Lebih/Kurang: dihitung dari selisih Stock Cabang vs SP per segment+kategori
+                $lebih = max(0, $stockCabangVal - $spVal);
+                $kurang = min(0, $stockCabangVal - $spVal);
                 $pctNppb = $spVal > 0 ? round((($stockBSpVal + $fakturVal + $nppbEksVal) / $spVal) * 100, 0) : 0;
 
                 $rows[] = [

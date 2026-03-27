@@ -741,7 +741,7 @@ class DashboardController extends Controller
         foreach ($yearsRange as $y) {
             $targetY = $yearlyTargetData[$y] ?? 0;
             $stockY = $yearlyStokPusatData[$y] ?? 0;
-            $yearlyStockPusatVsTargetPct[$y] = $targetY > 0 ? round(($stockY / $targetY) * 100, 1) : 0;
+            $yearlyStockPusatVsTargetPct[2026] = $targetY > 0 ? round(($stockY / $targetY) * 100, 1) : 0;
         }
 
         $yearlyNppbApproved = NppbCentral::select([

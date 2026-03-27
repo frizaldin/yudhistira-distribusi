@@ -64,11 +64,17 @@ class ApiController extends Controller
      */
     public function getWarehouseCodes(Request $request): JsonResponse
     {
+        $search = trim((string) $request->get('q', ''));
+
         $warehouseCodes = Branch::select('warehouse_code')
             ->whereNotNull('warehouse_code')
             ->where('warehouse_code', '!=', '')
+            ->when($search !== '', function ($query) use ($search) {
+                return $query->where('warehouse_code', 'like', '%' . $search . '%');
+            })
             ->distinct()
             ->orderBy('warehouse_code')
+            ->limit(100)
             ->pluck('warehouse_code');
 
         $results = $warehouseCodes->map(function ($code) {
@@ -141,9 +147,10 @@ class ApiController extends Controller
     {
         $search = $request->get('q', '');
         $warehouseCode = $request->get('warehouse_code', '');
+        $all = $request->boolean('all');
         $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
 
-        $branches = Branch::query()
+        $branchesQuery = Branch::query()
             ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
                 return $query->whereIn('branch_code', $filteredBranchCodes);
             })
@@ -156,9 +163,13 @@ class ApiController extends Controller
                         ->orWhere('branch_code', 'like', '%' . $search . '%');
                 });
             })
-            ->orderBy('branch_name')
-            ->limit(100)
-            ->get();
+            ->orderBy('branch_name');
+
+        if (!$all) {
+            $branchesQuery->limit(100);
+        }
+
+        $branches = $branchesQuery->get();
 
         $results = $branches->map(function ($branch) {
             return [
@@ -245,9 +256,9 @@ class ApiController extends Controller
         // Totals only: kembalikan hanya totals untuk seluruh data (tanpa filter) — dipanggil sesi ke-2
         if ($totalsOnly) {
             $activeCutoff = CutoffData::where('status', 'active')->first();
-            $productsQueryFull = Product::select('book_code', 'book_title')->orderBy('book_code');
-            $totalFull = $productsQueryFull->count();
-            $totals = $this->getNppbCentralTotals($branchCode, $activeCutoff, $currentYear, $percentage, $productsQueryFull);
+            $totalFull = Product::count();
+            // Fast path: totals_only tidak perlu load daftar semua book_code ke memory
+            $totals = $this->getNppbCentralTotalsFast($branchCode, $activeCutoff, $currentYear, $percentage);
             return response()->json([
                 'results' => [],
                 'totals' => $totals,
@@ -726,6 +737,128 @@ class ApiController extends Controller
     }
 
     /**
+     * Fast totals untuk endpoint totals_only (tanpa whereIn semua book_code).
+     */
+    protected function getNppbCentralTotalsFast(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage): array
+    {
+        $totalStockPusat = CentralStock::sum('exemplar');
+        $totalDeducted = CentralStockDeduction::sum('quantity');
+        $stockPusatTotal = max(0, $totalStockPusat - $totalDeducted);
+
+        $spBranchBase = SpBranch::where('active_data', 'yes')->where('branch_code', $branchCode);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $spBranchBase->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $spBranchBase->where('trans_date', '<=', $activeCutoff->end_date);
+        }
+        $spTotal = (clone $spBranchBase)->sum('ex_sp');
+        $fakturTotal = (clone $spBranchBase)->sum('ex_ftr');
+        $stockCabangTotal = (clone $spBranchBase)->sum('ex_stock');
+
+        $spNasionalBase = SpBranch::where('active_data', 'yes');
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $spNasionalBase->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $spNasionalBase->where('trans_date', '<=', $activeCutoff->end_date);
+        }
+        $stockNasionalTotal = (clone $spNasionalBase)->sum('ex_stock');
+        $spNasionalTotal = (clone $spNasionalBase)->sum('ex_sp');
+
+        $stockTeralokasikanQuery = NppbCentral::query();
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $stockTeralokasikanQuery->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $stockTeralokasikanQuery->where('date', '<=', $activeCutoff->end_date);
+        } else {
+            $stockTeralokasikanQuery->whereYear('date', $currentYear);
+        }
+        $stockTeralokasikanTotal = (clone $stockTeralokasikanQuery)->sum('exp');
+
+        $nppbCentralBranchQ = NppbCentral::where('branch_code', $branchCode);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $nppbCentralBranchQ->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $nppbCentralBranchQ->where('date', '<=', $activeCutoff->end_date);
+        } else {
+            $nppbCentralBranchQ->whereYear('date', $currentYear);
+        }
+        $nppbSums = (clone $nppbCentralBranchQ)->selectRaw('COALESCE(SUM(koli),0) as koli, COALESCE(SUM(exp),0) as exp, COALESCE(SUM(pls),0) as pls')->first();
+
+        // % avg dihitung langsung di SQL agar tidak loop per-book besar di PHP
+        $spPerBook = SpBranch::query()
+            ->select([
+                'book_code',
+                DB::raw('SUM(ex_sp) as sp'),
+                DB::raw('SUM(ex_ftr) as faktur'),
+                DB::raw('SUM(ex_stock) as stock_cabang'),
+            ])
+            ->where('active_data', 'yes')
+            ->where('branch_code', $branchCode);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $spPerBook->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $spPerBook->where('trans_date', '<=', $activeCutoff->end_date);
+        }
+        $spPerBook->groupBy('book_code')->havingRaw('SUM(ex_sp) > 0');
+
+        $intransitPerBook = DeliveryNoteDetail::query()
+            ->select(['delivery_note_details.book_code', DB::raw('SUM(delivery_note_details.exemplar) as total_intransit')])
+            ->join('delivery_notes', 'delivery_notes.nota_kirim_cab', '=', 'delivery_note_details.nota_kirim_cab')
+            ->where('delivery_notes.branch_code', $branchCode);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $intransitPerBook->whereBetween('delivery_notes.send_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $intransitPerBook->where('delivery_notes.send_date', '<=', $activeCutoff->end_date);
+        } else {
+            $intransitPerBook->whereYear('delivery_notes.send_date', $currentYear);
+        }
+        $intransitPerBook->groupBy('delivery_note_details.book_code');
+
+        $approvedPerBook = NppbCentral::query()
+            ->select(['book_code', DB::raw('SUM(COALESCE(exp, 0)) as nppb_approved_exp')])
+            ->where('branch_code', $branchCode)
+            ->whereNotNull('document_id')
+            ->where('document_id', '!=', 0);
+        if ($activeCutoff) {
+            $activeCutoff->start_date !== null
+                ? $approvedPerBook->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $approvedPerBook->where('date', '<=', $activeCutoff->end_date);
+        } else {
+            $approvedPerBook->whereYear('date', $currentYear);
+        }
+        $approvedPerBook->groupBy('book_code');
+
+        $pctRow = DB::query()
+            ->fromSub($spPerBook, 's')
+            ->leftJoinSub($intransitPerBook, 'i', 'i.book_code', '=', 's.book_code')
+            ->leftJoinSub($approvedPerBook, 'a', 'a.book_code', '=', 's.book_code')
+            ->selectRaw('COALESCE(AVG(((s.faktur + s.stock_cabang + COALESCE(i.total_intransit,0) + COALESCE(a.nppb_approved_exp,0)) / NULLIF(s.sp,0)) * 100), 0) as avg_pct')
+            ->first();
+
+        return [
+            'stock_pusat' => $stockPusatTotal,
+            'stock_nasional' => $stockNasionalTotal,
+            'sp_nasional' => $spNasionalTotal,
+            'stock_teralokasikan' => $stockTeralokasikanTotal,
+            'maksimal_total_eksemplar_nasional' => (int) floor(($percentage / 100) * $stockPusatTotal),
+            'sisa_kuota_eksemplar' => max(0, (int) floor(($percentage / 100) * $stockPusatTotal) - $stockTeralokasikanTotal),
+            'sisa_stock_pusat' => max(0, $stockPusatTotal - $stockTeralokasikanTotal),
+            'sp' => $spTotal,
+            'faktur' => $fakturTotal,
+            'stock_cabang' => $stockCabangTotal,
+            'sisa_sp' => 0,
+            'sisa_sp_nasional' => 0,
+            'koli' => (float) ($nppbSums->koli ?? 0),
+            'pls' => (float) ($nppbSums->pls ?? 0),
+            'exp' => (float) ($nppbSums->exp ?? 0),
+            'pct_stock_pusat_target_nasional_avg' => 0,
+            'pct_stock_pusat_sp_avg' => 0,
+            'pct_faktur_stock_total_vs_sp_avg' => round((float) ($pctRow->avg_pct ?? 0), 2),
+            'pct_faktur_stock_total_vs_target_avg' => 0,
+        ];
+    }
+
+    /**
      * Hitung totals NPPB Central (untuk baris Total) via query agregat - tanpa load semua baris ke memory
      */
     protected function getNppbCentralTotals(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage, $productsQuery): array
@@ -816,15 +949,15 @@ class ApiController extends Controller
         $intransitQuery = DeliveryNoteDetail::select([
             'delivery_note_details.book_code',
             DB::raw('SUM(exemplar) as total_intransit')
-        ])->join('delivery_notes', 'delivery_notes.id', '=', 'delivery_note_details.delivery_note_id')
+        ])->join('delivery_notes', 'delivery_notes.nota_kirim_cab', '=', 'delivery_note_details.nota_kirim_cab')
             ->where('delivery_notes.branch_code', $branchCode)
             ->whereIn('delivery_note_details.book_code', $allBookCodes);
         if ($activeCutoff) {
             $activeCutoff->start_date !== null
-                ? $intransitQuery->whereBetween('delivery_notes.trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
-                : $intransitQuery->where('delivery_notes.trans_date', '<=', $activeCutoff->end_date);
+                ? $intransitQuery->whereBetween('delivery_notes.send_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $intransitQuery->where('delivery_notes.send_date', '<=', $activeCutoff->end_date);
         } else {
-            $intransitQuery->whereYear('delivery_notes.trans_date', $currentYear);
+            $intransitQuery->whereYear('delivery_notes.send_date', $currentYear);
         }
         $intransitPerBook = $intransitQuery->groupBy('delivery_note_details.book_code')->get()->keyBy('book_code');
 

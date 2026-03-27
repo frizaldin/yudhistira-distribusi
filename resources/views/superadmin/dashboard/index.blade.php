@@ -187,7 +187,7 @@
             <!-- Rencana Kirim vs SP (Line Chart) -->
             <div class="card mb-3 border-0 shadow-sm">
                 <div class="card-header bg-white">
-                    <strong>Rencana Kirim vs SP</strong>
+                    <strong>Rencana Kirim vs Stock Pusat</strong>
                 </div>
                 <div class="card-body">
                     <div class="chart-wrapper">
@@ -389,11 +389,11 @@
             </div>
         </div>
         <div class="col-md-6">
-            <!-- Produk per Kategori Manual (Distinct) -->
+            <!-- Produk per Kategori Buku (Distinct) -->
             <div class="card mb-3 border-0 shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center"
                     style="padding: 0.625rem 1rem; border-bottom: 1px solid #dee2e6;">
-                    <strong style="font-size: 0.8125rem; font-weight: 600;">Produk per Kategori Manual</strong>
+                    <strong style="font-size: 0.8125rem; font-weight: 600;">Produk per Kategori Buku</strong>
                     @if (isset($productCategoryManualCounts) && $productCategoryManualCounts->isNotEmpty())
                         <small class="text-muted">
                             {{ $productCategoryManualCounts->count() }} kategori
@@ -405,8 +405,7 @@
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
                             <thead class="table-light" style="background-color: #f8f9fa;">
                                 <tr>
-                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori
-                                        Manual</th>
+                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori</th>
                                     <th class="text-end"
                                         style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Jumlah</th>
                                 </tr>
@@ -421,7 +420,7 @@
                                 @empty
                                     <tr>
                                         <td colspan="2" class="text-center py-3 text-muted">
-                                            <small>Belum ada data kategori manual</small>
+                                            <small>Belum ada data Kategori Buku</small>
                                         </td>
                                     </tr>
                                 @endforelse
@@ -640,11 +639,11 @@
             </div>
         </div>
         <div class="col-md-12">
-            <!-- Kategori Manual & SP (Tabel) -->
+            <!-- Kategori Buku & SP (Tabel) -->
             <div class="card mb-3 border-0 shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center"
                     style="padding: 0.625rem 1rem; border-bottom: 1px solid #dee2e6;">
-                    <strong style="font-size: 0.8125rem; font-weight: 600;">Kategori Manual & SP</strong>
+                    <strong style="font-size: 0.8125rem; font-weight: 600;">Kategori Buku & SP</strong>
                     @if (isset($categoryManualSp) && $categoryManualSp->isNotEmpty())
                         <small class="text-muted">{{ $categoryManualSp->count() }} kategori</small>
                     @endif
@@ -654,8 +653,7 @@
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
                             <thead class="table-light" style="background-color: #f8f9fa;">
                                 <tr>
-                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori
-                                        Manual</th>
+                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori</th>
                                     <th class="text-end"
                                         style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">SP</th>
                                     <th class="text-end"
@@ -920,7 +918,7 @@
                                     labels: yearlyLabels,
                                     datasets: [
                                         { label: 'Rencana Kirim (NPPB disetujui)', data: d.nppbRencanaKirimChartData || [], borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.4, pointStyle: 'rect', pointRadius: 5, pointHoverRadius: 7 },
-                                        { label: 'SP', data: d.spForRencanaChartData || [], borderColor: 'rgb(34, 197, 94)', backgroundColor: 'rgba(34, 197, 94, 0.1)', tension: 0.4, pointStyle: 'circle', pointRadius: 5, pointHoverRadius: 7 }
+                                        { label: 'Stock Pusat', data: d.spForRencanaChartData || [], borderColor: 'rgb(34, 197, 94)', backgroundColor: 'rgba(34, 197, 94, 0.1)', tension: 0.4, pointStyle: 'circle', pointRadius: 5, pointHoverRadius: 7 }
                                     ]
                                 },
                                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: { font: { family: 'monospace', size: 10 } } }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { family: 'monospace', size: 10 } } }, y: { beginAtZero: true, max: maxValue, ticks: { callback: function(v) { return fmt(v); } } } } }

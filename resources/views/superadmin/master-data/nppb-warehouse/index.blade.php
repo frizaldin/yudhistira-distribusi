@@ -210,6 +210,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <strong id="selected-warehouse-name"></strong>
+                        <div id="selected-warehouse-branches" class="small text-muted mt-1"></div>
                     </div>
                     <div class="d-flex gap-2">
                         <button type="button" id="btn-lihat-rumus" class="btn btn-outline-secondary btn-sm"
@@ -787,6 +788,7 @@
                         } else {
                             $('#products-table-container').hide();
                             $('#products-table-body').empty();
+                            $('#selected-warehouse-branches').text('');
                             $('#pagination-container').hide();
                             allProductsData = {};
                             currentSearchBookCode = '';
@@ -866,6 +868,37 @@
             let currentPerPage = 100;
             let usePercentage = true; // true = batasan persentase aktif, false = nonaktif (tanpa batas)
 
+            function loadWarehouseBranches(warehouseCode) {
+                if (!warehouseCode) {
+                    $('#selected-warehouse-branches').text('');
+                    return;
+                }
+
+                $('#selected-warehouse-branches').text('Memuat daftar cabang...');
+                $.ajax({
+                    url: '{{ route('api.branches-by-warehouse') }}',
+                    method: 'GET',
+                    data: {
+                        warehouse_code: warehouseCode,
+                        all: 1
+                    },
+                    success: function(resp) {
+                        const rows = (resp && resp.results) ? resp.results : [];
+                        if (!rows.length) {
+                            $('#selected-warehouse-branches').text('Cabang di bawah area ini: -');
+                            return;
+                        }
+                        const labels = rows.map(function(r) {
+                            return r.text || '';
+                        }).filter(Boolean);
+                        $('#selected-warehouse-branches').text('Cabang di bawah area ini: ' + labels.join(', '));
+                    },
+                    error: function() {
+                        $('#selected-warehouse-branches').text('Gagal memuat daftar cabang.');
+                    }
+                });
+            }
+
             function updatePersenToggleUI() {
                 if (usePercentage) {
                     $('#input_persen_rencana_kirim').prop('disabled', false).removeClass('bg-light');
@@ -896,6 +929,7 @@
                 const selectedOption = $('#select_warehouse_code option:selected');
                 currentWarehouseName = selectedOption.text() || warehouseCode;
                 $('#selected-warehouse-name').text('Data untuk: ' + currentWarehouseName);
+                loadWarehouseBranches(warehouseCode);
 
                 // Show loading state
                 $('#products-table-container').show();
@@ -1071,8 +1105,7 @@
                                         product.pct_faktur_stock_total_vs_target != null ? (Number(product
                                             .pct_faktur_stock_total_vs_target).toFixed(2) + '%') : '-') +
                                     '</td>';
-                                html +=
-                                    var volumeOptions = product.volume_options || [];
+                                var volumeOptions = product.volume_options || [];
                                 var volSelect =
                                     '<select class="form-control form-control-sm text-center input-volume" style="width: 90px; display: inline-block; padding: 0.2rem 0.4rem;" data-book-code="' +
                                     product.book_code + '">';
@@ -1119,13 +1152,11 @@
                                     '<td class="text-center align-middle" data-col="checklist"><input type="checkbox" class="input-check-save" data-book-code="' +
                                     product.book_code + '"' + (checked ? ' checked' : '') +
                                     ' title="Centang untuk menyimpan baris ini" style="cursor:pointer;width:1.1em;height:1.1em;"></td>';
-                                var spVal = product.sp || 0;
-                                var ftrVal = product.faktur || 0;
-                                var stkVal = product.stock_cabang || 0;
-                                var num = ftrVal + stkVal + exp;
-                                var pctRencana = spVal > 0 ? (num / spVal * 100) : 0;
-                                html += '<td class="text-center" data-col="pct-perencanaan">' + (spVal > 0 ?
-                                    (pctRencana.toFixed(2) + '%') : '—') + '</td>';
+                                // Samakan dengan nppb-central: nilai awal mengikuti % (Ftr+Stk+Kirim vs SP) dari API
+                                var pctRencanaAwal = product.pct_faktur_stock_total_vs_sp;
+                                html += '<td class="text-center" data-col="pct-perencanaan">' + (
+                                    pctRencanaAwal != null ? (Number(pctRencanaAwal).toFixed(2) + '%') :
+                                    '—') + '</td>';
                                 html += '</tr>';
                             });
 
@@ -1166,10 +1197,10 @@
                             $('#row-totals th[data-col="koli"]').text(formatNumber(totals.koli || 0));
                             $('#row-totals th[data-col="eceran"]').text(formatNumber(totals.pls || 0));
                             $('#row-totals th[data-col="total"]').text(formatNumber(totals.exp || 0));
-                            var sumSp = totals.sp || 0;
-                            var sumNum = (totals.faktur || 0) + (totals.stock_cabang || 0) + (totals.exp || 0);
-                            $('#row-totals th[data-col="pct-perencanaan"]').text(sumSp > 0 ? (sumNum / sumSp * 100)
-                                .toFixed(2) + '%' : '—');
+                            // Samakan dengan nppb-central: baris total pakai avg % (Ftr+Stk+Kirim vs SP)
+                            var avgPct = totals.pct_faktur_stock_total_vs_sp_avg;
+                            $('#row-totals th[data-col="pct-perencanaan"]').text(avgPct != null && !isNaN(avgPct) ?
+                                (Number(avgPct).toFixed(2) + '%') : '—');
 
                             // Generate pagination
                             generatePagination(page, lastPage);

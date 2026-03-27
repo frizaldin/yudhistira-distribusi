@@ -108,49 +108,21 @@ class SynchronizeTargetsJob implements ShouldQueue, ShouldBeUnique
                 if (!empty($batch)) {
                     try {
                         DB::transaction(function () use ($batch, &$created, &$updated) {
-                            $existingSet = [];
-                            $uniqueTriples = [];
-                            foreach ($batch as $r) {
-                                $key = $r['branch_code'] . "\0" . $r['book_code'] . "\0" . $r['period_code'];
-                                $uniqueTriples[$key] = [$r['branch_code'], $r['book_code'], $r['period_code']];
-                            }
-                            $uniqueTriples = array_values($uniqueTriples);
-                            foreach (array_chunk($uniqueTriples, 200) as $chunk) {
-                                $q = DB::table('targets')->select('branch_code', 'book_code', 'period_code');
-                                $q->where(function ($w) use ($chunk) {
-                                    foreach ($chunk as $triple) {
-                                        $w->orWhere(function ($w2) use ($triple) {
-                                            $w2->where('branch_code', $triple[0])
-                                                ->where('book_code', $triple[1])
-                                                ->where('period_code', $triple[2]);
-                                        });
-                                    }
-                                });
-                                foreach ($q->get() as $row) {
-                                    $existingSet[$row->branch_code . "\0" . $row->book_code . "\0" . $row->period_code] = true;
-                                }
-                            }
-                            $toInsert = [];
-                            $toUpdate = [];
-                            foreach ($batch as $r) {
-                                $key = $r['branch_code'] . "\0" . $r['book_code'] . "\0" . $r['period_code'];
-                                if (!empty($existingSet[$key])) {
-                                    $toUpdate[] = $r;
+                            foreach ($batch as $row) {
+                                $affected = DB::table('targets')
+                                    ->where('branch_code', $row['branch_code'])
+                                    ->where('book_code', $row['book_code'])
+                                    ->where('period_code', $row['period_code'])
+                                    ->update([
+                                        'exemplar' => $row['exemplar'],
+                                        'updated_at' => $row['updated_at'],
+                                    ]);
+                                if ($affected > 0) {
+                                    $updated++;
                                 } else {
-                                    $toInsert[] = $r;
+                                    DB::table('targets')->insert($row);
+                                    $created++;
                                 }
-                            }
-                            if (!empty($toInsert)) {
-                                DB::table('targets')->insert($toInsert);
-                                $created += count($toInsert);
-                            }
-                            foreach ($toUpdate as $r) {
-                                DB::table('targets')
-                                    ->where('branch_code', $r['branch_code'])
-                                    ->where('book_code', $r['book_code'])
-                                    ->where('period_code', $r['period_code'])
-                                    ->update(['exemplar' => $r['exemplar'], 'updated_at' => $r['updated_at']]);
-                                $updated += 1;
                             }
                         });
                         $totalProcessed += count($batch);

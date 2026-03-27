@@ -41,15 +41,16 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
         $totalRecords = 0;
         $totalProcessed = 0;
         $created = 0;
+        $updated = 0;
         $errors = [];
         $missingBranchCodes = [];
         $missingBookCodes = [];
 
         try {
-            Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL (hapus semua data dulu, lalu isi pakai upsert)');
+            Log::info('SynchronizeSpBranchesJob: Starting synchronization from PostgreSQL (sp_branches truncate + update/create, sp_branche_mains update/create)');
 
-            // Hapus semua data di MySQL dulu, baru isi dari PostgreSQL pakai upsert (data sama = update, tidak create duplikat)
-            Log::info('SynchronizeSpBranchesJob: Clearing all existing data');
+            // Sesuai kebutuhan: sp_branches di-truncate dulu.
+            Log::info('SynchronizeSpBranchesJob: Clearing sp_branches data');
             SpBranch::truncate();
 
             // Get total records first and initialize progress immediately
@@ -149,13 +150,62 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
 
                 if (!empty($batch)) {
                     try {
-                        DB::transaction(function () use ($batch) {
-                            DB::table('sp_branches')->upsert($batch, ['branch_code', 'book_code'], [
-                                'ex_sp', 'ex_ftr', 'ex_ret', 'ex_rec_pst', 'ex_rec_gdg', 'ex_stock',
-                                'trans_date', 'active_data', 'updated_at'
-                            ]);
+                        DB::transaction(function () use ($batch, &$created, &$updated) {
+                            foreach ($batch as $row) {
+                                // 1) sp_branches: update/create (setelah truncate)
+                                $query = DB::table('sp_branches')
+                                    ->where('branch_code', $row['branch_code'])
+                                    ->where('book_code', $row['book_code']);
+                                if ($row['trans_date'] === null) {
+                                    $query->whereNull('trans_date');
+                                } else {
+                                    $query->where('trans_date', $row['trans_date']);
+                                }
+
+                                $affected = $query->update([
+                                    'ex_sp' => $row['ex_sp'],
+                                    'ex_ftr' => $row['ex_ftr'],
+                                    'ex_ret' => $row['ex_ret'],
+                                    'ex_rec_pst' => $row['ex_rec_pst'],
+                                    'ex_rec_gdg' => $row['ex_rec_gdg'],
+                                    'ex_stock' => $row['ex_stock'],
+                                    'active_data' => $row['active_data'],
+                                    'updated_at' => $row['updated_at'],
+                                ]);
+
+                                if ($affected > 0) {
+                                    $updated++;
+                                } else {
+                                    DB::table('sp_branches')->insert($row);
+                                    $created++;
+                                }
+
+                                // 2) sp_branche_mains: tanpa truncate, pakai update/create rule yang sama
+                                $mainQuery = DB::table('sp_branche_mains')
+                                    ->where('branch_code', $row['branch_code'])
+                                    ->where('book_code', $row['book_code']);
+                                if ($row['trans_date'] === null) {
+                                    $mainQuery->whereNull('trans_date');
+                                } else {
+                                    $mainQuery->where('trans_date', $row['trans_date']);
+                                }
+
+                                $mainAffected = $mainQuery->update([
+                                    'ex_sp' => $row['ex_sp'],
+                                    'ex_ftr' => $row['ex_ftr'],
+                                    'ex_ret' => $row['ex_ret'],
+                                    'ex_rec_pst' => $row['ex_rec_pst'],
+                                    'ex_rec_gdg' => $row['ex_rec_gdg'],
+                                    'ex_stock' => $row['ex_stock'],
+                                    'active_data' => $row['active_data'],
+                                    'updated_at' => $row['updated_at'],
+                                ]);
+
+                                if ($mainAffected <= 0) {
+                                    DB::table('sp_branche_mains')->insert($row);
+                                }
+                            }
                         });
-                        $created += count($batch);
                     } catch (\Exception $e) {
                         Log::error('SynchronizeSpBranchesJob chunk error: ' . $e->getMessage());
                         $errors[] = $e->getMessage();
@@ -171,7 +221,7 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
                     'total' => $totalRecords,
                     'processed' => $totalProcessed,
                     'created' => $created,
-                    'updated' => 0,
+                    'updated' => $updated,
                     'errors' => count($errors),
                     'percentage' => $percentage
                 ], now()->addHours(2));
@@ -202,7 +252,7 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
                 'total' => $totalRecords,
                 'processed' => $totalProcessed,
                 'created' => $created,
-                'updated' => 0,
+                'updated' => $updated,
                 'errors' => count($errors),
                 'percentage' => 100,
                 'completed_at' => now()->toDateTimeString(),
@@ -226,7 +276,7 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
                 'total' => $totalRecords ?? 0,
                 'processed' => $totalProcessed ?? 0,
                 'created' => $created ?? 0,
-                'updated' => 0,
+                'updated' => $updated ?? 0,
                 'errors' => count($errors ?? []),
                 'percentage' => 0,
                 'error_message' => $e->getMessage()

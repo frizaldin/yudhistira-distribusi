@@ -180,15 +180,11 @@ class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
                                     $created++;
                                 }
 
-                                // 2) sp_branche_mains: tanpa truncate, pakai update/create rule yang sama
+                                // 2) sp_branche_mains: unique DB = (branch_code, book_code) saja — tanpa trans_date.
+                                // Kalau pakai trans_date di WHERE, baris ke-2 dengan tanggal beda akan "insert" lagi → 1062 duplicate.
                                 $mainQuery = DB::table('sp_branche_mains')
                                     ->where('branch_code', $row['branch_code'])
                                     ->where('book_code', $row['book_code']);
-                                if ($row['trans_date'] === null) {
-                                    $mainQuery->whereNull('trans_date');
-                                } else {
-                                    $mainQuery->where('trans_date', $row['trans_date']);
-                                }
 
                                 $mainAffected = $mainQuery->update([
                                     'ex_sp' => $row['ex_sp'],

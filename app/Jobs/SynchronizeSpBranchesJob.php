@@ -88,7 +88,7 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 return (float) $value;
             };
 
-            $chunkSize = 5000;
+            $chunkSize = 1000;
             $offset = 0;
 
             while (true) {
@@ -147,63 +147,75 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 }
 
                 if (!empty($batch)) {
-                    try {
-                        DB::transaction(function () use ($batch, &$created, &$updated) {
+                    // Optimisasi: bulk upsert per chunk (lebih cepat & lebih sedikit lock)
+                    $this->runWithDeadlockRetry(function () use ($batch, &$updated) {
+                        DB::transaction(function () use ($batch, &$updated) {
+                            $batchWithDate = [];
+                            $batchNullDate = [];
+
                             foreach ($batch as $row) {
-                                // 1) sp_branches: update/create (setelah truncate)
-                                $query = DB::table('sp_branches')
-                                    ->where('branch_code', $row['branch_code'])
-                                    ->where('book_code', $row['book_code']);
                                 if ($row['trans_date'] === null) {
-                                    $query->whereNull('trans_date');
+                                    $batchNullDate[] = $row;
                                 } else {
-                                    $query->where('trans_date', $row['trans_date']);
-                                }
-
-                                $affected = $query->update([
-                                    'ex_sp' => $row['ex_sp'],
-                                    'ex_ftr' => $row['ex_ftr'],
-                                    'ex_ret' => $row['ex_ret'],
-                                    'ex_rec_pst' => $row['ex_rec_pst'],
-                                    'ex_rec_gdg' => $row['ex_rec_gdg'],
-                                    'ex_stock' => $row['ex_stock'],
-                                    'active_data' => $row['active_data'],
-                                    'updated_at' => $row['updated_at'],
-                                ]);
-
-                                if ($affected > 0) {
-                                    $updated++;
-                                } else {
-                                    DB::table('sp_branches')->insert($row);
-                                    $created++;
-                                }
-
-                                // 2) sp_branche_mains: unique DB = (branch_code, book_code) saja — tanpa trans_date.
-                                // Kalau pakai trans_date di WHERE, baris ke-2 dengan tanggal beda akan "insert" lagi → 1062 duplicate.
-                                $mainQuery = DB::table('sp_branche_mains')
-                                    ->where('branch_code', $row['branch_code'])
-                                    ->where('book_code', $row['book_code']);
-
-                                $mainAffected = $mainQuery->update([
-                                    'ex_sp' => $row['ex_sp'],
-                                    'ex_ftr' => $row['ex_ftr'],
-                                    'ex_ret' => $row['ex_ret'],
-                                    'ex_rec_pst' => $row['ex_rec_pst'],
-                                    'ex_rec_gdg' => $row['ex_rec_gdg'],
-                                    'ex_stock' => $row['ex_stock'],
-                                    'active_data' => $row['active_data'],
-                                    'updated_at' => $row['updated_at'],
-                                ]);
-
-                                if ($mainAffected <= 0) {
-                                    DB::table('sp_branche_mains')->insert($row);
+                                    $batchWithDate[] = $row;
                                 }
                             }
+
+                            // 1) sp_branches: upsert jika trans_date tidak null (butuh unique key (branch_code, book_code, trans_date))
+                            if (!empty($batchWithDate)) {
+                                DB::table('sp_branches')->upsert(
+                                    $batchWithDate,
+                                    ['branch_code', 'book_code', 'trans_date'],
+                                    ['ex_sp', 'ex_ftr', 'ex_ret', 'ex_rec_pst', 'ex_rec_gdg', 'ex_stock', 'active_data', 'updated_at']
+                                );
+                            }
+
+                            // Fallback rare-case: trans_date null (MySQL UNIQUE memperbolehkan banyak NULL, jadi tidak aman untuk upsert)
+                            if (!empty($batchNullDate)) {
+                                foreach ($batchNullDate as $row) {
+                                    $query = DB::table('sp_branches')
+                                        ->where('branch_code', $row['branch_code'])
+                                        ->where('book_code', $row['book_code'])
+                                        ->whereNull('trans_date');
+
+                                    $affected = $query->update([
+                                        'ex_sp' => $row['ex_sp'],
+                                        'ex_ftr' => $row['ex_ftr'],
+                                        'ex_ret' => $row['ex_ret'],
+                                        'ex_rec_pst' => $row['ex_rec_pst'],
+                                        'ex_rec_gdg' => $row['ex_rec_gdg'],
+                                        'ex_stock' => $row['ex_stock'],
+                                        'active_data' => $row['active_data'],
+                                        'updated_at' => $row['updated_at'],
+                                    ]);
+
+                                    if ($affected <= 0) {
+                                        DB::table('sp_branches')->insert($row);
+                                    }
+                                }
+                            }
+
+                            // 2) sp_branche_mains: unique (branch_code, book_code)
+                            // Ambil 1 row terakhir per key (branch_code, book_code) agar upsert tidak bolak-balik di chunk yang sama.
+                            $mains = [];
+                            foreach ($batch as $row) {
+                                $k = $row['branch_code'] . '|' . $row['book_code'];
+                                $mains[$k] = $row;
+                            }
+                            $mains = array_values($mains);
+
+                            if (!empty($mains)) {
+                                DB::table('sp_branche_mains')->upsert(
+                                    $mains,
+                                    ['branch_code', 'book_code'],
+                                    ['ex_sp', 'ex_ftr', 'ex_ret', 'ex_rec_pst', 'ex_rec_gdg', 'ex_stock', 'active_data', 'updated_at', 'trans_date']
+                                );
+                            }
+
+                            // upsert tidak memberi angka created/updated yang akurat, jadi treat sebagai updated untuk progres.
+                            $updated += count($batch);
                         });
-                    } catch (\Exception $e) {
-                        Log::error('SynchronizeSpBranchesJob chunk error: ' . $e->getMessage());
-                        $errors[] = $e->getMessage();
-                    }
+                    }, $errors);
                 }
                 $totalProcessed += count($spBranchRecords);
 
@@ -283,6 +295,37 @@ class SynchronizeSpBranchesJob implements ShouldQueue
                 'line' => $e->getLine()
             ]);
             throw $e;
+        }
+    }
+
+    /**
+     * Retry query saat deadlock (SQLSTATE 40001 / error 1213).
+     *
+     * @param callable():void $callback
+     * @param array<int,string> $errors
+     */
+    protected function runWithDeadlockRetry(callable $callback, array &$errors): void
+    {
+        $maxAttempts = 5;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $callback();
+                return;
+            } catch (\Throwable $e) {
+                $message = $e->getMessage();
+                $isDeadlock = str_contains($message, 'Deadlock found when trying to get lock')
+                    || str_contains($message, 'SQLSTATE[40001]')
+                    || str_contains($message, '1213');
+
+                if (!$isDeadlock || $attempt === $maxAttempts) {
+                    Log::error('SynchronizeSpBranchesJob chunk error: ' . $message);
+                    $errors[] = $message;
+                    return;
+                }
+
+                // Exponential backoff ringan: 100ms, 200ms, 400ms, 800ms
+                usleep((int) (100000 * (2 ** ($attempt - 1))));
+            }
         }
     }
 }

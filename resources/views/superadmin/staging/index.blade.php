@@ -521,7 +521,43 @@
                             }
                         },
                         error: function(xhr) {
-                            const errorMsg = xhr.responseJSON?.message || 'Terjadi kesalahan';
+                            const data = xhr.responseJSON || {};
+                            const errorMsg = data.message || 'Terjadi kesalahan';
+                            // 409: job sync masih berjalan — tampilkan progress + hint dari server
+                            if (xhr.status === 409) {
+                                const hint = data.progress_hint || '';
+                                const p = data.progress;
+                                let htmlBody = '<p class="mb-2">' + $('<div>').text(errorMsg).html() + '</p>';
+                                if (hint) {
+                                    htmlBody += '<p class="mb-2 small text-start">' + $('<div>').text(hint).html() + '</p>';
+                                }
+                                if (p && typeof p === 'object') {
+                                    const pct = (p.percentage != null) ? Number(p.percentage).toFixed(1) : '0';
+                                    const proc = (p.processed != null) ? p.processed : '—';
+                                    const tot = (p.total != null) ? p.total : '—';
+                                    const st = (p.status != null) ? p.status : '—';
+                                    htmlBody += '<div class="alert alert-light py-2 mb-0 small text-start">' +
+                                        '<strong>Progress cache</strong><br>' +
+                                        'Status: <code>' + st + '</code><br>' +
+                                        proc + ' / ' + tot + ' (<strong>' + pct + '%</strong>)' +
+                                        '</div>';
+                                }
+                                Swal.fire({
+                                    icon: 'info',
+                                    title: 'Sinkron masih aktif',
+                                    html: htmlBody,
+                                    width: '520px'
+                                });
+                                const card = btn.closest('.card');
+                                if (p && typeof p === 'object') {
+                                    card.find('.progress-section[data-type="' + type + '"]').show();
+                                    updateCardProgress(card, p, type);
+                                }
+                                startProgressPolling();
+                                btn.prop('disabled', false).html(
+                                    '<i class="bi bi-arrow-repeat"></i> Synchronize');
+                                return;
+                            }
                             Swal.fire({
                                 icon: 'error',
                                 title: 'Error',

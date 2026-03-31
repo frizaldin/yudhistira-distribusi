@@ -11,6 +11,7 @@ use App\Jobs\SynchronizeSpBranchesJob;
 use App\Jobs\SynchronizeDeliveryNotesJob;
 use App\Jobs\SynchronizeDeliveryNoteDetailsJob;
 use App\Models\CutoffData;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -373,20 +374,20 @@ class StagingController extends Controller
                 case 'central_stock':
                     $this->clearStaleSyncLock('sync_central_stocks_lock', 'sync_central_stocks_progress');
                     if (!Cache::add('sync_central_stocks_lock', true, now()->addHours(2))) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Job sinkron stock pusat (r_stock_pusat) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
-                        ], 409);
+                        return $this->syncConflictResponse(
+                            'Job sinkron stock pusat (r_stock_pusat) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_central_stocks_progress'
+                        );
                     }
                     SynchronizeCentralStocksJob::dispatch();
                     break;
                 case 'target':
                     $this->clearStaleSyncLock('sync_targets_lock', 'sync_targets_progress');
                     if (!Cache::add('sync_targets_lock', true, now()->addHours(2))) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Job sinkron target masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
-                        ], 409);
+                        return $this->syncConflictResponse(
+                            'Job sinkron target masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_targets_progress'
+                        );
                     }
                     SynchronizeTargetsJob::dispatch();
                     break;
@@ -396,10 +397,10 @@ class StagingController extends Controller
                 case 'sp_branch':
                     $this->clearStaleSyncLock('sync_sp_branches_lock', 'sync_sp_branches_progress');
                     if (!Cache::add('sync_sp_branches_lock', true, now()->addHours(2))) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
-                        ], 409);
+                        return $this->syncConflictResponse(
+                            'Job sinkron SP Branch masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_sp_branches_progress'
+                        );
                     }
                     SynchronizeSpBranchesJob::dispatch();
                     break;
@@ -408,17 +409,17 @@ class StagingController extends Controller
                     $this->clearStaleSyncLock('sync_delivery_notes_lock', 'sync_delivery_notes_progress');
                     $this->clearStaleSyncLock('sync_delivery_note_details_lock', 'sync_delivery_note_details_progress');
                     if (!Cache::add('sync_delivery_notes_lock', true, now()->addHours(2))) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Job sinkron nota kirim (m_kirim_cabang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
-                        ], 409);
+                        return $this->syncConflictResponse(
+                            'Job sinkron nota kirim (m_kirim_cabang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_delivery_notes_progress'
+                        );
                     }
                     if (!Cache::add('sync_delivery_note_details_lock', true, now()->addHours(2))) {
                         Cache::forget('sync_delivery_notes_lock');
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Job sinkron detail kirim (d_kirim_cabang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
-                        ], 409);
+                        return $this->syncConflictResponse(
+                            'Job sinkron detail kirim (d_kirim_cabang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_delivery_note_details_progress'
+                        );
                     }
                     SynchronizeDeliveryNotesJob::dispatch();
                     SynchronizeDeliveryNoteDetailsJob::dispatch();
@@ -560,6 +561,61 @@ class StagingController extends Controller
         if (in_array($status, ['completed', 'error', 'failed'], true)) {
             Cache::forget($lockKey);
         }
+    }
+
+    /**
+     * Respons 409 saat lock sync masih aktif: sertakan progress dari cache + hint untuk UI.
+     */
+    private function syncConflictResponse(string $message, string $progressCacheKey): JsonResponse
+    {
+        $progress = Cache::get($progressCacheKey);
+        $progressArr = is_array($progress) ? $progress : null;
+
+        return response()->json([
+            'success' => false,
+            'message' => $message,
+            'progress' => $progressArr,
+            'progress_hint' => $this->syncProgressHint($progressArr),
+        ], 409);
+    }
+
+    /**
+     * Teks tambahan untuk user: sudah berapa %, status job, atau kemungkinan worker queue belum jalan.
+     */
+    private function syncProgressHint(?array $progress): string
+    {
+        if ($progress === null) {
+            return 'Belum ada data progress di cache. Jika baru memulai sync, pastikan worker antrian jalan '
+                . '(mis. `php artisan queue:work` atau Horizon). Cron `schedule:run` saja tidak memproses job kecuali '
+                . 'Anda memang menjadwalkan `queue:work` di dalamnya.';
+        }
+
+        $status = $progress['status'] ?? 'unknown';
+        $pct = isset($progress['percentage']) ? (float) $progress['percentage'] : 0.0;
+        $processed = (int) ($progress['processed'] ?? 0);
+        $total = (int) ($progress['total'] ?? 0);
+
+        $line = sprintf(
+            'Status: %s — %s / %s (%.1f%%).',
+            $status,
+            number_format($processed, 0, ',', '.'),
+            number_format($total, 0, ',', '.'),
+            $pct
+        );
+
+        if ($status === 'running' && $total > 0 && $processed === 0) {
+            return $line . ' Job sudah antri / baru mulai. Jika lama tetap 0%, cek worker queue di server.';
+        }
+
+        if ($status === 'running') {
+            return $line . ' Sinkronisasi sedang berjalan.';
+        }
+
+        if (in_array($status, ['completed', 'error', 'failed'], true)) {
+            return $line . ' Progress menunjuk selesai/error; coba refresh halaman. Jika masih terkunci, lock akan dibersihkan otomatis.';
+        }
+
+        return $line;
     }
 
     /**

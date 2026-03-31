@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\NppbCentral;
 use App\Models\CentralStock;
 use App\Models\CentralStockDeduction;
+use App\Models\StockMutation;
 use App\Models\CentralStockKoli;
 use App\Models\Periode;
 use App\Models\SpBranch;
@@ -325,6 +326,15 @@ class ApiController extends Controller
             DB::raw('SUM(quantity) as total_deducted')
         ])->whereIn('book_code', $bookCodesPage)->groupBy('book_code')->get()->keyBy('book_code');
 
+        $stockMutationsByBook = StockMutation::select([
+            'book_code',
+            DB::raw('SUM(total_eksemplar) as total_mutasi'),
+        ])
+            ->whereIn('book_code', $bookCodesPage)
+            ->groupBy('book_code')
+            ->get()
+            ->keyBy('book_code');
+
         $lastSpBranchSync = Cache::get('sync_sp_branches_progress_last_sync');
 
         // Get existing NPPB data for this branch and year - hanya untuk book di halaman ini
@@ -549,7 +559,7 @@ class ApiController extends Controller
         }
 
         // Combine data
-        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductions, $existingNppb, $spBranchData, $spBranchNasional, $stockTeralokasikanData, $targetNasional, $branchCode, $stockKolisByBranch, $stockKolisGeneral, $volumeOptionsByBook, $intransitData, $nppbApprovedExpByBook, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
+        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductions, $stockMutationsByBook, $existingNppb, $spBranchData, $spBranchNasional, $stockTeralokasikanData, $targetNasional, $branchCode, $stockKolisByBranch, $stockKolisGeneral, $volumeOptionsByBook, $intransitData, $nppbApprovedExpByBook, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $spBranch = $spBranchData->get($product->book_code);
@@ -560,7 +570,8 @@ class ApiController extends Controller
             $sp = $spBranch->sp ?? 0;
             $faktur = $spBranch->faktur ?? 0;
             $stockCabang = $spBranch->stock_cabang ?? 0;
-            $rawStockPusat = $stock->total_stock_pusat ?? 0;
+            $mutasiRow = $stockMutationsByBook->get($product->book_code);
+            $rawStockPusat = (float) ($stock->total_stock_pusat ?? 0) + (float) ($mutasiRow?->total_mutasi ?? 0);
             $deducted = $centralStockDeductions->get($product->book_code)?->total_deducted ?? 0;
             $stockPusat = max(0, $rawStockPusat - $deducted);
             $stockNasional = $spNasionalRow->stock_nasional ?? 0;
@@ -741,7 +752,7 @@ class ApiController extends Controller
      */
     protected function getNppbCentralTotalsFast(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage): array
     {
-        $totalStockPusat = CentralStock::sum('exemplar');
+        $totalStockPusat = CentralStock::sum('exemplar') + StockMutation::sum('total_eksemplar');
         $totalDeducted = CentralStockDeduction::sum('quantity');
         $stockPusatTotal = max(0, $totalStockPusat - $totalDeducted);
 
@@ -875,7 +886,8 @@ class ApiController extends Controller
             ];
         }
 
-        $totalStockPusat = CentralStock::whereIn('book_code', $allBookCodes)->sum('exemplar');
+        $totalStockPusat = CentralStock::whereIn('book_code', $allBookCodes)->sum('exemplar')
+            + StockMutation::whereIn('book_code', $allBookCodes)->sum('total_eksemplar');
         $totalDeducted = CentralStockDeduction::whereIn('book_code', $allBookCodes)->sum('quantity');
         $stockPusatTotal = max(0, $totalStockPusat - $totalDeducted);
 
@@ -1073,6 +1085,15 @@ class ApiController extends Controller
             DB::raw('SUM(quantity) as total_deducted')
         ])->groupBy('book_code')->get()->keyBy('book_code');
 
+        $stockMutationsByBookWarehouse = StockMutation::select([
+            'book_code',
+            DB::raw('SUM(total_eksemplar) as total_mutasi'),
+        ])
+            ->whereIn('book_code', $products->pluck('book_code'))
+            ->groupBy('book_code')
+            ->get()
+            ->keyBy('book_code');
+
         $activeCutoff = CutoffData::where('status', 'active')->first();
 
         $lastSpBranchSync = Cache::get('sync_sp_branches_progress_last_sync');
@@ -1239,7 +1260,7 @@ class ApiController extends Controller
                 ->keyBy('book_code');
         }
 
-        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductionsWarehouse, $existingNppb, $spBranchData, $intransitData, $allStockKolis, $volumeOptionsByBookWarehouse, $nppbApprovedExpByBook, $targetNasional, $spBranchNasional, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
+        $results = $products->map(function ($product) use ($centralStocks, $centralStockDeductionsWarehouse, $stockMutationsByBookWarehouse, $existingNppb, $spBranchData, $intransitData, $allStockKolis, $volumeOptionsByBookWarehouse, $nppbApprovedExpByBook, $targetNasional, $spBranchNasional, $intransitDataNasional, $nppbApprovedExpNasional, $percentage, $lastSpBranchSync) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $hasExistingData = ($nppb !== null);
@@ -1251,7 +1272,8 @@ class ApiController extends Controller
             $sp = $spBranch->sp ?? 0;
             $faktur = $spBranch->faktur ?? 0;
             $stockCabang = $spBranch->stock_cabang ?? 0;
-            $rawStockPusatWarehouse = $stock->total_stock_pusat ?? 0;
+            $mutasiWh = $stockMutationsByBookWarehouse->get($product->book_code);
+            $rawStockPusatWarehouse = (float) ($stock->total_stock_pusat ?? 0) + (float) ($mutasiWh?->total_mutasi ?? 0);
             $deductedWarehouse = $centralStockDeductionsWarehouse->get($product->book_code)?->total_deducted ?? 0;
             $stockPusat = max(0, $rawStockPusatWarehouse - $deductedWarehouse);
             $targetNasionalVal = $targetNasionalRow->target_nasional ?? 0;

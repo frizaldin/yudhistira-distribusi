@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\CentralStock;
 use App\Models\CentralStockDeduction;
+use App\Models\StockMutation;
 use App\Models\SpBranch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -66,6 +67,15 @@ class SpVStockController extends Controller
         }
         $centralStocks = $centralStocksQuery->get()->keyBy('book_code');
 
+        $stockMutationsByBook = StockMutation::select([
+            'book_code',
+            DB::raw('SUM(total_eksemplar) as total_mutasi'),
+        ])
+            ->whereIn('book_code', $products->pluck('book_code'))
+            ->groupBy('book_code')
+            ->get()
+            ->keyBy('book_code');
+
         $centralStockDeductions = CentralStockDeduction::select([
             'book_code',
             DB::raw('SUM(quantity) as total_deducted')
@@ -88,7 +98,9 @@ class SpVStockController extends Controller
         // Total = Stock Pusat + Stock Nasional + Faktur. Persentase = (Total - SP) / SP * 100 (lebih/kurang).
         $data = [];
         foreach ($products as $product) {
-            $rawStockPusat = $centralStocks->get($product->book_code)->total_stock_pusat ?? 0;
+            $cs = $centralStocks->get($product->book_code);
+            $mut = $stockMutationsByBook->get($product->book_code);
+            $rawStockPusat = (float) ($cs?->total_stock_pusat ?? 0) + (float) ($mut?->total_mutasi ?? 0);
             $deducted = $centralStockDeductions->get($product->book_code)?->total_deducted ?? 0;
             $stockPusat = max(0, $rawStockPusat - $deducted);
             $row = $spData->get($product->book_code);

@@ -43,6 +43,8 @@
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('preparation-notes') }}" key="preparation_notes" icon="bi bi-card-list"
             :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('mutasi') }}" key="mutasi" icon="bi bi-arrow-left-right"
+            :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nkb') }}" key="nkb" icon="bi bi-file-earmark-text"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('delivery-orders') }}" key="delivery_orders" icon="bi bi-truck"

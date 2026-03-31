@@ -18,6 +18,7 @@ use App\Http\Controllers\NppbCentralController;
 use App\Http\Controllers\NppbWarehouseController;
 use App\Http\Controllers\PreparationNotesController;
 use App\Http\Controllers\NkbController;
+use App\Http\Controllers\StockMutationController;
 use App\Http\Controllers\DeliveryOrderController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiController;
@@ -201,6 +202,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/nkb/{number}', 'show')->name('nkb.show');
     });
 
+    Route::controller(StockMutationController::class)->group(function () {
+        Route::get('/mutasi', 'index')->name('mutasi.index');
+        Route::get('/mutasi/create', 'create')->name('mutasi.create');
+        Route::post('/mutasi', 'store')->name('mutasi.store');
+        Route::get('/mutasi/{stock_mutation}/edit', 'edit')->name('mutasi.edit');
+        Route::put('/mutasi/{stock_mutation}', 'update')->name('mutasi.update');
+        Route::delete('/mutasi/{stock_mutation}', 'destroy')->name('mutasi.destroy');
+    });
+
     Route::controller(DeliveryOrderController::class)->group(function () {
         Route::get('/delivery-orders', 'index')->name('delivery-orders.index');
         Route::get('/delivery-orders/create', 'create')->name('delivery-orders.create');
@@ -265,4 +275,32 @@ Route::middleware('auth')->group(function () {
             'message' => 'optimize:clear telah dijalankan.',
         ]);
     })->name('artisan.clear-cache');
+
+    //Version
+    Route::get('/version', function () {
+        return response()->json([
+            'success' => true,
+            'message' => 'v3.4.0.1',
+        ]);
+    })->name('version.project');
+
+    // Daftar job gagal (tabel failed_jobs) — tanpa model FailedJob
+    Route::get('/failed-job', function () {
+        $limit = (int) request()->query('limit', 100);
+        $limit = max(1, min($limit, 500));
+
+        $total = DB::table('failed_jobs')->count();
+        $rows = DB::table('failed_jobs')
+            ->orderByDesc('failed_at')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Daftar failed jobs (terbaru dulu)',
+            'total' => $total,
+            'limit' => $limit,
+            'data' => $rows,
+        ]);
+    })->name('failed-job.index');
 });

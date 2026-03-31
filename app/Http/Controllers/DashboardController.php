@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\SpBranch;
 use App\Models\Branch;
 use App\Models\CentralStock;
+use App\Models\StockMutation;
 use App\Models\CentralStockKoli;
 use App\Models\Target;
 use App\Models\NppbCentral;
@@ -192,6 +193,7 @@ class DashboardController extends Controller
         $totalStockPusat = (float) CentralStock::query()
             ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
             ->sum('exemplar');
+        $totalStockPusat += (float) StockMutation::query()->sum('total_eksemplar');
         
         // Total calculation - hanya dari cabang yang memiliki data (untuk akurasi)
         $totalTargetForCalculationQuery = Target::select([
@@ -728,7 +730,7 @@ class DashboardController extends Controller
             ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
             ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
             ->first();
-        $totalStokPusatAllValue = $totalStokPusatAll->total_stok_pusat ?? 0;
+        $totalStokPusatAllValue = (float) ($totalStokPusatAll->total_stok_pusat ?? 0) + (float) StockMutation::query()->sum('total_eksemplar');
         $yearlyStokPusatData = [];
         foreach ($yearsRange as $y) {
             $yearlyStokPusatData[$y] = $totalStokPusatAllValue;
@@ -863,6 +865,15 @@ class DashboardController extends Controller
             ->get()
             ->keyBy('book_code');
 
+        $stockMutationsByBook = StockMutation::select([
+            'book_code',
+            DB::raw('SUM(total_eksemplar) as total_mutasi'),
+        ])
+            ->whereIn('book_code', $products->pluck('book_code'))
+            ->groupBy('book_code')
+            ->get()
+            ->keyBy('book_code');
+
         // Get existing NPPB data for this branch
         $existingNppbQuery = NppbCentral::select([
             'book_code',
@@ -921,7 +932,7 @@ class DashboardController extends Controller
             });
 
         // Combine data per product
-        $branchProducts = $products->map(function ($product) use ($centralStocks, $existingNppb, $spBranchData, $stockKolisByBranch, $stockKolisGeneral) {
+        $branchProducts = $products->map(function ($product) use ($centralStocks, $stockMutationsByBook, $existingNppb, $spBranchData, $stockKolisByBranch, $stockKolisGeneral) {
             $stock = $centralStocks->get($product->book_code);
             $nppb = $existingNppb->get($product->book_code);
             $spBranch = $spBranchData->get($product->book_code);
@@ -929,7 +940,8 @@ class DashboardController extends Controller
             $sp = $spBranch->sp ?? 0;
             $faktur = $spBranch->faktur ?? 0;
             $stockCabang = $spBranch->stock_cabang ?? 0;
-            $stockPusat = $stock->total_stock_pusat ?? 0;
+            $mutasiRow = $stockMutationsByBook->get($product->book_code);
+            $stockPusat = (float) ($stock->total_stock_pusat ?? 0) + (float) ($mutasiRow?->total_mutasi ?? 0);
 
             // Calculate Sisa SP
             $selisih = $sp - $faktur;

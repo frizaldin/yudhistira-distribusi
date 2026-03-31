@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\SpBranch;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -14,18 +13,17 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
-class SynchronizeSpBranchesJob implements ShouldQueue, ShouldBeUnique
+class SynchronizeSpBranchesJob implements ShouldQueue
 {
     use Queueable, InteractsWithQueue, SerializesModels;
 
     /** Tidak dibatasi waktu (0 = sampai selesai). Default 60 detik bikin job sync 80k+ data terpotong. */
     public int $timeout = 0;
 
-    /** Hanya satu job ini yang boleh ada di queue; mencegah double saat user sinkron berkali-kali sebelum worker jalan. */
-    public function uniqueId(): string
-    {
-        return 'sync_sp_branches';
-    }
+    /**
+     * Tanpa ShouldBeUnique: di server, middleware unique bisa bikin job antri tapi tidak pernah dieksekusi
+     * (lock cache unik bentrok / stale). Pencegahan double sync sudah dari StagingController + sync_sp_branches_lock.
+     */
 
     /**
      * @param bool $clearFirst Tidak dipakai lagi: job selalu hapus semua data dulu lalu isi pakai upsert.

@@ -100,7 +100,7 @@
         <div class="col-6 col-lg p-2">
             <div class="card border-0 shadow-sm rounded-0 kpi-card">
                 <div class="card-body">
-                    <h6 class="text-muted mb-2" style="font-size: 0.875rem; font-weight: 400;">Sisa SP</h6>
+                    <h6 class="text-muted mb-2" style="font-size: 0.875rem; font-weight: 400;">Kurang SP</h6>
                     <h3 class="mb-0" style="font-size: 1.5rem; font-weight: 600;">
                         {{ number_format($totalSisaSp ?? 0) }}</h3>
                 </div>
@@ -250,31 +250,44 @@
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-header bg-white"><strong>Realisasi Tahun Lalu, Target, SP, Faktur</strong></div>
-                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartRealisasiTargetSpFaktur" height="200"></canvas></div></div>
+                    <div class="card-body">
+                        <div class="chart-wrapper"><canvas id="chartRealisasiTargetSpFaktur" height="200"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-header bg-white"><strong>Kurang SP vs Stock Pusat</strong></div>
-                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartKurangSpVsStockPusat" height="200"></canvas></div></div>
+                    <div class="card-body">
+                        <div class="chart-wrapper"><canvas id="chartKurangSpVsStockPusat" height="200"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-header bg-white"><strong>SP vs Faktur</strong></div>
-                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartSpVsFaktur" height="200"></canvas></div></div>
+                    <div class="card-body">
+                        <div class="chart-wrapper"><canvas id="chartSpVsFaktur" height="200"></canvas></div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-header bg-white"><strong>Faktur per Tahun</strong></div>
-                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartFakturPerTahun" height="200"></canvas></div></div>
+                    <div class="card-body">
+                        <div class="chart-wrapper"><canvas id="chartFakturPerTahun" height="200"></canvas></div>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6 col-lg-4">
                 <div class="card border-0 shadow-sm mb-3">
                     <div class="card-header bg-white"><strong>Stock Pusat vs Target (Persentase)</strong></div>
-                    <div class="card-body"><div class="chart-wrapper"><canvas id="chartStockPusatVsTargetPct" height="200"></canvas></div></div>
+                    <div class="card-body">
+                        <div class="chart-wrapper"><canvas id="chartStockPusatVsTargetPct" height="200"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -303,9 +316,11 @@
                     @endif
                 </div>
                 <div class="card-body p-1">
-                    <div class="table-responsive dashboard-scroll-container" style="max-height: 320px; overflow-y: auto;">
+                    <div class="table-responsive dashboard-scroll-container"
+                        style="max-height: 320px; overflow-y: auto;">
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
-                            <thead class="table-light" style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
+                            <thead class="table-light"
+                                style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
                                 <tr>
                                     <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Cabang</th>
                                     <th class="text-end"
@@ -376,11 +391,12 @@
                                     </td>
                                 </tr>
                                 @if (isset($adpBranches) && $adpBranches->hasMorePages())
-                                <tr id="adp-sentinel" class="dashboard-infinite-sentinel" data-next-page="2" data-has-more="1" data-url="{{ route('dashboard.adp-more') }}">
-                                    <td colspan="5" class="text-center py-2">
-                                        <small class="text-muted">Scroll untuk memuat lebih banyak...</small>
-                                    </td>
-                                </tr>
+                                    <tr id="adp-sentinel" class="dashboard-infinite-sentinel" data-next-page="2"
+                                        data-has-more="1" data-url="{{ route('dashboard.adp-more') }}">
+                                        <td colspan="5" class="text-center py-2">
+                                            <small class="text-muted">Scroll untuk memuat lebih banyak...</small>
+                                        </td>
+                                    </tr>
                                 @endif
                             </tbody>
                         </table>
@@ -405,7 +421,8 @@
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
                             <thead class="table-light" style="background-color: #f8f9fa;">
                                 <tr>
-                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori</th>
+                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori
+                                    </th>
                                     <th class="text-end"
                                         style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Jumlah</th>
                                 </tr>
@@ -442,9 +459,11 @@
                     @endif
                 </div>
                 <div class="card-body p-1">
-                    <div class="table-responsive dashboard-scroll-container" style="max-height: 320px; overflow-y: auto;">
+                    <div class="table-responsive dashboard-scroll-container"
+                        style="max-height: 320px; overflow-y: auto;">
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
-                            <thead class="table-light" style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
+                            <thead class="table-light"
+                                style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 1;">
                                 <tr>
                                     <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">
                                         Cabang</th>
@@ -472,7 +491,7 @@
                                     </th>
                                     <th class="text-end"
                                         style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">
-                                        Sisa SP</th>
+                                        Kurang SP</th>
                                     <th class="text-end"
                                         style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">
                                         Stock Cabang</th>
@@ -606,11 +625,13 @@
                                     </tr>
                                 @endforelse
                                 @if (isset($topBranches) && $topBranches->hasMorePages())
-                                <tr id="kebutuhan-sentinel" class="dashboard-infinite-sentinel" data-next-page="2" data-has-more="1" data-url="{{ route('dashboard.kebutuhan-more') }}">
-                                    <td colspan="5" class="text-center py-2">
-                                        <small class="text-muted">Scroll untuk memuat lebih banyak...</small>
-                                    </td>
-                                </tr>
+                                    <tr id="kebutuhan-sentinel" class="dashboard-infinite-sentinel"
+                                        data-next-page="2" data-has-more="1"
+                                        data-url="{{ route('dashboard.kebutuhan-more') }}">
+                                        <td colspan="5" class="text-center py-2">
+                                            <small class="text-muted">Scroll untuk memuat lebih banyak...</small>
+                                        </td>
+                                    </tr>
                                 @endif
                                 <tr class="table-light d-none" style="background-color: #f8f9fa;">
                                     <td style="padding: 0.5rem 1rem; font-weight: 600; font-size: 0.75rem;">
@@ -653,7 +674,8 @@
                         <table class="table table-sm table-striped-columns mb-0" style="font-size: 0.75rem;">
                             <thead class="table-light" style="background-color: #f8f9fa;">
                                 <tr>
-                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori</th>
+                                    <th style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">Kategori
+                                    </th>
                                     <th class="text-end"
                                         style="font-weight: 600; padding: 0.5rem 1rem; font-size: 0.75rem;">SP</th>
                                     <th class="text-end"
@@ -703,7 +725,7 @@
                     </p>
                     <ul class="mb-3">
                         <li><strong>Target</strong> → Data target penjualan (eksemplar) per periode.</li>
-                        <li><strong>SP, Faktur, Sisa SP, Stock Cabang</strong> → Data Surat Pesanan (SP), Faktur, dan
+                        <li><strong>SP, Faktur, Kurang SP, Stock Cabang</strong> → Data Surat Pesanan (SP), Faktur, dan
                             stok cabang yang aktif.</li>
                         <li><strong>Stock Pusat</strong> → Total eksemplar stok di gudang pusat.</li>
                         <li><strong>Rencana Kirim (NPPB)</strong> → Data rencana kirim (eksemplar, koli, eceran).</li>
@@ -736,7 +758,7 @@
                             </tr>
                             <tr>
                                 <td>Sisa Stock</td>
-                                <td>SP − Faktur = Sisa SP (pesanan yang belum terkirim).</td>
+                                <td>SP − Faktur = Kurang SP (pesanan yang belum terkirim).</td>
                             </tr>
                             <tr>
                                 <td>Stock Pusat</td>
@@ -763,19 +785,24 @@
 
                     <h6 class="text-primary mt-3 mb-2">Grafik</h6>
                     <ul class="mb-0">
-                        <li><strong>Rencana Kirim vs SP</strong> → Rencana kirim dari NPPB yang sudah disetujui (total eksemplar per tahun) vs SP (Stok Pusat) per tahun.</li>
-                        <li><strong>Realisasi Tahun Lalu, Target, SP, Faktur</strong> → Perbandingan empat metrik per tahun (bar); Realisasi Tahun Lalu = Faktur tahun sebelumnya.</li>
-                        <li><strong>Kurang SP vs Stock Pusat</strong> → Sisa SP (SP − Faktur) per tahun vs Stok Pusat per tahun.</li>
+                        <li><strong>Rencana Kirim vs SP</strong> → Rencana kirim dari NPPB yang sudah disetujui (total
+                            eksemplar per tahun) vs SP (Stok Pusat) per tahun.</li>
+                        <li><strong>Realisasi Tahun Lalu, Target, SP, Faktur</strong> → Perbandingan empat metrik per
+                            tahun (bar); Realisasi Tahun Lalu = Faktur tahun sebelumnya.</li>
+                        <li><strong>Kurang SP vs Stock Pusat</strong> → Kurang SP (SP − Faktur) per tahun vs Stok Pusat
+                            per tahun.</li>
                         <li><strong>SP vs Faktur</strong> → Total SP dan total Faktur per tahun.</li>
                         <li><strong>Faktur per Tahun</strong> → Total Faktur per tahun.</li>
-                        <li><strong>Stock Pusat vs Target (Persentase)</strong> → (Stok Pusat ÷ Target) × 100% per tahun.</li>
-                        <li><strong>Grafik Faktur (Per Bulan)</strong> → Total Faktur per bulan dalam periode yang dipilih.</li>
+                        <li><strong>Stock Pusat vs Target (Persentase)</strong> → (Stok Pusat ÷ Target) × 100% per
+                            tahun.</li>
+                        <li><strong>Grafik Faktur (Per Bulan)</strong> → Total Faktur per bulan dalam periode yang
+                            dipilih.</li>
                         <li><strong>SP Per Tahun</strong> → Total SP per tahun.</li>
                         <li><strong>Stok Pusat vs Target</strong> → Stok pusat vs total target (per tahun).</li>
                     </ul>
 
                     <p class="text-muted mt-3 mb-0"><small>Kebutuhan Kirim Cabang &amp; Penentuan Kirim (ADP) memakai
-                            data SP, Faktur, dan Sisa SP per cabang.</small></p>
+                            data SP, Faktur, dan Kurang SP per cabang.</small></p>
                 </div>
             </div>
         </div>
@@ -903,9 +930,13 @@
                     return;
                 }
                 fetch(chartDataUrl)
-                    .then(function(r) { return r.json(); })
+                    .then(function(r) {
+                        return r.json();
+                    })
                     .then(function(d) {
-                        const fmt = function(v) { return new Intl.NumberFormat('id-ID').format(v); };
+                        const fmt = function(v) {
+                            return new Intl.NumberFormat('id-ID').format(v);
+                        };
                         const yearlyLabels = d.yearlyLabels || [];
                         const maxValue = d.maxChartValue || 100;
 
@@ -916,12 +947,70 @@
                                 type: 'line',
                                 data: {
                                     labels: yearlyLabels,
-                                    datasets: [
-                                        { label: 'Rencana Kirim (NPPB disetujui)', data: d.nppbRencanaKirimChartData || [], borderColor: 'rgb(59, 130, 246)', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.4, pointStyle: 'rect', pointRadius: 5, pointHoverRadius: 7 },
-                                        { label: 'Stock Pusat', data: d.spForRencanaChartData || [], borderColor: 'rgb(34, 197, 94)', backgroundColor: 'rgba(34, 197, 94, 0.1)', tension: 0.4, pointStyle: 'circle', pointRadius: 5, pointHoverRadius: 7 }
+                                    datasets: [{
+                                            label: 'Rencana Kirim (NPPB disetujui)',
+                                            data: d.nppbRencanaKirimChartData || [],
+                                            borderColor: 'rgb(59, 130, 246)',
+                                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                            tension: 0.4,
+                                            pointStyle: 'rect',
+                                            pointRadius: 5,
+                                            pointHoverRadius: 7
+                                        },
+                                        {
+                                            label: 'Stock Pusat',
+                                            data: d.spForRencanaChartData || [],
+                                            borderColor: 'rgb(34, 197, 94)',
+                                            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                            tension: 0.4,
+                                            pointStyle: 'circle',
+                                            pointRadius: 5,
+                                            pointHoverRadius: 7
+                                        }
                                     ]
                                 },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top', labels: { font: { family: 'monospace', size: 10 } } }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { family: 'monospace', size: 10 } } }, y: { beginAtZero: true, max: maxValue, ticks: { callback: function(v) { return fmt(v); } } } } }
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            display: true,
+                                            position: 'top',
+                                            labels: {
+                                                font: {
+                                                    family: 'monospace',
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    family: 'monospace',
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            max: maxValue,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -930,19 +1019,108 @@
                         if (fakturPerBulanCtx) {
                             new Chart(fakturPerBulanCtx, {
                                 type: 'bar',
-                                data: { labels: d.monthlySalesLabels || [], datasets: [{ label: 'Faktur', data: d.monthlySalesData || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: 'rgb(59, 130, 246)', borderWidth: 1 }] },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                                data: {
+                                    labels: d.monthlySalesLabels || [],
+                                    datasets: [{
+                                        label: 'Faktur',
+                                        data: d.monthlySalesData || [],
+                                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                                        borderColor: 'rgb(59, 130, 246)',
+                                        borderWidth: 1
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            display: true,
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
                         // SP Per Tahun (yearlySpData = array values dari backend)
                         const spPerTahunCtx = document.getElementById('spPerTahunChart');
                         if (spPerTahunCtx) {
-                            const yearlySpData = Array.isArray(d.yearlySpData) ? d.yearlySpData : (d.yearlySpData && typeof d.yearlySpData === 'object' ? Object.values(d.yearlySpData) : []);
+                            const yearlySpData = Array.isArray(d.yearlySpData) ? d.yearlySpData : (d.yearlySpData &&
+                                typeof d.yearlySpData === 'object' ? Object.values(d.yearlySpData) : []);
                             new Chart(spPerTahunCtx, {
                                 type: 'bar',
-                                data: { labels: yearlyLabels, datasets: [{ label: 'SP', data: yearlySpData, backgroundColor: '#D6E0FF', borderColor: '#829BFF', borderWidth: 2, borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 }, borderSkipped: false }] },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return 'SP: ' + fmt(c.parsed.y); } } } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } }, x: { grid: { display: false } } } }
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [{
+                                        label: 'SP',
+                                        data: yearlySpData,
+                                        backgroundColor: '#D6E0FF',
+                                        borderColor: '#829BFF',
+                                        borderWidth: 2,
+                                        borderRadius: {
+                                            topLeft: 8,
+                                            topRight: 8,
+                                            bottomLeft: 0,
+                                            bottomRight: 0
+                                        },
+                                        borderSkipped: false
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            display: false
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return 'SP: ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        },
+                                        x: {
+                                            grid: {
+                                                display: false
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -955,12 +1133,62 @@
                                 type: 'line',
                                 data: {
                                     labels: yearlyLabels,
-                                    datasets: [
-                                        { label: 'Stok Pusat', data: yearlyStok, borderColor: '#829BFF', backgroundColor: 'rgba(130, 155, 255, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 },
-                                        { label: 'Target', data: yearlyTarget, borderColor: '#F97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', borderWidth: 2, fill: true, tension: 0.4, pointRadius: 4, pointHoverRadius: 6 }
+                                    datasets: [{
+                                            label: 'Stok Pusat',
+                                            data: yearlyStok,
+                                            borderColor: '#829BFF',
+                                            backgroundColor: 'rgba(130, 155, 255, 0.1)',
+                                            borderWidth: 2,
+                                            fill: true,
+                                            tension: 0.4,
+                                            pointRadius: 4,
+                                            pointHoverRadius: 6
+                                        },
+                                        {
+                                            label: 'Target',
+                                            data: yearlyTarget,
+                                            borderColor: '#F97316',
+                                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                                            borderWidth: 2,
+                                            fill: true,
+                                            tension: 0.4,
+                                            pointRadius: 4,
+                                            pointHoverRadius: 6
+                                        }
                                     ]
                                 },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return (c.dataset.label || '') + ': ' + fmt(c.parsed.y); } } } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } }, x: { grid: { display: false } } } }
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return (c.dataset.label || '') + ': ' + fmt(c.parsed
+                                                        .y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        },
+                                        x: {
+                                            grid: {
+                                                display: false
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -971,14 +1199,69 @@
                                 type: 'bar',
                                 data: {
                                     labels: yearlyLabels,
-                                    datasets: [
-                                        { label: 'Realisasi Thn Lalu', data: d.chartRealisasiTahunLaluData || [], backgroundColor: 'rgba(156, 163, 175, 0.7)', borderColor: '#6B7280', borderWidth: 1 },
-                                        { label: 'Target', data: d.chartTargetDataForCharts || [], backgroundColor: 'rgba(34, 197, 94, 0.6)', borderColor: '#16a34a', borderWidth: 1 },
-                                        { label: 'SP', data: d.chartSpDataForCharts || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 },
-                                        { label: 'Faktur', data: d.chartFakturData || [], backgroundColor: 'rgba(249, 115, 22, 0.6)', borderColor: '#ea580c', borderWidth: 1 }
+                                    datasets: [{
+                                            label: 'Realisasi Thn Lalu',
+                                            data: d.chartRealisasiTahunLaluData || [],
+                                            backgroundColor: 'rgba(156, 163, 175, 0.7)',
+                                            borderColor: '#6B7280',
+                                            borderWidth: 1
+                                        },
+                                        {
+                                            label: 'Target',
+                                            data: d.chartTargetDataForCharts || [],
+                                            backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                                            borderColor: '#16a34a',
+                                            borderWidth: 1
+                                        },
+                                        {
+                                            label: 'SP',
+                                            data: d.chartSpDataForCharts || [],
+                                            backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                                            borderColor: '#2563eb',
+                                            borderWidth: 1
+                                        },
+                                        {
+                                            label: 'Faktur',
+                                            data: d.chartFakturData || [],
+                                            backgroundColor: 'rgba(249, 115, 22, 0.6)',
+                                            borderColor: '#ea580c',
+                                            borderWidth: 1
+                                        }
                                     ]
                                 },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -989,12 +1272,57 @@
                                 type: 'line',
                                 data: {
                                     labels: yearlyLabels,
-                                    datasets: [
-                                        { label: 'Kurang SP', data: d.chartKurangSpData || [], borderColor: '#dc2626', backgroundColor: 'rgba(220, 38, 38, 0.1)', tension: 0.4, fill: true },
-                                        { label: 'Stock Pusat', data: d.chartStockPusatData || [], borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.1)', tension: 0.4, fill: true }
+                                    datasets: [{
+                                            label: 'Kurang SP',
+                                            data: d.chartKurangSpData || [],
+                                            borderColor: '#dc2626',
+                                            backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                                            tension: 0.4,
+                                            fill: true
+                                        },
+                                        {
+                                            label: 'Stock Pusat',
+                                            data: d.chartStockPusatData || [],
+                                            borderColor: '#16a34a',
+                                            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                                            tension: 0.4,
+                                            fill: true
+                                        }
                                     ]
                                 },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -1005,12 +1333,57 @@
                                 type: 'line',
                                 data: {
                                     labels: yearlyLabels,
-                                    datasets: [
-                                        { label: 'SP', data: d.chartSpDataForCharts || [], borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.4, fill: true },
-                                        { label: 'Faktur', data: d.chartFakturData || [], borderColor: '#ea580c', backgroundColor: 'rgba(234, 88, 12, 0.1)', tension: 0.4, fill: true }
+                                    datasets: [{
+                                            label: 'SP',
+                                            data: d.chartSpDataForCharts || [],
+                                            borderColor: '#2563eb',
+                                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                                            tension: 0.4,
+                                            fill: true
+                                        },
+                                        {
+                                            label: 'Faktur',
+                                            data: d.chartFakturData || [],
+                                            borderColor: '#ea580c',
+                                            backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                                            tension: 0.4,
+                                            fill: true
+                                        }
                                     ]
                                 },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -1019,8 +1392,49 @@
                         if (ctx5) {
                             new Chart(ctx5, {
                                 type: 'bar',
-                                data: { labels: yearlyLabels, datasets: [{ label: 'Faktur', data: d.chartFakturData || [], backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#2563eb', borderWidth: 1 }] },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + fmt(c.parsed.y); } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return fmt(v); } } } } }
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [{
+                                        label: 'Faktur',
+                                        data: d.chartFakturData || [],
+                                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                                        borderColor: '#2563eb',
+                                        borderWidth: 1
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + fmt(c.parsed.y);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return fmt(v);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
 
@@ -1029,12 +1443,55 @@
                         if (ctx6) {
                             new Chart(ctx6, {
                                 type: 'bar',
-                                data: { labels: yearlyLabels, datasets: [{ label: 'Stock Pusat vs Target (%)', data: d.chartStockPusatVsTargetPct || [], backgroundColor: 'rgba(139, 92, 246, 0.6)', borderColor: '#7c3aed', borderWidth: 1 }] },
-                                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } } }, scales: { x: { ticks: { font: { size: 10 } } }, y: { beginAtZero: true, ticks: { callback: function(v) { return v + '%'; } } } } }
+                                data: {
+                                    labels: yearlyLabels,
+                                    datasets: [{
+                                        label: 'Stock Pusat vs Target (%)',
+                                        data: d.chartStockPusatVsTargetPct || [],
+                                        backgroundColor: 'rgba(139, 92, 246, 0.6)',
+                                        borderColor: '#7c3aed',
+                                        borderWidth: 1
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    plugins: {
+                                        legend: {
+                                            position: 'top'
+                                        },
+                                        tooltip: {
+                                            callbacks: {
+                                                label: function(c) {
+                                                    return c.dataset.label + ': ' + c.parsed.y + '%';
+                                                }
+                                            }
+                                        }
+                                    },
+                                    scales: {
+                                        x: {
+                                            ticks: {
+                                                font: {
+                                                    size: 10
+                                                }
+                                            }
+                                        },
+                                        y: {
+                                            beginAtZero: true,
+                                            ticks: {
+                                                callback: function(v) {
+                                                    return v + '%';
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             });
                         }
                     })
-                    .catch(function(err) { console.warn('Dashboard chart data load failed:', err); });
+                    .catch(function(err) {
+                        console.warn('Dashboard chart data load failed:', err);
+                    });
 
                 // Initialize Leaflet Map with Heatmap
                 const areaMapElement = document.getElementById('areaMap');
@@ -1127,7 +1584,7 @@
             });
         </script>
         <script>
-            (function () {
+            (function() {
                 function setupInfiniteScroll(sentinelId, tbodyId) {
                     var sentinel = document.getElementById(sentinelId);
                     var tbody = document.getElementById(tbodyId);
@@ -1135,6 +1592,7 @@
                     var container = tbody.closest('.dashboard-scroll-container');
                     if (!container) return;
                     var loading = false;
+
                     function loadMore() {
                         var page = parseInt(sentinel.getAttribute('data-next-page') || '1', 10);
                         var hasMore = sentinel.getAttribute('data-has-more') === '1';
@@ -1142,8 +1600,10 @@
                         loading = true;
                         sentinel.querySelector('td').innerHTML = '<small class="text-muted">Memuat...</small>';
                         fetch(sentinel.getAttribute('data-url') + '?page=' + page)
-                            .then(function (r) { return r.json(); })
-                            .then(function (data) {
+                            .then(function(r) {
+                                return r.json();
+                            })
+                            .then(function(data) {
                                 var wrap = document.createElement('div');
                                 wrap.innerHTML = '<table><tbody>' + data.html + '</tbody></table>';
                                 var rows = wrap.querySelector('tbody').children;
@@ -1152,17 +1612,20 @@
                                 }
                                 sentinel.setAttribute('data-has-more', data.hasMore ? '1' : '0');
                                 sentinel.setAttribute('data-next-page', String(page + 1));
-                                sentinel.querySelector('td').innerHTML = data.hasMore
-                                    ? '<small class="text-muted">Scroll untuk memuat lebih banyak...</small>'
-                                    : '';
+                                sentinel.querySelector('td').innerHTML = data.hasMore ?
+                                    '<small class="text-muted">Scroll untuk memuat lebih banyak...</small>' :
+                                    '';
                                 if (!data.hasMore) sentinel.style.display = 'none';
                             })
-                            .catch(function () {
-                                sentinel.querySelector('td').innerHTML = '<small class="text-danger">Gagal memuat.</small>';
+                            .catch(function() {
+                                sentinel.querySelector('td').innerHTML =
+                                    '<small class="text-danger">Gagal memuat.</small>';
                             })
-                            .finally(function () { loading = false; });
+                            .finally(function() {
+                                loading = false;
+                            });
                     }
-                    container.addEventListener('scroll', function () {
+                    container.addEventListener('scroll', function() {
                         var rect = sentinel.getBoundingClientRect();
                         var containerRect = container.getBoundingClientRect();
                         if (rect.top <= containerRect.bottom + 100) loadMore();

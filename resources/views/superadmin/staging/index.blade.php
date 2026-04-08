@@ -256,7 +256,7 @@
     <x-slot name="js">
         <script>
             $(document).ready(function() {
-                // Lazy-load staging counts (agar halaman langsung tampil, count di-fetch via AJAX)
+                // Lazy-load count PostgreSQL via AJAX (real-time per request, tanpa cache server)
                 $.get('{{ route('staging.counts') }}')
                     .done(function(counts) {
                         $('.staging-count').each(function() {

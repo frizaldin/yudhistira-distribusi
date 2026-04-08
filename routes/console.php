@@ -19,3 +19,13 @@ Artisan::command('inspire', function () {
 Schedule::command('queue:work database --stop-when-empty --timeout=0')
     ->everyMinute()
     ->withoutOverlapping(2);
+
+/*
+|--------------------------------------------------------------------------
+| Bersihkan cache bootstrap (config, route, view, event, compiled) setiap malam jam 23:30 WIB.
+|--------------------------------------------------------------------------
+*/
+Schedule::command('optimize:clear')
+    ->dailyAt('23:30')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping();

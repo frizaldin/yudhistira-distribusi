@@ -20,6 +20,7 @@ use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
 use App\Imports\ProductsImport;
 use App\Imports\ProductCategorySerialImport;
+use App\Imports\ProductWarehouseImport;
 use App\Jobs\ImportProductCategorySerialJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -378,6 +379,51 @@ class ProductController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return redirect()->back()->with('error', 'Error: ' . $e->getMessage() . ' (Line: ' . $e->getLine() . ')');
+        }
+    }
+
+    /**
+     * Import identifikasi gudang: kolom B = book_code, kolom D = books.warehouse.
+     */
+    public function importWarehouseIdentification(Request $request)
+    {
+        try {
+            $request->validate([
+                'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+            ]);
+
+            $file = $request->file('file');
+            if (!$file || !$file->isValid()) {
+                return redirect()->back()->with('error', 'File tidak valid.');
+            }
+
+            $import = new ProductWarehouseImport;
+            Excel::import($import, $file);
+
+            $msg = sprintf(
+                'Identifikasi gudang selesai: %d baris diperbarui.',
+                $import->updatedRows
+            );
+            if ($import->skippedEmptyCode > 0) {
+                $msg .= sprintf(' %d baris dilewati (kode buku kosong di kolom B).', $import->skippedEmptyCode);
+            }
+            if ($import->notFoundCodes !== []) {
+                $sample = array_slice($import->notFoundCodes, 0, 25);
+                $msg .= ' Kode tidak ditemukan di database: '.count($import->notFoundCodes).' buku';
+                $msg .= ' (contoh: '.implode(', ', $sample).(count($import->notFoundCodes) > 25 ? ', …' : '').').';
+            }
+
+            return redirect()->back()->with('success', $msg);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\Exception $e) {
+            Log::error('Import warehouse identification: '.$e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return redirect()->back()->with('error', 'Gagal import: '.$e->getMessage());
         }
     }
 

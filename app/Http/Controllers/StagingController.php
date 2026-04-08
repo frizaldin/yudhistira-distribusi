@@ -19,9 +19,6 @@ use Illuminate\Support\Facades\Cache;
 
 class StagingController extends Controller
 {
-    /** Cache count staging (detik) - kurangi query ke PostgreSQL tiap load */
-    const STAGING_COUNT_CACHE_TTL = 120;
-
     protected $base_url;
     protected $title;
     protected $callbackfolder;
@@ -235,7 +232,7 @@ class StagingController extends Controller
     }
 
     /**
-     * API: ambil semua count staging (untuk lazy-load di halaman, dengan cache).
+     * API: ambil semua count staging (lazy-load; hitungan PostgreSQL real-time tanpa cache).
      */
     public function getStagingCounts()
     {
@@ -252,23 +249,19 @@ class StagingController extends Controller
     }
 
     /**
-     * Get count from PostgreSQL staging table (dengan cache agar halaman tidak lambat).
+     * Hitung baris tabel staging di PostgreSQL (selalu query langsung, tidak di-cache).
      */
-    private function getStagingCount($table)
+    private function getStagingCount(string $table): int
     {
-        $cacheKey = 'staging_count_' . str_replace(',', '_', $table);
         try {
-            return Cache::remember($cacheKey, self::STAGING_COUNT_CACHE_TTL, function () use ($table) {
-                return DB::connection('pgsql')->table($table)->count();
-            });
+            return (int) DB::connection('pgsql')->table($table)->count();
         } catch (\Exception $e) {
-            Cache::forget($cacheKey);
             return 0;
         }
     }
 
     /**
-     * Hapus cache count staging untuk tabel tertentu (dipanggil setelah sync).
+     * Dulu dipakai untuk forget cache count; count tidak di-cache lagi, tetap dipanggil agar kunci lama (deploy sebelumnya) ikut dibersihkan.
      */
     private function clearStagingCountCache(string $type): void
     {

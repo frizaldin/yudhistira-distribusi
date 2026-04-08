@@ -20,6 +20,7 @@ use App\Http\Controllers\PreparationNotesController;
 use App\Http\Controllers\NkbController;
 use App\Http\Controllers\StockMutationController;
 use App\Http\Controllers\DeliveryOrderController;
+use App\Http\Controllers\LogisticsHistoryController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiController;
 use App\Models\Staging\Master\Book;
@@ -92,6 +93,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/product/{book_code}/detail', 'showDetail')->name('product.detail');
         Route::post('/product/import', 'import')->name('product.import');
         Route::post('/product/import-category-serial', 'importCategorySerial')->name('product.import-category-serial');
+        Route::post('/product/import-warehouse', 'importWarehouseIdentification')->name('product.import-warehouse');
         Route::post('/product/synchronize', 'synchronize')->name('product.synchronize');
         Route::post('/product/clear-and-sync', 'clearAndSync')->name('product.clear-and-sync');
         Route::get('/product/sync-progress', 'getProgress')->name('product.sync-progress');
@@ -211,6 +213,10 @@ Route::middleware('auth')->group(function () {
         Route::delete('/mutasi/{stock_mutation}', 'destroy')->name('mutasi.destroy');
     });
 
+    Route::controller(LogisticsHistoryController::class)->group(function () {
+        Route::get('/riwayat-pengiriman', 'index')->name('riwayat_pengiriman.index');
+    });
+
     Route::controller(DeliveryOrderController::class)->group(function () {
         Route::get('/delivery-orders', 'index')->name('delivery-orders.index');
         Route::get('/delivery-orders/create', 'create')->name('delivery-orders.create');
@@ -280,9 +286,23 @@ Route::middleware('auth')->group(function () {
     Route::get('/version', function () {
         return response()->json([
             'success' => true,
-            'message' => 'v3.4.0.1',
+            'message' => 'v3.4.0.2',
         ]);
     })->name('version.project');
+
+    Route::get('rows-data', function(){
+        $spBranches = DB::table('sp_branches')
+            ->count();
+        $centralStocks = DB::table('central_stocks')
+            ->count();
+            $target = DB::table('targets')
+            ->count();
+        return response()->json([
+            'sp_branches' => number_format($spBranches),
+            'central_stocks' => number_format($centralStocks),
+            'targets' => number_format($target),
+        ]);
+    })->name('rows-data');
 
     // Daftar job gagal (tabel failed_jobs) — tanpa model FailedJob
     Route::get('/failed-job', function () {
@@ -303,4 +323,9 @@ Route::middleware('auth')->group(function () {
             'data' => $rows,
         ]);
     })->name('failed-job.index');
+
+    Route::get('/clear-log', function () {
+        file_put_contents(storage_path('logs/laravel.log'), '');
+        return 'Log cleared!';
+    })->name('clear-log');
 });

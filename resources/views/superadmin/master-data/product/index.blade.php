@@ -46,6 +46,9 @@
                     <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalImportCategorySerial">
                         <i class="bi bi-upload me-1"></i>Import Kategori & Serial
                     </button>
+                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalImportWarehouse">
+                        <i class="bi bi-building me-1"></i>Identifikasi Gudang
+                    </button>
                     <div class="d-none">
                     <form action="{{ route('product.synchronize') }}" method="POST" class="d-inline"
                         id="synchronizeForm">
@@ -86,6 +89,34 @@
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
                                 <button type="submit" class="btn btn-primary">Upload & Proses di Background</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Identifikasi Gudang -->
+            <div class="modal fade" id="modalImportWarehouse" tabindex="-1" aria-labelledby="modalImportWarehouseLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalImportWarehouseLabel">Identifikasi Gudang</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form action="{{ route('product.import-warehouse') }}" method="POST" enctype="multipart/form-data">
+                            @csrf
+                            <div class="modal-body">
+                                <p class="text-muted small mb-2">Upload Excel/CSV dengan format: <strong>Kolom B</strong> =
+                                    <code>book_code</code> (kode buku), <strong>Kolom D</strong> = nama gudang untuk field
+                                    <code>books.warehouse</code>. Kolom lain (mis. A, C) boleh diisi bebas. Baris tanpa kode di B dilewati.</p>
+                                <div class="mb-3">
+                                    <label for="fileWarehouse" class="form-label">File (xlsx / xls / csv)</label>
+                                    <input type="file" class="form-control" id="fileWarehouse" name="file" accept=".xlsx,.xls,.csv" required />
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                <button type="submit" class="btn btn-primary">Upload &amp; Perbarui</button>
                             </div>
                         </form>
                     </div>
@@ -151,6 +182,7 @@
                             <th>Nama Produk</th>
                             <th>Jenis</th>
                             <th>Jenjang</th>
+                            <th>Gudang</th>
                             <th class="text-end">Aksi</th>
                         </tr>
                     </thead>
@@ -161,6 +193,7 @@
                                 <td>{{ $product->book_title }}</td>
                                 <td>{{ $product->category ?? '-' }}</td>
                                 <td>{{ $product->jenjang ?? '-' }}</td>
+                                <td>{{ $product->warehouse ?? '-' }}</td>
                                 <td class="text-end">
                                     <a href="{{ route('product.detail', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-primary" title="Detail stok & SP per cabang">
                                         <i class="bi bi-eye me-1"></i>Detail

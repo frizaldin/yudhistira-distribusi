@@ -15,10 +15,40 @@
 
     <div class="card mb-3">
         <div class="card-body">
-            <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
                 <div>
                     <strong>Data Produk</strong><br />
                     <small class="text-muted">Buku paket, LKS, referensi </small>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#modalImportWarehouse">
+                        <i class="bi bi-building me-1"></i>Identifikasi Gudang
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal fade" id="modalImportWarehouse" tabindex="-1" aria-labelledby="modalImportWarehouseLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalImportWarehouseLabel">Identifikasi Gudang</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <form action="{{ route('product.import-warehouse') }}" method="POST" enctype="multipart/form-data">
+                            @csrf
+                            <div class="modal-body">
+                                <p class="text-muted small mb-2">Kolom <strong>B</strong> = kode buku, <strong>D</strong> = gudang (<code>books.warehouse</code>).</p>
+                                <div class="mb-3">
+                                    <label for="fileWarehouse" class="form-label">File (xlsx / xls / csv)</label>
+                                    <input type="file" class="form-control" id="fileWarehouse" name="file" accept=".xlsx,.xls,.csv" required />
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                                <button type="submit" class="btn btn-primary">Upload &amp; Perbarui</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
 
@@ -78,6 +108,7 @@
                             <th>Nama Produk</th>
                             <th>Jenis</th>
                             <th>Jenjang</th>
+                            <th>Gudang</th>
                             <th class="text-end">Aksi</th>
                         </tr>
                     </thead>
@@ -88,6 +119,7 @@
                                 <td>{{ $product->book_title }}</td>
                                 <td>{{ $product->category ?? '-' }}</td>
                                 <td>{{ $product->jenjang ?? '-' }}</td>
+                                <td>{{ $product->warehouse ?? '-' }}</td>
                                 <td class="text-end">
                                     <a href="{{ route('product.detail', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-primary" title="Detail stok & SP per cabang">
                                         <i class="bi bi-eye me-1"></i>Detail
@@ -102,7 +134,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center py-4">
+                                <td colspan="6" class="text-center py-4">
                                     <p class="text-muted mb-0">Belum ada data produk.</p>
                                 </td>
                             </tr>

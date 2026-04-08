@@ -246,6 +246,8 @@
                         <option value="exp_asc">Eksemplar Tersedikit</option>
                         <option value="sisa_sp_desc">Kurang SP Terbanyak</option>
                         <option value="sisa_sp_asc">Kurang SP Tersedikit</option>
+                        <option value="target_desc">Target nasional tertinggi</option>
+                        <option value="target_asc">Target nasional terendah</option>
                     </select>
                     <select id="filter-show" class="form-select form-select-sm" style="width: auto; max-width: 120px;">
                         <option value="50">50</option>
@@ -980,50 +982,70 @@
                             const startNumber = (page - 1) * perPage + 1;
                             products.forEach(function(product, index) {
                                 const stockPusat = Number(product.stock_pusat) || 0;
-                                const noStock = stockPusat === 0;
                                 const maksKirim = product.maksimal_total_eksemplar_nasional != null ?
                                     product.maksimal_total_eksemplar_nasional : 0;
                                 const sisaKuota = product.sisa_kuota_eksemplar != null ? product
                                     .sisa_kuota_eksemplar : 0;
-                                const sisaSp = parseFloat(product.sisa_sp) || 0; // Kurang SP
+                                const sisaSp = parseFloat(product.sisa_sp) || 0;
                                 const allowRencana = product.allow_rencana_kirim !== false;
-                                const existing = allProductsData[product.book_code];
-                                let volume = parseFloat(product.volume_used) || 0; // Isi
+                                const rawExisting = allProductsData[product.book_code];
+                                const hasMeaningfulDraft = rawExisting && (
+                                    (parseFloat(rawExisting.exp) || 0) > 0 ||
+                                    (parseFloat(rawExisting.koli) || 0) > 0 ||
+                                    (parseFloat(rawExisting.pls) || 0) > 0
+                                );
+                                let volume = parseFloat(product.volume_used) || 0;
                                 let exp = product.exp || 0;
                                 let koli = product.koli || 0;
                                 let pls = product.pls || 0;
-                                if (!allowRencana) {
-                                    koli = 0;
-                                    pls = 0;
-                                    exp = 0;
-                                } else if (existing) {
-                                    volume = parseFloat(existing.volume_used) || volume;
-                                    koli = parseFloat(existing.koli) || 0;
-                                    pls = parseFloat(existing.pls) || 0;
-                                    exp = parseFloat(existing.exp) || 0;
+                                if (hasMeaningfulDraft) {
+                                    volume = parseFloat(rawExisting.volume_used) || volume;
+                                    koli = parseFloat(rawExisting.koli) || 0;
+                                    pls = parseFloat(rawExisting.pls) || 0;
+                                    exp = parseFloat(rawExisting.exp) || 0;
+                                } else if (!allowRencana) {
+                                    exp = product.exp || 0;
+                                    koli = product.koli || 0;
+                                    pls = product.pls || 0;
+                                    if (exp === 0 && sisaSp > 0) {
+                                        exp = sisaSp;
+                                    }
+                                    if (usePercentage && Number(sisaKuota) > 0) {
+                                        exp = Math.min(exp, Number(sisaKuota));
+                                    }
+                                    const volEff = volume > 0 ? volume : 1;
+                                    koli = Math.floor(exp / volEff);
+                                    pls = exp % volEff;
                                 } else {
-                                    if (noStock) {
-                                        koli = 0;
-                                        pls = 0;
-                                        exp = 0;
-                                    } else {
-                                        if (exp === 0 && sisaSp > 0) {
-                                            exp = sisaSp;
+                                    if (exp === 0 && sisaSp > 0) {
+                                        exp = sisaSp;
+                                    }
+                                    if (usePercentage && Number(sisaKuota) > 0) {
+                                        exp = Math.min(exp, Number(sisaKuota));
+                                    }
+                                    const volEff = volume > 0 ? volume : 1;
+                                    koli = Math.floor(exp / volEff);
+                                    pls = exp % volEff;
+                                }
+                                if (!hasMeaningfulDraft) {
+                                    const sisaSpNum = Number(product.sisa_sp) || 0;
+                                    if (sisaSpNum > 0 && exp <= 0 && koli <= 0 && pls <= 0) {
+                                        const volEff = volume > 0 ? volume : 1;
+                                        let rencanaExp = sisaSpNum;
+                                        if (usePercentage && Number(sisaKuota) > 0) {
+                                            const cap = Math.max(0, Math.round(Number(sisaKuota)));
+                                            if (cap >= 1) {
+                                                rencanaExp = Math.min(rencanaExp, cap);
+                                            }
                                         }
-                                        if (usePercentage && sisaKuota > 0) {
-                                            exp = Math.min(exp, sisaKuota);
-                                        }
-                                        if (volume > 0) {
-                                            koli = Math.floor(exp / volume);
-                                            pls = Math.floor(exp % volume);
-                                        } else {
-                                            pls = exp;
-                                        }
+                                        exp = rencanaExp;
+                                        koli = Math.floor(exp / volEff);
+                                        pls = exp % volEff;
                                     }
                                 }
                                 const hadData = (koli > 0 || pls > 0 || exp > 0);
-                                const checked = (existing && typeof existing.checked === 'boolean') ?
-                                    existing.checked :
+                                const checked = (rawExisting && typeof rawExisting.checked === 'boolean') ?
+                                    rawExisting.checked :
                                     hadData;
                                 allProductsData[product.book_code] = {
                                     book_code: product.book_code,
@@ -1138,7 +1160,7 @@
                                     pls +
                                     '" min="0" step="1" style="width: 80px; display: inline-block;" data-book-code="' +
                                     product.book_code + '"' + disTitle + '></td>';
-                                const expMax = allowRencana && !noStock && usePercentage && sisaKuota >= 0 ?
+                                const expMax = allowRencana && usePercentage && Number(sisaKuota) > 0 ?
                                     sisaKuota : '';
                                 html +=
                                     '<td class="text-center" data-col="total"><input type="number" class="form-control form-control-sm text-center input-exp" value="' +

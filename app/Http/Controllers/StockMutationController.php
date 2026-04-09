@@ -86,7 +86,7 @@ class StockMutationController extends Controller
 
     public function update(Request $request, StockMutation $stock_mutation)
     {
-        $validated = $this->validatedMutation($request);
+        $validated = $this->validatedMutationUpdate($request);
 
         $total = (int) $validated['koli'] * (int) $validated['isi_koli'] + (int) $validated['eceran'];
 
@@ -96,12 +96,6 @@ class StockMutationController extends Controller
             'isi_koli' => (int) $validated['isi_koli'],
             'eceran' => (int) $validated['eceran'],
             'total_eksemplar' => $total,
-            'nama_pt_produksi' => $validated['nama_pt_produksi'] ?? null,
-            'tanggal_penerimaan' => $validated['tanggal_penerimaan'] ?? null,
-            'nama_penerima' => $validated['nama_penerima'] ?? null,
-            'nomor_surat_jalan' => $validated['nomor_surat_jalan'] ?? null,
-            'nomor_jo' => $validated['nomor_jo'] ?? null,
-            'keterangan' => $validated['keterangan'] ?? null,
         ]);
 
         return redirect()->route('mutasi.index')->with('success', 'Mutasi berhasil diperbarui.');
@@ -130,6 +124,19 @@ class StockMutationController extends Controller
             'nomor_surat_jalan' => ['nullable', 'string', 'max:100'],
             'nomor_jo' => ['nullable', 'string', 'max:100'],
             'keterangan' => ['nullable', 'string'],
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function validatedMutationUpdate(Request $request): array
+    {
+        return $request->validate([
+            'book_code' => ['required', 'string', 'max:100', 'exists:books,book_code'],
+            'koli' => ['required', 'integer', 'min:0'],
+            'isi_koli' => ['required', 'integer', 'min:0'],
+            'eceran' => ['required', 'integer', 'min:0'],
         ]);
     }
 }

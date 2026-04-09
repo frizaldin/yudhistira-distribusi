@@ -69,65 +69,9 @@
                         @enderror
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label">Total eksemplar (otomatis)</label>
                         <input type="text" class="form-control" id="total_eksemplar_display" readonly value="0" />
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="nama_pt_produksi" class="form-label">Nama PT produksi</label>
-                        <input type="text" name="nama_pt_produksi" id="nama_pt_produksi"
-                            class="form-control @error('nama_pt_produksi') is-invalid @enderror"
-                            value="{{ old('nama_pt_produksi', $item->nama_pt_produksi) }}" />
-                        @error('nama_pt_produksi')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-                    <div class="col-md-4">
-                        <label for="tanggal_penerimaan" class="form-label">Tanggal penerimaan</label>
-                        <input type="date" name="tanggal_penerimaan" id="tanggal_penerimaan"
-                            class="form-control @error('tanggal_penerimaan') is-invalid @enderror"
-                            value="{{ old('tanggal_penerimaan', optional($item->tanggal_penerimaan)->format('Y-m-d')) }}" />
-                        @error('tanggal_penerimaan')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="col-md-4">
-                        <label for="nama_penerima" class="form-label">Nama penerima</label>
-                        <input type="text" name="nama_penerima" id="nama_penerima"
-                            class="form-control @error('nama_penerima') is-invalid @enderror"
-                            value="{{ old('nama_penerima', $item->nama_penerima) }}" />
-                        @error('nama_penerima')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-                    <div class="col-md-4">
-                        <label for="nomor_surat_jalan" class="form-label">Nomor surat jalan</label>
-                        <input type="text" name="nomor_surat_jalan" id="nomor_surat_jalan"
-                            class="form-control @error('nomor_surat_jalan') is-invalid @enderror"
-                            value="{{ old('nomor_surat_jalan', $item->nomor_surat_jalan) }}" />
-                        @error('nomor_surat_jalan')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-                    <div class="col-md-4">
-                        <label for="nomor_jo" class="form-label">Nomor JO (job order)</label>
-                        <input type="text" name="nomor_jo" id="nomor_jo"
-                            class="form-control @error('nomor_jo') is-invalid @enderror"
-                            value="{{ old('nomor_jo', $item->nomor_jo) }}" />
-                        @error('nomor_jo')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="col-12">
-                        <label for="keterangan" class="form-label">Keterangan</label>
-                        <textarea name="keterangan" id="keterangan" rows="3"
-                            class="form-control @error('keterangan') is-invalid @enderror">{{ old('keterangan', $item->keterangan) }}</textarea>
-                        @error('keterangan')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
                     </div>
                 </div>
 

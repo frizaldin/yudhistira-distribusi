@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Nkb;
 use App\Models\NkbItem;
+use App\Exports\PreparationNotesDetailExport;
 use App\Models\NppbCentral;
 use App\Models\CentralStockDeduction;
 use App\Models\NppbDocument;
 use App\Models\Branch;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -206,6 +208,51 @@ class PreparationNotesController extends Controller
         ];
 
         return view($this->callbackfolder . '.preparation-notes.detail', $data);
+    }
+
+    /**
+     * Export baris detail stack ke Excel (xlsx).
+     */
+    public function exportDetailExcel(Request $request)
+    {
+        $stack = $request->get('stack');
+        if ($stack === null || $stack === '') {
+            return redirect()->route('preparation_notes.index')->with('error', 'Stack tidak valid.');
+        }
+
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+
+        $rows = NppbCentral::query()
+            ->where('stack', $stack)
+            ->when($filteredBranchCodes !== null, function ($q) use ($filteredBranchCodes) {
+                return $q->whereIn('branch_code', $filteredBranchCodes);
+            })
+            ->orderBy('date', 'desc')
+            ->orderBy('book_code')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return redirect()->route('preparation_notes.detail', ['stack' => $stack])
+                ->with('error', 'Tidak ada data untuk diekspor.');
+        }
+
+        $documentId = $rows->pluck('document_id')
+            ->filter(fn ($id) => $id !== null && $id !== '' && (int) $id !== 0)
+            ->unique()
+            ->first();
+        $nppbNumber = $documentId
+            ? NppbDocument::where('id', $documentId)->value('number')
+            : null;
+
+        $safeFilePart = $nppbNumber
+            ? (preg_replace('/[^A-Za-z0-9._-]/', '_', $nppbNumber) ?: 'nppb')
+            : (preg_replace('/[^A-Za-z0-9._-]/', '_', $stack) ?: 'stack');
+        $filename = 'preparation-notes-' . $safeFilePart . '-' . date('Y-m-d_His') . '.xlsx';
+
+        return Excel::download(
+            new PreparationNotesDetailExport($rows, $stack, $nppbNumber),
+            $filename
+        );
     }
 
     /**

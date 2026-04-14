@@ -856,24 +856,6 @@ class DashboardController extends Controller
             ->orderBy('book_code')
             ->get();
 
-        // Get central stocks (total stock pusat per book_code)
-        $centralStocks = CentralStock::select([
-            'book_code',
-            DB::raw('SUM(exemplar) as total_stock_pusat')
-        ])
-            ->groupBy('book_code')
-            ->get()
-            ->keyBy('book_code');
-
-        $stockMutationsByBook = StockMutation::select([
-            'book_code',
-            DB::raw('SUM(total_eksemplar) as total_mutasi'),
-        ])
-            ->whereIn('book_code', $products->pluck('book_code'))
-            ->groupBy('book_code')
-            ->get()
-            ->keyBy('book_code');
-
         // Get existing NPPB data for this branch
         $existingNppbQuery = NppbCentral::select([
             'book_code',
@@ -932,23 +914,20 @@ class DashboardController extends Controller
             });
 
         // Combine data per product
-        $branchProducts = $products->map(function ($product) use ($centralStocks, $stockMutationsByBook, $existingNppb, $spBranchData, $stockKolisByBranch, $stockKolisGeneral) {
-            $stock = $centralStocks->get($product->book_code);
+        $branchProducts = $products->map(function ($product) use ($existingNppb, $spBranchData, $stockKolisByBranch, $stockKolisGeneral) {
             $nppb = $existingNppb->get($product->book_code);
             $spBranch = $spBranchData->get($product->book_code);
 
             $sp = $spBranch->sp ?? 0;
             $faktur = $spBranch->faktur ?? 0;
             $stockCabang = $spBranch->stock_cabang ?? 0;
-            $mutasiRow = $stockMutationsByBook->get($product->book_code);
-            $stockPusat = (float) ($stock->total_stock_pusat ?? 0) + (float) ($mutasiRow?->total_mutasi ?? 0);
 
-            // Calculate Sisa SP
+            // Calculate Sisa SP (stok pusat tidak mengurangi Kur. SP; sama dengan NPPB Central)
             $selisih = $sp - $faktur;
             if ($stockCabang >= $selisih) {
                 $sisaSp = 0;
             } else {
-                $sisaSp = max(0, $selisih - $stockCabang - $stockPusat);
+                $sisaSp = max(0, $selisih - $stockCabang);
             }
 
             // Get eksemplar, koli, plastik

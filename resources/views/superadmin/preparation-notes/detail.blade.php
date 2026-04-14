@@ -33,7 +33,11 @@
                     @endif
                 </div>
                 @if (isset($rows) && $rows->isNotEmpty())
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="{{ route('preparation_notes.detail.export_excel', ['stack' => $stack ?? '']) }}"
+                            class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+                        </a>
                         @if (empty($has_document))
                             <button type="submit" form="form-detail-update" class="btn btn-primary btn-sm">
                                 <i class="bi bi-save me-1"></i>Simpan Perubahan

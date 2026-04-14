@@ -585,7 +585,7 @@ class ApiController extends Controller
             $pctStockPusatVsTargetNasional = $targetNasionalVal > 0 ? round(($stockPusat / $targetNasionalVal) * 100, 2) : 0;
             $pctStockPusatVsSp = $sp > 0 ? round(($stockPusat / $sp) * 100, 2) : 0;
 
-            // Calculate Sisa SP (Kurang SP = (SP - Faktur) - stock_cabang - stock_pusat; stock_cabang sudah termasuk intransit + NPPB approve)
+            // Calculate Sisa SP (Kurang SP = (SP - Faktur) - stock_cabang; stock_cabang sudah termasuk intransit + NPPB approve). Stok pusat tidak mengurangi Kur. SP.
             // SP - Faktur
             $selisih = $sp - $faktur;
 
@@ -593,8 +593,8 @@ class ApiController extends Controller
             if ($stockCabang >= $selisih) {
                 $sisaSp = 0;
             } else {
-                // Jika stok cabang tidak memenuhi, maka sisa SP = SP - Faktur - Stok Cabang - Stok Pusat
-                $sisaSp = max(0, $selisih - $stockCabang - $stockPusat);
+                // Jika stok cabang tidak memenuhi, maka sisa SP = SP - Faktur - Stok Cabang
+                $sisaSp = max(0, $selisih - $stockCabang);
             }
 
             // Ada baris NPPB di DB vs ada rencana kirim yang benar-benar diisi (koli/exp/pls > 0)
@@ -616,15 +616,16 @@ class ApiController extends Controller
                 $stockKoli = $stockKolisGeneral->get($product->book_code);
             }
 
-            // Pilihan Isi: semua row central_stock_kolis untuk book ini; default = volume terbesar
+            // Pilihan Isi: row central_stock_kolis dengan koli > 0 saja (yang koli 0/kosong disembunyikan di dropdown)
             $opts = $volumeOptionsByBook->get($product->book_code) ?? collect();
-            $volumeOptions = $opts->sortByDesc('volume')->values()->map(function ($r) {
+            $optsWithKoli = $opts->filter(fn ($r) => (int) ($r->koli ?? 0) > 0);
+            $volumeOptions = $optsWithKoli->sortByDesc('volume')->values()->map(function ($r) {
                 $v = (float) $r->volume;
-                $koliVal = isset($r->koli) ? (int) $r->koli : null;
-                $label = (string) (int) $v . ($koliVal !== null ? ' (' . $koliVal . ')' : '');
+                $koliVal = (int) ($r->koli ?? 0);
+                $label = (string) (int) $v . ' (' . $koliVal . ')';
                 return ['value' => $v, 'label' => $label];
             })->values()->toArray();
-            $volumeUsedRaw = $opts->isEmpty() ? 0.0 : (float) $opts->max('volume');
+            $volumeUsedRaw = $optsWithKoli->isEmpty() ? 0.0 : (float) $optsWithKoli->max('volume');
             if ($stockKoli && $stockKoli->volume > 0 && $volumeUsedRaw <= 0) {
                 $volumeUsedRaw = (float) $stockKoli->volume;
             }
@@ -647,8 +648,8 @@ class ApiController extends Controller
                 }
             }
 
-            // Kurang SP Nasional = max(0, SP Nasional - Faktur Nasional - Stock Cabang Nasional - Stock Pusat)
-            $kurangSpNasional = max(0, $spNasional - $fakturNasional - $stockCabangNasional - $stockPusat);
+            // Kurang SP Nasional = max(0, SP Nasional - Faktur Nasional - Stock Cabang Nasional); stok pusat tidak mengurangi.
+            $kurangSpNasional = max(0, $spNasional - $fakturNasional - $stockCabangNasional);
             // Persentase SP (Stock Pusat vs Kurang SP) = sisa_sp / stock_pusat × 100 (per cabang)
             $pctSpVsStock = $stockPusat > 0 ? round(($sisaSp / $stockPusat) * 100, 2) : 0;
             // Flag UI: rencana tetap boleh diisi; pembatasan kuota & % target dihitung di bawah.
@@ -1107,7 +1108,7 @@ class ApiController extends Controller
             if ($stockCabang >= $selisih) {
                 $sisaSp = 0;
             } else {
-                $sisaSp = (int) max(0, $selisih - $stockCabang - $stockPusat);
+                $sisaSp = (int) max(0, $selisih - $stockCabang);
             }
             $sisaSpTotal += $sisaSp;
 
@@ -1120,7 +1121,7 @@ class ApiController extends Controller
             $nppbAppNasVal = $nppbAppNas ? (float) ($nppbAppNas->nppb_approved_exp ?? 0) : 0;
             $stockCabangNasional = (float) ($spNas?->stock_nasional ?? 0) + $totalIntransitNasional + $nppbAppNasVal;
 
-            $kurangSpNasional = (int) max(0, $spNasional - $fakturNasional - $stockCabangNasional - $stockPusat);
+            $kurangSpNasional = (int) max(0, $spNasional - $fakturNasional - $stockCabangNasional);
             $kurangSpNasionalTotal += $kurangSpNasional;
 
             if ($sp > 0) {
@@ -1421,21 +1422,22 @@ class ApiController extends Controller
             if ($stockCabang >= $selisih) {
                 $sisaSp = 0;
             } else {
-                $sisaSp = max(0, $selisih - $stockCabang - $stockPusat);
+                $sisaSp = max(0, $selisih - $stockCabang);
             }
 
             $exp = (int) ($nppb?->exp ?? 0);
             $koli = (int) ($nppb?->koli ?? 0);
             $pls = (int) ($nppb?->pls ?? 0);
-            // Pilihan Isi: semua row central_stock_kolis untuk book ini; default = volume terbesar
+            // Pilihan Isi: hanya row dengan koli > 0 (selaras NPPB Central)
             $optsWh = $volumeOptionsByBookWarehouse->get($product->book_code) ?? collect();
-            $volumeOptionsWh = $optsWh->sortByDesc('volume')->values()->map(function ($r) {
+            $optsWhWithKoli = $optsWh->filter(fn ($r) => (int) ($r->koli ?? 0) > 0);
+            $volumeOptionsWh = $optsWhWithKoli->sortByDesc('volume')->values()->map(function ($r) {
                 $v = (float) $r->volume;
-                $koliVal = isset($r->koli) ? (int) $r->koli : null;
-                $label = (string) (int) $v . ($koliVal !== null ? ' (' . $koliVal . ')' : '');
+                $koliVal = (int) ($r->koli ?? 0);
+                $label = (string) (int) $v . ' (' . $koliVal . ')';
                 return ['value' => $v, 'label' => $label];
             })->values()->toArray();
-            $volumeUsed = $optsWh->isEmpty() ? 0 : (float) $optsWh->max('volume');
+            $volumeUsed = $optsWhWithKoli->isEmpty() ? 0 : (float) $optsWhWithKoli->max('volume');
             $stockKoli = $allStockKolis->get($product->book_code);
             if ($volumeUsed <= 0 && $stockKoli) {
                 $volumeUsed = (float)$stockKoli->volume;
@@ -1466,7 +1468,7 @@ class ApiController extends Controller
             $nppbApprovedNasional = $nppbApprovedExpNasional->get($product->book_code);
             $stockCabangNasional = ($spNasionalRow?->stock_nasional ?? 0) + $totalIntransitNasional + ($nppbApprovedNasional ? (int)($nppbApprovedNasional->nppb_approved_exp ?? 0) : 0);
 
-            $kurangSpNasional = max(0, $spNasional - $fakturNasional - $stockCabangNasional - $stockPusat);
+            $kurangSpNasional = max(0, $spNasional - $fakturNasional - $stockCabangNasional);
             $pctSpVsStock = $stockPusat > 0 ? round(($kurangSpNasional / $stockPusat) * 100, 2) : 0;
             // Target & % vs target informatif; rencana tidak diblokir oleh target / ambang % Stk/Kur SP.
             $allowRencanaKirim = true;

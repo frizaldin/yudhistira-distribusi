@@ -447,8 +447,8 @@
                                     <td><strong>Kurang SP Nasional</strong></td>
                                     <td>Total kekurangan SP seluruh cabang untuk kode buku tersebut.
                                         <strong>Rumus:</strong> max(0, <strong>SP Nasional − Faktur Nasional − Stock
-                                            Cabang Nasional − Stock Pusat</strong>). Stock Cabang Nasional = stok cabang
-                                        seluruh cabang + Intransit + NPPB yang sudah disetujui.
+                                            Cabang Nasional</strong>); stok pusat tidak mengurangi. Stock Cabang
+                                        Nasional = stok cabang seluruh cabang + Intransit + NPPB yang sudah disetujui.
                                     </td>
                                 </tr>
                                 <tr>
@@ -534,13 +534,14 @@
                                     <td><strong>Kurang SP</strong></td>
                                     <td>Kekurangan Surat Pesanan untuk cabang tersebut. Diambil dari SP dikurangi
                                         Faktur. Jika stok cabang sudah menutupi kekurangan itu, maka Kurang SP = 0. Jika
-                                        belum, dihitung dari selisih setelah dikurangi stok cabang dan stock pusat
-                                        (nilai tidak negatif).</td>
+                                        belum, dihitung dari selisih setelah dikurangi stok cabang saja (stok pusat
+                                        tidak mengurangi Kur. SP; nilai tidak negatif).</td>
                                 </tr>
                                 <tr>
                                     <td><strong>Isi</strong></td>
-                                    <td>Banyak eksemplar per koli (isi per kardus/koli). Bisa dari data master atau
-                                        diisi manual.</td>
+                                    <td>Banyak eksemplar per koli (isi per kardus/koli). Pilihan dropdown diambil dari
+                                        master stok koli yang <strong>jumlah kolinya lebih dari 0</strong> (yang koli
+                                        0 tidak ditampilkan). Bisa diisi manual.</td>
                                 </tr>
                                 <tr>
                                     <td><strong>Koli</strong></td>

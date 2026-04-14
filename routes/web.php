@@ -183,6 +183,7 @@ Route::middleware('auth')->group(function () {
     Route::controller(PreparationNotesController::class)->group(function () {
         Route::get('/preparation-notes', 'index')->name('preparation_notes.index');
         Route::get('/preparation-notes/detail', 'detail')->name('preparation_notes.detail');
+        Route::get('/preparation-notes/detail/export-excel', 'exportDetailExcel')->name('preparation_notes.detail.export_excel');
         Route::post('/preparation-notes/detail/update', 'updateDetail')->name('preparation_notes.detail.update');
         Route::post('/preparation-notes/approve-rencana', 'approveRencana')->name('preparation_notes.approve_rencana');
         Route::post('/preparation-notes/detail/delete-rows', 'deleteDetailRows')->name('preparation_notes.detail.delete_rows');

@@ -74,14 +74,13 @@ class SpBranchController extends Controller
             // SP - Faktur
             $selisih = ($order->ex_sp ?? 0) - ($order->ex_ftr ?? 0);
             $stokCabang = $order->ex_stock ?? 0;
-            $stokPusat = $order->stock_pusat ?? 0;
 
             // Jika stok cabang memenuhi (>= selisih), maka sisa SP = 0
             if ($stokCabang >= $selisih) {
                 $order->sisa_sp = 0;
             } else {
-                // Jika stok cabang tidak memenuhi, maka sisa SP = SP - Faktur - Stok Cabang - Stok Pusat
-                $order->sisa_sp = max(0, $selisih - $stokCabang - $stokPusat);
+                // Stok pusat tidak mengurangi Kur. SP (selaras NPPB Central)
+                $order->sisa_sp = max(0, $selisih - $stokCabang);
             }
         }
 

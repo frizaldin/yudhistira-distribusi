@@ -145,7 +145,7 @@
                         {{ number_format($totalNppbExp ?? 0) }}</h3>
                 </div>
             </div>
-        </div>
+        </div> 
         <div class="col-6 col-lg p-2">
             <div class="card border-0 shadow-sm rounded-0 kpi-card-last">
                 <div class="card-body">

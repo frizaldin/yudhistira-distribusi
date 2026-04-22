@@ -407,10 +407,12 @@ class ProductController extends Controller
             if ($import->skippedEmptyCode > 0) {
                 $msg .= sprintf(' %d baris dilewati (kode buku kosong di kolom B).', $import->skippedEmptyCode);
             }
-            if ($import->notFoundCodes !== []) {
+            if ($import->notFoundCount > 0) {
                 $sample = array_slice($import->notFoundCodes, 0, 25);
-                $msg .= ' Kode tidak ditemukan di database: '.count($import->notFoundCodes).' buku';
-                $msg .= ' (contoh: '.implode(', ', $sample).(count($import->notFoundCodes) > 25 ? ', …' : '').').';
+                $msg .= ' Kode tidak ditemukan di database: '.$import->notFoundCount.' buku';
+                if ($sample !== []) {
+                    $msg .= ' (contoh: '.implode(', ', $sample).($import->notFoundCount > count($sample) ? ', …' : '').').';
+                }
             }
 
             return redirect()->back()->with('success', $msg);

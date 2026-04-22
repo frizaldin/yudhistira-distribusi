@@ -3,18 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StockMutation extends Model
 {
     protected $table = 'stock_mutations';
 
     protected $fillable = [
-        'book_code',
-        'koli',
-        'isi_koli',
-        'eceran',
-        'total_eksemplar',
+        'no_mutasi',
         'nama_pt_produksi',
         'tanggal_penerimaan',
         'nama_penerima',
@@ -28,15 +24,11 @@ class StockMutation extends Model
     {
         return [
             'tanggal_penerimaan' => 'date',
-            'koli' => 'integer',
-            'isi_koli' => 'integer',
-            'eceran' => 'integer',
-            'total_eksemplar' => 'integer',
         ];
     }
 
-    public function product(): BelongsTo
+    public function items(): HasMany
     {
-        return $this->belongsTo(Product::class, 'book_code', 'book_code');
+        return $this->hasMany(StockMutationItem::class, 'mutation_id');
     }
 }

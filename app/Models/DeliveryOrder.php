@@ -20,6 +20,12 @@ class DeliveryOrder extends Model
         'note',
         'creator_name',
         'known_name',
+        'recipient_name',
+        'recipient_phone',
+        'recipient_address',
+        'koli',
+        'pack',
+        'terbilang',
         'created_by',
     ];
 
@@ -50,21 +56,27 @@ class DeliveryOrder extends Model
     }
 
     /**
-     * Generate nomor Surat Jalan berikutnya. Format: SJ-YYYYMMDD-XXXX (4 digit urut per hari).
+     * Generate nomor Surat Jalan berikutnya.
+     * Format: SJ{YY}{NNNNN}
+     * Contoh: SJ2600001 (tahun 2026, nomor urut ke-1).
+     * Nomor urut reset ke 1 setiap ganti tahun.
      */
     public static function generateNextNumber(): string
     {
-        $prefix = 'SJ-' . date('Ymd') . '-';
+        $yy      = date('y');          // 2-digit tahun, misal '26'
+        $prefix  = 'SJ' . $yy;
+        $pattern = '/^SJ' . $yy . '(\d{5})$/';
+
         $last = self::where('number', 'like', $prefix . '%')
             ->orderBy('id', 'desc')
             ->lockForUpdate()
             ->value('number');
 
         $seq = 1;
-        if ($last && preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $last, $m)) {
+        if ($last && preg_match($pattern, $last, $m)) {
             $seq = (int) $m[1] + 1;
         }
 
-        return $prefix . str_pad((string) $seq, 4, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
     }
 }

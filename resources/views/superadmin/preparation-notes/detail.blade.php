@@ -24,13 +24,24 @@
                         <span class="text-muted ms-2">— Dibuat oleh: <strong>{{ $creator_name }}</strong></span>
                     @endif
                     <br />
-                    @if (!empty($has_document))
-                        <small class="text-muted">Daftar lengkap baris NPPB — data sudah disetujui, tidak dapat
-                            diedit.</small>
-                    @else
-                        <small class="text-muted">Daftar lengkap baris NPPB untuk rencana kirim ini (Isi, Koli, Eceran,
-                            Total dapat diedit)</small>
-                    @endif
+                    <small class="text-muted">Daftar lengkap baris NPPB untuk rencana kirim ini (Isi, Koli, Eceran,
+                        Total dapat diedit)</small>
+                    {{-- Status badges --}}
+                    <div class="mt-1 d-flex flex-wrap gap-1">
+                        @if (!empty($has_document))
+                            <span class="badge bg-success">Sudah dijadikan NPPB</span>
+                        @else
+                            <span class="badge bg-secondary">Belum dijadikan NPPB</span>
+                        @endif
+                        @if (!empty($nkb_was_cancelled))
+                            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>NKB Dibatalkan</span>
+                        @elseif (!empty($has_document) && !empty($existing_nkb))
+                            <span class="badge bg-primary"><i class="bi bi-check2-circle me-1"></i>NKB Aktif: {{ $existing_nkb->number }}</span>
+                        @endif
+                        @if (!empty($can_edit))
+                            <span class="badge bg-warning text-dark"><i class="bi bi-pencil me-1"></i>Data dapat diedit</span>
+                        @endif
+                    </div>
                 </div>
                 @if (isset($rows) && $rows->isNotEmpty())
                     <div class="d-flex gap-2 flex-wrap">
@@ -38,7 +49,7 @@
                             class="btn btn-outline-success btn-sm">
                             <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
                         </a>
-                        @if (empty($has_document))
+                        @if (!empty($can_edit))
                             <button type="submit" form="form-detail-update" class="btn btn-primary btn-sm">
                                 <i class="bi bi-save me-1"></i>Simpan Perubahan
                             </button>
@@ -48,8 +59,13 @@
                                 data-bs-target="#modalApproveRencana">
                                 <i class="bi bi-check-circle me-1"></i>Approve Rencana
                             </button>
+                        @elseif (!empty($nkb_was_cancelled))
+                            {{-- NKB dibatalkan: tampilkan opsi approve ulang (buat NPPB baru tidak diperlukan, tapi bisa jadikan NKB baru) --}}
+                            <a href="{{ route('preparation_notes.preview_nkb_page', ['stack' => $stack ?? '', 'from' => 'nkb']) }}"
+                                class="btn btn-warning btn-sm ms-1">
+                                <i class="bi bi-arrow-repeat me-1"></i>Buat NKB Baru
+                            </a>
                         @else
-                            <span class="badge bg-success align-self-center">Sudah disetujui</span>
                             <a href="{{ route('preparation_notes.export_nota', ['stack' => $stack ?? '', 'print' => 1]) }}"
                                 target="_blank" class="btn btn-outline-secondary btn-sm">
                                 <i class="bi bi-printer me-1"></i>Print Nota
@@ -70,12 +86,30 @@
                 @endif
             </div>
 
-            @if (empty($has_document))
-                <form id="form-detail-update" method="POST" action="{{ route('preparation_notes.detail.update') }}">
-                    @csrf
-                    <input type="hidden" name="stack" value="{{ $stack ?? '' }}" />
-                </form>
+            <form id="form-detail-update" method="POST" action="{{ route('preparation_notes.detail.update') }}">
+                @csrf
+                <input type="hidden" name="stack" value="{{ $stack ?? '' }}" />
+            </form>
+
+            {{-- Alert informasi status edit --}}
+            @if (!empty($nkb_was_cancelled))
+                <div class="alert alert-warning alert-sm py-2 px-3 mb-3" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>NKB untuk rencana ini telah dibatalkan.</strong>
+                    Data dapat diedit kembali. Setelah selesai, gunakan tombol <strong>"Buat NKB Baru"</strong> untuk membuat NKB pengganti.
+                </div>
+            @elseif (empty($has_document))
+                <div class="alert alert-info alert-sm py-2 px-3 mb-3" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Rencana ini <strong>belum dijadikan NPPB</strong>. Data masih dapat diedit dan dihapus.
+                </div>
+            @elseif (empty($can_edit))
+                <div class="alert alert-secondary alert-sm py-2 px-3 mb-3" role="alert">
+                    <i class="bi bi-lock me-2"></i>
+                    Data <strong>tidak dapat diedit</strong> karena sudah dijadikan NPPB dan NKB masih aktif.
+                </div>
             @endif
+
             <div class="table-responsive">
                 <table class="table table-hover table-sm align-middle mb-0">
                     <thead class="table-light">
@@ -102,39 +136,33 @@
                                 <td>{{ $row->branch_name ?? '-' }}</td>
                                 <td><code>{{ $row->book_code }}</code></td>
                                 <td>{{ $row->book_name ?? '-' }}</td>
-                                @if (empty($has_document))
-                                    <td class="text-end">
-                                        <input type="hidden" name="rows[{{ $row->id }}][id]"
-                                            value="{{ $row->id }}" form="form-detail-update" />
-                                        <input type="number" name="rows[{{ $row->id }}][volume]"
-                                            value="{{ $row->volume }}" form="form-detail-update"
-                                            class="form-control form-control-sm text-end" min="0" step="1"
-                                            style="width: 80px; display: inline-block;" />
-                                    </td>
-                                    <td class="text-end">
-                                        <input type="number" name="rows[{{ $row->id }}][koli]"
-                                            value="{{ $row->koli }}" form="form-detail-update"
-                                            class="form-control form-control-sm text-end" min="0" step="1"
-                                            style="width: 80px; display: inline-block;" />
-                                    </td>
-                                    <td class="text-end">
-                                        <input type="number" name="rows[{{ $row->id }}][pls]"
-                                            value="{{ $row->pls }}" form="form-detail-update"
-                                            class="form-control form-control-sm text-end" min="0" step="1"
-                                            style="width: 80px; display: inline-block;" />
-                                    </td>
-                                    <td class="text-end">
-                                        <input type="number" name="rows[{{ $row->id }}][exp]"
-                                            value="{{ $row->exp }}" form="form-detail-update"
-                                            class="form-control form-control-sm text-end" min="0" step="1"
-                                            style="width: 80px; display: inline-block;" />
-                                    </td>
-                                @else
-                                    <td class="text-end">{{ number_format($row->volume ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($row->koli ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($row->pls ?? 0) }}</td>
-                                    <td class="text-end">{{ number_format($row->exp ?? 0) }}</td>
-                                @endif
+                                <td class="text-end">
+                                    <input type="hidden" name="rows[{{ $row->id }}][id]" value="{{ $row->id }}"
+                                        form="form-detail-update" />
+                                    <input type="number" name="rows[{{ $row->id }}][volume]"
+                                        value="{{ $row->volume }}" form="form-detail-update"
+                                        class="form-control form-control-sm text-end" min="0" step="1"
+                                        style="width: 80px; display: inline-block;"
+                                        {{ empty($can_edit) ? 'readonly' : '' }} />
+                                </td>
+                                <td class="text-end">
+                                    <input type="number" name="rows[{{ $row->id }}][koli]" value="{{ $row->koli }}"
+                                        form="form-detail-update" class="form-control form-control-sm text-end"
+                                        min="0" step="1" style="width: 80px; display: inline-block;"
+                                        {{ empty($can_edit) ? 'readonly' : '' }} />
+                                </td>
+                                <td class="text-end">
+                                    <input type="number" name="rows[{{ $row->id }}][pls]" value="{{ $row->pls }}"
+                                        form="form-detail-update" class="form-control form-control-sm text-end"
+                                        min="0" step="1" style="width: 80px; display: inline-block;"
+                                        {{ empty($can_edit) ? 'readonly' : '' }} />
+                                </td>
+                                <td class="text-end">
+                                    <input type="number" name="rows[{{ $row->id }}][exp]" value="{{ $row->exp }}"
+                                        form="form-detail-update" class="form-control form-control-sm text-end"
+                                        min="0" step="1" style="width: 80px; display: inline-block;"
+                                        {{ empty($can_edit) ? 'readonly' : '' }} />
+                                </td>
                                 @if (empty($has_document))
                                     <td class="text-center align-middle">
                                         <form method="POST"

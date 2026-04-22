@@ -8,6 +8,7 @@ use App\Models\NppbCentral;
 use App\Models\CentralStock;
 use App\Models\CentralStockDeduction;
 use App\Models\StockMutation;
+use App\Models\StockMutationItem;
 use App\Models\CentralStockKoli;
 use App\Models\SpBranch;
 use App\Models\Target;
@@ -274,7 +275,7 @@ class ApiController extends Controller
 
         // Get all products; optional filter: hanya list marketing (is_marketing_list = Y)
         $marketingListOnly = $request->boolean('marketing_list_only');
-        $productsQuery = Product::select('book_code', 'book_title');
+        $productsQuery = Product::select('book_code', 'book_title', 'urutan');
         if ($marketingListOnly) {
             $productsQuery->where('is_marketing_list', 'Y');
         }
@@ -293,7 +294,14 @@ class ApiController extends Controller
         $totalProducts = $productsQuery->count();
         $lastPage = $totalProducts > 0 ? (int) ceil($totalProducts / $perPage) : 1;
         $page = max(1, min($page, $lastPage));
-        $products = $productsQuery->orderBy('book_code')->skip(($page - 1) * $perPage)->take($perPage)->get();
+        $products = $productsQuery
+            // Default urutan list mengikuti books.urutan; urutan kosong diletakkan di bawah.
+            ->orderByRaw("CASE WHEN urutan IS NULL OR urutan = '' THEN 1 ELSE 0 END ASC")
+            ->orderByRaw('CAST(urutan AS UNSIGNED) ASC')
+            ->orderBy('book_code')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
 
         // Check if there's an active cutoff_data (perlu sebelum empty return)
         $activeCutoff = CutoffData::where('status', 'active')->first();
@@ -328,7 +336,7 @@ class ApiController extends Controller
             DB::raw('SUM(quantity) as total_deducted')
         ])->whereIn('book_code', $bookCodesPage)->groupBy('book_code')->get()->keyBy('book_code');
 
-        $stockMutationsByBook = StockMutation::select([
+        $stockMutationsByBook = StockMutationItem::select([
             'book_code',
             DB::raw('SUM(total_eksemplar) as total_mutasi'),
         ])
@@ -469,19 +477,26 @@ class ApiController extends Controller
         }
         $nppbApprovedExpNasional = $nppbApprovedExpNasionalQuery->get()->keyBy('book_code');
 
-        // Stock Teralokasikan: total eksemplar NPPB seluruh cabang - hanya book di halaman ini
-        $stockTeralokasikanQuery = NppbCentral::select([
-            'book_code',
-            DB::raw('SUM(COALESCE(exp, 0)) as stock_teralokasikan')
-        ])->whereIn('book_code', $bookCodesPage)->groupBy('book_code');
+        // Stock Teralokasikan: total exemplar NKB (delivery_notes + delivery_note_details)
+        // yang BELUM punya NTB (m_terima_buku) berdasarkan nota_kirim_cab.
+        $stockTeralokasikanQuery = DeliveryNoteDetail::select([
+            'delivery_note_details.book_code as book_code',
+            DB::raw('SUM(COALESCE(delivery_note_details.exemplar, 0)) as stock_teralokasikan')
+        ])
+            ->join('delivery_notes', 'delivery_notes.nota_kirim_cab', '=', 'delivery_note_details.nota_kirim_cab')
+            ->leftJoin('m_terima_buku as ntb', 'ntb.nota_kirim_cab', '=', 'delivery_notes.nota_kirim_cab')
+            ->whereNull('ntb.nota_kirim_cab')
+            ->whereIn('delivery_note_details.book_code', $bookCodesPage)
+            ->whereNotNull('delivery_note_details.book_code')
+            ->groupBy('delivery_note_details.book_code');
         if ($activeCutoff) {
             if ($activeCutoff->start_date !== null) {
-                $stockTeralokasikanQuery->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date]);
+                $stockTeralokasikanQuery->whereBetween('delivery_notes.send_date', [$activeCutoff->start_date, $activeCutoff->end_date]);
             } else {
-                $stockTeralokasikanQuery->where('date', '<=', $activeCutoff->end_date);
+                $stockTeralokasikanQuery->where('delivery_notes.send_date', '<=', $activeCutoff->end_date);
             }
         } else {
-            $stockTeralokasikanQuery->whereYear('date', $currentYear);
+            $stockTeralokasikanQuery->whereYear('delivery_notes.send_date', $currentYear);
         }
         $stockTeralokasikanData = $stockTeralokasikanQuery->get()->keyBy('book_code');
 
@@ -573,13 +588,18 @@ class ApiController extends Controller
             $stockCabang += $totalIntransit;
             $nppbApproved = $nppbApprovedExpByBook->get($product->book_code);
             $stockCabang += $nppbApproved ? (int) ($nppbApproved->nppb_approved_exp ?? 0) : 0;
+            // Permintaan bisnis: stock cabang ikut menampung stock teralokasikan (NKB belum NTB).
+            $stockCabang += (int) $stockTeralokasikan;
 
             // Nasional: Faktur + (Stock cabang + Intransit + NPPB disetujui) seluruh cabang → untuk % (Ftr+Stk+Kirim vs Target)
             $fakturNasional = $spNasionalRow?->faktur_nasional ?? 0;
             $intransitNasional = $intransitDataNasional->get($product->book_code);
             $totalIntransitNasional = $intransitNasional ? ($intransitNasional->total_intransit ?? 0) : 0;
             $nppbApprovedNasional = $nppbApprovedExpNasional->get($product->book_code);
-            $stockCabangNasional = ($spNasionalRow?->stock_nasional ?? 0) + $totalIntransitNasional + ($nppbApprovedNasional ? (int)($nppbApprovedNasional->nppb_approved_exp ?? 0) : 0);
+            $stockCabangNasional = ($spNasionalRow?->stock_nasional ?? 0)
+                + $totalIntransitNasional
+                + ($nppbApprovedNasional ? (int) ($nppbApprovedNasional->nppb_approved_exp ?? 0) : 0)
+                + (int) $stockTeralokasikan;
 
             // Persentase
             $pctStockPusatVsTargetNasional = $targetNasionalVal > 0 ? round(($stockPusat / $targetNasionalVal) * 100, 2) : 0;
@@ -618,7 +638,7 @@ class ApiController extends Controller
 
             // Pilihan Isi: row central_stock_kolis dengan koli > 0 saja (yang koli 0/kosong disembunyikan di dropdown)
             $opts = $volumeOptionsByBook->get($product->book_code) ?? collect();
-            $optsWithKoli = $opts->filter(fn ($r) => (int) ($r->koli ?? 0) > 0);
+            $optsWithKoli = $opts->filter(fn($r) => (int) ($r->koli ?? 0) > 0);
             $volumeOptions = $optsWithKoli->sortByDesc('volume')->values()->map(function ($r) {
                 $v = (float) $r->volume;
                 $koliVal = (int) ($r->koli ?? 0);
@@ -734,28 +754,34 @@ class ApiController extends Controller
         if ($sort !== '') {
             switch ($sort) {
                 case 'sp_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['sp'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'sp_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['sp'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['sp'] ?? 0))->values();
+                    break;
+                case 'pct_sp_desc':
+                    $results = $results->sortByDesc(fn($item) => (float)($item['pct_stock_pusat_sp'] ?? 0))->values();
+                    break;
+                case 'pct_sp_asc':
+                    $results = $results->sortBy(fn($item) => (float)($item['pct_stock_pusat_sp'] ?? 0))->values();
                     break;
                 case 'exp_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['exp'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'exp_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['exp'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 case 'target_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['target_nasional'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['target_nasional'] ?? 0))->values();
                     break;
                 case 'target_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['target_nasional'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['target_nasional'] ?? 0))->values();
                     break;
                 default:
                     break;
@@ -864,12 +890,26 @@ class ApiController extends Controller
     protected function getNppbCentralTotals(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage, $productsQuery, bool $allBooksViaSubquery = false): array
     {
         $emptyTotals = [
-            'stock_pusat' => 0, 'target_nasional' => 0, 'stock_nasional' => 0, 'sp_nasional' => 0,
-            'stock_teralokasikan' => 0, 'maksimal_total_eksemplar_nasional' => 0, 'sisa_kuota_eksemplar' => 0,
-            'sisa_stock_pusat' => 0, 'sp' => 0, 'faktur' => 0, 'stock_cabang' => 0,
-            'sisa_sp' => 0, 'sisa_sp_nasional' => 0, 'koli' => 0, 'pls' => 0, 'exp' => 0,
-            'pct_stock_pusat_target_nasional_avg' => 0, 'pct_stock_pusat_sp_avg' => 0,
-            'pct_faktur_stock_total_vs_sp_avg' => 0, 'pct_faktur_stock_total_vs_target_avg' => 0,
+            'stock_pusat' => 0,
+            'target_nasional' => 0,
+            'stock_nasional' => 0,
+            'sp_nasional' => 0,
+            'stock_teralokasikan' => 0,
+            'maksimal_total_eksemplar_nasional' => 0,
+            'sisa_kuota_eksemplar' => 0,
+            'sisa_stock_pusat' => 0,
+            'sp' => 0,
+            'faktur' => 0,
+            'stock_cabang' => 0,
+            'sisa_sp' => 0,
+            'sisa_sp_nasional' => 0,
+            'koli' => 0,
+            'pls' => 0,
+            'exp' => 0,
+            'pct_stock_pusat_target_nasional_avg' => 0,
+            'pct_stock_pusat_sp_avg' => 0,
+            'pct_faktur_stock_total_vs_sp_avg' => 0,
+            'pct_faktur_stock_total_vs_target_avg' => 0,
         ];
 
         if ($allBooksViaSubquery) {
@@ -878,17 +918,17 @@ class ApiController extends Controller
             }
             $allBookCodes = null;
             // Subquery baru per pemakaian agar builder tidak terkontaminasi antar-query
-            $booksIn = fn () => Product::query()->select('book_code');
+            $booksIn = fn() => Product::query()->select('book_code');
         } else {
             $allBookCodes = (clone $productsQuery)->orderBy('book_code')->pluck('book_code');
             if ($allBookCodes->isEmpty()) {
                 return $emptyTotals;
             }
-            $booksIn = fn () => $allBookCodes;
+            $booksIn = fn() => $allBookCodes;
         }
 
         $totalStockPusat = CentralStock::whereIn('book_code', $booksIn())->sum('exemplar')
-            + StockMutation::whereIn('book_code', $booksIn())->sum('total_eksemplar');
+            + StockMutationItem::whereIn('book_code', $booksIn())->sum('total_eksemplar');
         $totalDeducted = CentralStockDeduction::whereIn('book_code', $booksIn())->sum('quantity');
         $stockPusatTotal = max(0, $totalStockPusat - $totalDeducted);
 
@@ -911,15 +951,29 @@ class ApiController extends Controller
         $stockNasionalTotal = (clone $spNasionalBase)->sum('ex_stock');
         $spNasionalTotal = (clone $spNasionalBase)->sum('ex_sp');
 
-        $stockTeralokasikanQuery = NppbCentral::whereIn('book_code', $booksIn());
+        $stockTeralokasikanQuery = DeliveryNoteDetail::query()
+            ->join('delivery_notes', 'delivery_notes.nota_kirim_cab', '=', 'delivery_note_details.nota_kirim_cab')
+            ->leftJoin('m_terima_buku as ntb', 'ntb.nota_kirim_cab', '=', 'delivery_notes.nota_kirim_cab')
+            ->whereNull('ntb.nota_kirim_cab')
+            ->whereIn('delivery_note_details.book_code', $booksIn())
+            ->whereNotNull('delivery_note_details.book_code');
         if ($activeCutoff) {
             $activeCutoff->start_date !== null
-                ? $stockTeralokasikanQuery->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])
-                : $stockTeralokasikanQuery->where('date', '<=', $activeCutoff->end_date);
+                ? $stockTeralokasikanQuery->whereBetween('delivery_notes.send_date', [$activeCutoff->start_date, $activeCutoff->end_date])
+                : $stockTeralokasikanQuery->where('delivery_notes.send_date', '<=', $activeCutoff->end_date);
         } else {
-            $stockTeralokasikanQuery->whereYear('date', $currentYear);
+            $stockTeralokasikanQuery->whereYear('delivery_notes.send_date', $currentYear);
         }
-        $stockTeralokasikanTotal = (clone $stockTeralokasikanQuery)->sum('exp');
+        $stockTeralokasikanTotal = (clone $stockTeralokasikanQuery)->sum('delivery_note_details.exemplar');
+        $stockCabangTotal += (float) $stockTeralokasikanTotal;
+        $stockTeralokasikanPerBook = (clone $stockTeralokasikanQuery)
+            ->select([
+                'delivery_note_details.book_code',
+                DB::raw('SUM(delivery_note_details.exemplar) as stock_teralokasikan'),
+            ])
+            ->groupBy('delivery_note_details.book_code')
+            ->get()
+            ->keyBy('book_code');
 
         $nppbCentralBranchQ = NppbCentral::where('branch_code', $branchCode)->whereIn('book_code', $booksIn());
         if ($activeCutoff) {
@@ -1010,7 +1064,7 @@ class ApiController extends Controller
             ->get()
             ->keyBy('book_code');
 
-        $stockMutationsByBook = StockMutation::select([
+        $stockMutationsByBook = StockMutationItem::select([
             'book_code',
             DB::raw('SUM(total_eksemplar) as total_mutasi'),
         ])
@@ -1095,7 +1149,8 @@ class ApiController extends Controller
             $stockCabangBase = $row ? (float) ($row->stock_cabang ?? 0) : 0;
             $intr = (float) (($intransitPerBook->get($bc)?->total_intransit ?? 0) ?: 0);
             $apr = (float) (($nppbApprovedPerBook->get($bc)?->nppb_approved_exp ?? 0) ?: 0);
-            $stockCabang = $stockCabangBase + $intr + $apr;
+            $teralokasi = (float) (($stockTeralokasikanPerBook->get($bc)?->stock_teralokasikan ?? 0) ?: 0);
+            $stockCabang = $stockCabangBase + $intr + $apr + $teralokasi;
 
             $stkRow = $centralStocksByBook->get($bc);
             $mutRow = $stockMutationsByBook->get($bc);
@@ -1119,13 +1174,13 @@ class ApiController extends Controller
             $totalIntransitNasional = $inNas ? (float) ($inNas->total_intransit ?? 0) : 0;
             $nppbAppNas = $nppbApprovedExpNasionalTotals->get($bc);
             $nppbAppNasVal = $nppbAppNas ? (float) ($nppbAppNas->nppb_approved_exp ?? 0) : 0;
-            $stockCabangNasional = (float) ($spNas?->stock_nasional ?? 0) + $totalIntransitNasional + $nppbAppNasVal;
+            $stockCabangNasional = (float) ($spNas?->stock_nasional ?? 0) + $totalIntransitNasional + $nppbAppNasVal + $teralokasi;
 
             $kurangSpNasional = (int) max(0, $spNasional - $fakturNasional - $stockCabangNasional);
             $kurangSpNasionalTotal += $kurangSpNasional;
 
             if ($sp > 0) {
-                $pctVals[] = (($faktur + $stockCabangBase + $intr + $apr) / $sp) * 100;
+                $pctVals[] = (($faktur + $stockCabangBase + $intr + $apr + $teralokasi) / $sp) * 100;
             }
 
             $targetNasionalVal = (float) ($targetNasionalByBook->get($bc)?->target_nasional ?? 0);
@@ -1231,7 +1286,7 @@ class ApiController extends Controller
             DB::raw('SUM(quantity) as total_deducted')
         ])->groupBy('book_code')->get()->keyBy('book_code');
 
-        $stockMutationsByBookWarehouse = StockMutation::select([
+        $stockMutationsByBookWarehouse = StockMutationItem::select([
             'book_code',
             DB::raw('SUM(total_eksemplar) as total_mutasi'),
         ])
@@ -1430,7 +1485,7 @@ class ApiController extends Controller
             $pls = (int) ($nppb?->pls ?? 0);
             // Pilihan Isi: hanya row dengan koli > 0 (selaras NPPB Central)
             $optsWh = $volumeOptionsByBookWarehouse->get($product->book_code) ?? collect();
-            $optsWhWithKoli = $optsWh->filter(fn ($r) => (int) ($r->koli ?? 0) > 0);
+            $optsWhWithKoli = $optsWh->filter(fn($r) => (int) ($r->koli ?? 0) > 0);
             $volumeOptionsWh = $optsWhWithKoli->sortByDesc('volume')->values()->map(function ($r) {
                 $v = (float) $r->volume;
                 $koliVal = (int) ($r->koli ?? 0);
@@ -1509,28 +1564,28 @@ class ApiController extends Controller
         if ($sort !== '') {
             switch ($sort) {
                 case 'sp_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['sp'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'sp_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['sp'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['sp'] ?? 0))->values();
                     break;
                 case 'exp_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['exp'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'exp_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['exp'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['exp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 case 'sisa_sp_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['sisa_sp'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['sisa_sp'] ?? 0))->values();
                     break;
                 case 'target_desc':
-                    $results = $results->sortByDesc(fn ($item) => (float)($item['target_nasional'] ?? 0))->values();
+                    $results = $results->sortByDesc(fn($item) => (float)($item['target_nasional'] ?? 0))->values();
                     break;
                 case 'target_asc':
-                    $results = $results->sortBy(fn ($item) => (float)($item['target_nasional'] ?? 0))->values();
+                    $results = $results->sortBy(fn($item) => (float)($item['target_nasional'] ?? 0))->values();
                     break;
                 default:
                     break;

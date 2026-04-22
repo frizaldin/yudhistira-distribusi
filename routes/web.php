@@ -18,6 +18,8 @@ use App\Http\Controllers\NppbCentralController;
 use App\Http\Controllers\NppbWarehouseController;
 use App\Http\Controllers\PreparationNotesController;
 use App\Http\Controllers\NkbController;
+use App\Http\Controllers\NtbController;
+use App\Http\Controllers\RekonsiliasiController;
 use App\Http\Controllers\StockMutationController;
 use App\Http\Controllers\DeliveryOrderController;
 use App\Http\Controllers\LogisticsHistoryController;
@@ -199,10 +201,22 @@ Route::middleware('auth')->group(function () {
         Route::get('/nkb', 'index')->name('nkb.index');
         Route::get('/nkb/create', 'create')->name('nkb.create');
         Route::post('/nkb/{number}/destroy', 'destroy')->name('nkb.destroy');
-        Route::get('/nkb/{number}/edit', 'edit')->name('nkb.edit');
-        Route::put('/nkb/{number}', 'update')->name('nkb.update');
         Route::get('/nkb/{number}/print', 'print')->name('nkb.print');
         Route::get('/nkb/{number}', 'show')->name('nkb.show');
+    });
+
+    Route::controller(NtbController::class)->group(function () {
+        Route::get('/ntb', 'index')->name('ntb.index');
+        Route::get('/ntb/create', 'create')->name('ntb.create');
+        Route::post('/ntb', 'store')->name('ntb.store');
+        Route::get('/ntb/{ntb}/edit', 'edit')->name('ntb.edit');
+        Route::put('/ntb/{ntb}', 'update')->name('ntb.update');
+        Route::delete('/ntb/{ntb}', 'destroy')->name('ntb.destroy');
+    });
+
+    Route::controller(RekonsiliasiController::class)->group(function () {
+        Route::get('/rekonsiliasi-nkb-ntb', 'index')->name('rekonsiliasi.index');
+        Route::get('/rekonsiliasi-nkb-ntb/{nota_kirim_cab}', 'show')->name('rekonsiliasi.show');
     });
 
     Route::controller(StockMutationController::class)->group(function () {

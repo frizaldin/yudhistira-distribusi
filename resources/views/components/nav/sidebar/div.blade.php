@@ -19,7 +19,6 @@
             titlegroup="Manajemen User" /> --}}
 
         <x-nav.sidebar.menu url="{{ url('dashboard') }}" key="dashboard" icon="bi bi-speedometer" :authority="$authority" />
-        <x-nav.sidebar.menu url="{{ url('rangkuman') }}" key="rangkuman" icon="bi bi-journal" :authority="$authority" />
 
         @if ((auth()->user()->authority_id ?? null) == 1 || (auth()->user()->authority_id ?? null) == 4)
             <div class="sidebar-title">Data Master</div>
@@ -31,28 +30,37 @@
         <x-nav.sidebar.menu url="{{ url('target') }}" key="target" icon="bi bi-bullseye" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('period') }}" key="period" icon="bi bi-calendar" :authority="$authority" />
 
-
         <div class="sidebar-title">Operasional</div>
         <x-nav.sidebar.menu url="{{ url('staging') }}" key="staging" icon="bi bi-journal" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('pesanan') }}" key="pesanan" icon="bi bi-journal" :authority="$authority" />
-        <x-nav.sidebar.menu url="{{ url('sp_v_stock') }}" key="sp_v_stock" icon="bi bi-journal" :authority="$authority" />
-        <x-nav.sidebar.menu url="{{ url('sp_v_target') }}" key="sp_v_target" icon="bi bi-bullseye"
-            :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nppb-central') }}" key="nppb-central" icon="bi bi-truck" :authority="$authority" />
         {{-- <x-nav.sidebar.menu url="{{ url('nppb-warehouse') }}" key="nppb-warehouse" icon="bi bi-truck"
             :authority="$authority" /> --}}
+
+        <div class="sidebar-title">Distribusi</div>
         <x-nav.sidebar.menu url="{{ url('preparation-notes') }}" key="preparation_notes" icon="bi bi-card-list"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('mutasi') }}" key="mutasi" icon="bi bi-arrow-left-right"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nkb') }}" key="nkb" icon="bi bi-file-earmark-text"
             :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('ntb') }}" key="ntb" icon="bi bi-box-arrow-in-down"
+            :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('delivery-orders') }}" key="delivery_orders" icon="bi bi-truck"
             :authority="$authority" />
+
+        <div class="sidebar-title">Laporan</div>
+        <x-nav.sidebar.menu url="{{ url('sp_v_stock') }}" key="sp_v_stock" icon="bi bi-journal" :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('sp_v_target') }}" key="sp_v_target" icon="bi bi-bullseye"
+            :authority="$authority" />
+
+        <x-nav.sidebar.menu url="{{ url('rangkuman') }}" key="rangkuman" icon="bi bi-journal" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('riwayat-pengiriman') }}" key="riwayat_pengiriman" icon="bi bi-clock-history"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('recap') }}" key="recap" icon="bi bi-journal" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('report') }}" key="report" icon="bi bi-journal" :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('rekonsiliasi-nkb-ntb') }}" key="rekonsiliasi_nkb_ntb"
+            icon="bi bi-arrow-left-right" :authority="$authority" />
 
         @if ((auth()->user()->authority_id ?? null) == 1 || (auth()->user()->authority_id ?? null) == 4)
             <div class="sidebar-title">Manajemen User</div>

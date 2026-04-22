@@ -10,6 +10,10 @@ use App\Jobs\SynchronizePeriodesJob;
 use App\Jobs\SynchronizeSpBranchesJob;
 use App\Jobs\SynchronizeDeliveryNotesJob;
 use App\Jobs\SynchronizeDeliveryNoteDetailsJob;
+use App\Jobs\SynchronizeReceiveBookNotesJob;
+use App\Jobs\SynchronizeReceiveBookNoteDetailsJob;
+use App\Jobs\SynchronizeStockMutationsJob;
+use App\Jobs\SynchronizeStockMutationItemsJob;
 use App\Models\CutoffData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -111,100 +115,52 @@ class StagingController extends Controller
                 'icon' => 'bi-truck',
                 'color' => 'dark',
             ],
+            [
+                'name'      => 'Staging Nota Terima',
+                'key'       => 'receive_notes',
+                'table'     => 'm_terima_buku, d_terima_buku',
+                'count'     => null,
+                'cache_key' => 'sync_receive_book_notes_progress',
+                'icon'      => 'bi-box-arrow-in-down',
+                'color'     => 'secondary',
+            ],
+            [
+                'name'      => 'Staging Mutasi Buku',
+                'key'       => 'stock_mutations',
+                'table'     => 'm_mutasi_buku, d_mutasi_buku',
+                'count'     => null,
+                'cache_key' => 'sync_stock_mutations_progress',
+                'icon'      => 'bi-arrow-left-right',
+                'color'     => 'warning',
+            ],
         ];
 
         // Get sync progress and last sync time for each item
         foreach ($stagingData as &$item) {
-            // Special handling for delivery_notes: combine progress from both jobs
             if ($item['key'] === 'delivery_notes') {
-                $progressNotes = Cache::get('sync_delivery_notes_progress', null);
-                $progressDetails = Cache::get('sync_delivery_note_details_progress', null);
-
-                // Combine progress from both jobs
-                if ($progressNotes || $progressDetails) {
-                    $combinedProgress = [
-                        'status' => 'running',
-                        'total' => 0,
-                        'processed' => 0,
-                        'created' => 0,
-                        'updated' => 0,
-                        'errors' => 0,
-                        'percentage' => 0,
-                    ];
-
-                    // Sum totals first
-                    $combinedProgress['total'] = ($progressNotes['total'] ?? 0) + ($progressDetails['total'] ?? 0);
-                    $combinedProgress['processed'] = ($progressNotes['processed'] ?? 0) + ($progressDetails['processed'] ?? 0);
-                    $combinedProgress['created'] = ($progressNotes['created'] ?? 0) + ($progressDetails['created'] ?? 0);
-                    $combinedProgress['updated'] = ($progressNotes['updated'] ?? 0) + ($progressDetails['updated'] ?? 0);
-                    $combinedProgress['errors'] = ($progressNotes['errors'] ?? 0) + ($progressDetails['errors'] ?? 0);
-
-                    // Determine overall status
-                    $notesStatus = $progressNotes['status'] ?? null;
-                    $detailsStatus = $progressDetails['status'] ?? null;
-
-                    // If both are null, status is running (jobs might be starting)
-                    if ($notesStatus === null && $detailsStatus === null) {
-                        $combinedProgress['status'] = 'running';
-                    } else if ($notesStatus === 'running' || $detailsStatus === 'running') {
-                        $combinedProgress['status'] = 'running';
-                    } else if ($notesStatus === 'failed' || $detailsStatus === 'failed') {
-                        $combinedProgress['status'] = 'failed';
-                    } else {
-                        // Both are completed or at least not running/failed
-                        // If both jobs have status 'completed', mark as completed
-                        if (($notesStatus === 'completed' || $notesStatus === null) &&
-                            ($detailsStatus === 'completed' || $detailsStatus === null)
-                        ) {
-                            $combinedProgress['status'] = 'completed';
-                            // Use the latest completed_at
-                            $notesCompletedAt = $progressNotes['completed_at'] ?? null;
-                            $detailsCompletedAt = $progressDetails['completed_at'] ?? null;
-                            if ($notesCompletedAt && $detailsCompletedAt) {
-                                $combinedProgress['completed_at'] = $notesCompletedAt > $detailsCompletedAt ? $notesCompletedAt : $detailsCompletedAt;
-                            } else {
-                                $combinedProgress['completed_at'] = $notesCompletedAt ?? $detailsCompletedAt;
-                            }
-                        } else {
-                            $combinedProgress['status'] = 'running';
-                        }
-                    }
-
-                    // Calculate percentage
-                    // When completed, ensure processed includes errors (errors are also processed records)
-                    if ($combinedProgress['status'] === 'completed' && $combinedProgress['total'] > 0) {
-                        // When completed, all records have been processed (including errors)
-                        // So processed + errors should equal total, or we set processed = total
-                        $actualProcessed = $combinedProgress['processed'] + $combinedProgress['errors'];
-                        if ($actualProcessed >= $combinedProgress['total']) {
-                            $combinedProgress['processed'] = $combinedProgress['total'];
-                        } else {
-                            // If somehow processed + errors < total, use total as processed
-                            $combinedProgress['processed'] = $combinedProgress['total'];
-                        }
-                        $combinedProgress['percentage'] = 100;
-                    } else if ($combinedProgress['total'] > 0) {
-                        // While running, calculate percentage based on processed + errors
-                        $actualProcessed = $combinedProgress['processed'] + $combinedProgress['errors'];
-                        $combinedProgress['percentage'] = round(($actualProcessed / $combinedProgress['total']) * 100, 2);
-                    }
-
-                    $item['progress'] = $combinedProgress;
-                    $item['is_running'] = $combinedProgress['status'] === 'running';
-
-                    // Get last sync timestamp (use the latest one)
-                    $lastSyncNotes = Cache::get('sync_delivery_notes_progress_last_sync', null);
-                    $lastSyncDetails = Cache::get('sync_delivery_note_details_progress_last_sync', null);
-                    if ($lastSyncNotes && $lastSyncDetails) {
-                        $item['last_sync'] = $lastSyncNotes > $lastSyncDetails ? $lastSyncNotes : $lastSyncDetails;
-                    } else {
-                        $item['last_sync'] = $lastSyncNotes ?? $lastSyncDetails;
-                    }
-                } else {
-                    $item['progress'] = null;
-                    $item['is_running'] = false;
-                    $item['last_sync'] = null;
-                }
+                $state = $this->combinedMasterDetailSyncState(
+                    'sync_delivery_notes_progress',
+                    'sync_delivery_note_details_progress'
+                );
+                $item['progress'] = $state['progress'];
+                $item['is_running'] = $state['is_running'];
+                $item['last_sync'] = $state['last_sync'];
+            } elseif ($item['key'] === 'receive_notes') {
+                $state = $this->combinedMasterDetailSyncState(
+                    'sync_receive_book_notes_progress',
+                    'sync_receive_book_note_details_progress'
+                );
+                $item['progress'] = $state['progress'];
+                $item['is_running'] = $state['is_running'];
+                $item['last_sync'] = $state['last_sync'];
+            } elseif ($item['key'] === 'stock_mutations') {
+                $state = $this->combinedMasterDetailSyncState(
+                    'sync_stock_mutations_progress',
+                    'sync_stock_mutation_items_progress'
+                );
+                $item['progress']   = $state['progress'];
+                $item['is_running'] = $state['is_running'];
+                $item['last_sync']  = $state['last_sync'];
             } else {
                 // Normal handling for other items
                 $progress = Cache::get($item['cache_key'], null);
@@ -237,15 +193,108 @@ class StagingController extends Controller
     public function getStagingCounts()
     {
         $counts = [
-            'product' => $this->getStagingCount('m_book'),
-            'branch' => $this->getStagingCount('m_cabang'),
-            'central_stock' => $this->getStagingCount('r_stock_pusat'),
-            'target' => $this->getStagingCount('r_target_buku'),
-            'period' => $this->getStagingCount('m_period'),
-            'sp_branch' => $this->getStagingCount('r_sp_faktur_stok'),
-            'delivery_notes' => $this->getStagingCount('m_kirim_cabang') + $this->getStagingCount('d_kirim_cabang'),
+            'product'         => $this->getStagingCount('m_book'),
+            'branch'          => $this->getStagingCount('m_cabang'),
+            'central_stock'   => $this->getStagingCount('r_stock_pusat'),
+            'target'          => $this->getStagingCount('r_target_buku'),
+            'period'          => $this->getStagingCount('m_period'),
+            'sp_branch'       => $this->getStagingCount('r_sp_faktur_stok'),
+            'delivery_notes'  => $this->getStagingCount('m_kirim_cabang') + $this->getStagingCount('d_kirim_cabang'),
+            'receive_notes'   => $this->getStagingCount('m_terima_buku')  + $this->getStagingCount('d_terima_buku'),
+            'stock_mutations' => $this->getStagingCount('m_mutasi_buku')  + $this->getStagingCount('d_mutasi_buku'),
         ];
         return response()->json($counts);
+    }
+
+    /**
+     * Gabungkan progress cache dua job (master + detail), pola sama dengan Nota Kirim.
+     *
+     * @return array{progress: ?array, is_running: bool, last_sync: ?string}
+     */
+    private function combinedMasterDetailSyncState(string $masterProgressKey, string $detailProgressKey): array
+    {
+        $progressNotes = Cache::get($masterProgressKey, null);
+        $progressDetails = Cache::get($detailProgressKey, null);
+
+        if (!$progressNotes && !$progressDetails) {
+            return [
+                'progress' => null,
+                'is_running' => false,
+                'last_sync' => null,
+            ];
+        }
+
+        $combinedProgress = [
+            'status' => 'running',
+            'total' => 0,
+            'processed' => 0,
+            'created' => 0,
+            'updated' => 0,
+            'errors' => 0,
+            'percentage' => 0,
+        ];
+
+        $n = is_array($progressNotes) ? $progressNotes : [];
+        $d = is_array($progressDetails) ? $progressDetails : [];
+
+        $combinedProgress['total'] = ($n['total'] ?? 0) + ($d['total'] ?? 0);
+        $combinedProgress['processed'] = ($n['processed'] ?? 0) + ($d['processed'] ?? 0);
+        $combinedProgress['created'] = ($n['created'] ?? 0) + ($d['created'] ?? 0);
+        $combinedProgress['updated'] = ($n['updated'] ?? 0) + ($d['updated'] ?? 0);
+        $combinedProgress['errors'] = ($n['errors'] ?? 0) + ($d['errors'] ?? 0);
+
+        $notesStatus = $n['status'] ?? null;
+        $detailsStatus = $d['status'] ?? null;
+
+        if ($notesStatus === null && $detailsStatus === null) {
+            $combinedProgress['status'] = 'running';
+        } elseif ($notesStatus === 'running' || $detailsStatus === 'running') {
+            $combinedProgress['status'] = 'running';
+        } elseif ($notesStatus === 'failed' || $detailsStatus === 'failed') {
+            $combinedProgress['status'] = 'failed';
+        } else {
+            if (($notesStatus === 'completed' || $notesStatus === null) &&
+                ($detailsStatus === 'completed' || $detailsStatus === null)
+            ) {
+                $combinedProgress['status'] = 'completed';
+                $notesCompletedAt = $n['completed_at'] ?? null;
+                $detailsCompletedAt = $d['completed_at'] ?? null;
+                if ($notesCompletedAt && $detailsCompletedAt) {
+                    $combinedProgress['completed_at'] = $notesCompletedAt > $detailsCompletedAt ? $notesCompletedAt : $detailsCompletedAt;
+                } else {
+                    $combinedProgress['completed_at'] = $notesCompletedAt ?? $detailsCompletedAt;
+                }
+            } else {
+                $combinedProgress['status'] = 'running';
+            }
+        }
+
+        if ($combinedProgress['status'] === 'completed' && $combinedProgress['total'] > 0) {
+            $actualProcessed = $combinedProgress['processed'] + $combinedProgress['errors'];
+            if ($actualProcessed >= $combinedProgress['total']) {
+                $combinedProgress['processed'] = $combinedProgress['total'];
+            } else {
+                $combinedProgress['processed'] = $combinedProgress['total'];
+            }
+            $combinedProgress['percentage'] = 100;
+        } elseif ($combinedProgress['total'] > 0) {
+            $actualProcessed = $combinedProgress['processed'] + $combinedProgress['errors'];
+            $combinedProgress['percentage'] = round(($actualProcessed / $combinedProgress['total']) * 100, 2);
+        }
+
+        $lastSyncNotes = Cache::get($masterProgressKey . '_last_sync', null);
+        $lastSyncDetails = Cache::get($detailProgressKey . '_last_sync', null);
+        if ($lastSyncNotes && $lastSyncDetails) {
+            $lastSync = $lastSyncNotes > $lastSyncDetails ? $lastSyncNotes : $lastSyncDetails;
+        } else {
+            $lastSync = $lastSyncNotes ?? $lastSyncDetails;
+        }
+
+        return [
+            'progress' => $combinedProgress,
+            'is_running' => $combinedProgress['status'] === 'running',
+            'last_sync' => $lastSync,
+        ];
     }
 
     /**
@@ -273,7 +322,9 @@ class StagingController extends Controller
             'period' => ['m_period'],
             'sp_branch' => ['r_sp_faktur_stok'],
             'delivery_notes' => ['m_kirim_cabang', 'd_kirim_cabang'],
-            default => [],
+            'receive_notes' => ['m_terima_buku', 'd_terima_buku'],
+            'stock_mutations' => ['m_mutasi_buku', 'd_mutasi_buku'],
+            default           => [],
         };
         foreach ($tables as $table) {
             Cache::forget('staging_count_' . $table);
@@ -286,7 +337,7 @@ class StagingController extends Controller
     public function synchronizeAll(Request $request)
     {
         try {
-            $types = ['product', 'branch', 'period', 'central_stock', 'target', 'sp_branch', 'delivery_notes'];
+            $types = ['product', 'branch', 'period', 'central_stock', 'target', 'sp_branch', 'delivery_notes', 'receive_notes', 'stock_mutations'];
             foreach ($types as $type) {
                 $this->clearStagingCountCache($type);
                 switch ($type) {
@@ -327,6 +378,26 @@ class StagingController extends Controller
                             SynchronizeDeliveryNoteDetailsJob::dispatch();
                         }
                         break;
+                    case 'receive_notes':
+                        $this->clearStaleSyncLock('sync_receive_book_notes_lock', 'sync_receive_book_notes_progress');
+                        $this->clearStaleSyncLock('sync_receive_book_note_details_lock', 'sync_receive_book_note_details_progress');
+                        if (Cache::add('sync_receive_book_notes_lock', true, now()->addHours(2))) {
+                            SynchronizeReceiveBookNotesJob::dispatch();
+                        }
+                        if (Cache::add('sync_receive_book_note_details_lock', true, now()->addHours(2))) {
+                            SynchronizeReceiveBookNoteDetailsJob::dispatch();
+                        }
+                        break;
+                    case 'stock_mutations':
+                        $this->clearStaleSyncLock('sync_stock_mutations_lock', 'sync_stock_mutations_progress');
+                        $this->clearStaleSyncLock('sync_stock_mutation_items_lock', 'sync_stock_mutation_items_progress');
+                        if (Cache::add('sync_stock_mutations_lock', true, now()->addHours(2))) {
+                            SynchronizeStockMutationsJob::dispatch();
+                        }
+                        if (Cache::add('sync_stock_mutation_items_lock', true, now()->addHours(2))) {
+                            SynchronizeStockMutationItemsJob::dispatch();
+                        }
+                        break;
                 }
             }
 
@@ -348,11 +419,10 @@ class StagingController extends Controller
     public function synchronize(Request $request)
     {
         $request->validate([
-            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes',
+            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes,receive_notes,stock_mutations',
         ]);
 
         $type = $request->input('type');
-        $clearFirst = $request->input('clear_first', false);
 
         try {
             $this->clearStagingCountCache($type);
@@ -417,6 +487,44 @@ class StagingController extends Controller
                     SynchronizeDeliveryNotesJob::dispatch();
                     SynchronizeDeliveryNoteDetailsJob::dispatch();
                     break;
+                case 'receive_notes':
+                    $this->clearStaleSyncLock('sync_receive_book_notes_lock', 'sync_receive_book_notes_progress');
+                    $this->clearStaleSyncLock('sync_receive_book_note_details_lock', 'sync_receive_book_note_details_progress');
+                    if (!Cache::add('sync_receive_book_notes_lock', true, now()->addHours(2))) {
+                        return $this->syncConflictResponse(
+                            'Job sinkron nota terima (m_terima_buku) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_receive_book_notes_progress'
+                        );
+                    }
+                    if (!Cache::add('sync_receive_book_note_details_lock', true, now()->addHours(2))) {
+                        Cache::forget('sync_receive_book_notes_lock');
+                        return $this->syncConflictResponse(
+                            'Job sinkron detail terima (d_terima_buku) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_receive_book_note_details_progress'
+                        );
+                    }
+                    SynchronizeReceiveBookNotesJob::dispatch();
+                    SynchronizeReceiveBookNoteDetailsJob::dispatch();
+                    break;
+                case 'stock_mutations':
+                    $this->clearStaleSyncLock('sync_stock_mutations_lock', 'sync_stock_mutations_progress');
+                    $this->clearStaleSyncLock('sync_stock_mutation_items_lock', 'sync_stock_mutation_items_progress');
+                    if (!Cache::add('sync_stock_mutations_lock', true, now()->addHours(2))) {
+                        return $this->syncConflictResponse(
+                            'Job sinkron mutasi buku (m_mutasi_buku) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_stock_mutations_progress'
+                        );
+                    }
+                    if (!Cache::add('sync_stock_mutation_items_lock', true, now()->addHours(2))) {
+                        Cache::forget('sync_stock_mutations_lock');
+                        return $this->syncConflictResponse(
+                            'Job sinkron detail mutasi (d_mutasi_buku) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_stock_mutation_items_progress'
+                        );
+                    }
+                    SynchronizeStockMutationsJob::dispatch();
+                    SynchronizeStockMutationItemsJob::dispatch();
+                    break;
             }
 
             return response()->json([
@@ -437,95 +545,43 @@ class StagingController extends Controller
     public function getProgress(Request $request)
     {
         $request->validate([
-            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes',
+            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes,receive_notes,stock_mutations',
         ]);
 
         $type = $request->input('type');
 
-        // Special handling for delivery_notes: combine progress from both delivery_notes and delivery_note_details
         if ($type === 'delivery_notes') {
-            $progressNotes = Cache::get('sync_delivery_notes_progress', null);
-            $progressDetails = Cache::get('sync_delivery_note_details_progress', null);
+            $state = $this->combinedMasterDetailSyncState(
+                'sync_delivery_notes_progress',
+                'sync_delivery_note_details_progress'
+            );
 
-            // Combine progress from both jobs
-            if ($progressNotes || $progressDetails) {
-                $combinedProgress = [
-                    'status' => 'running',
-                    'total' => 0,
-                    'processed' => 0,
-                    'created' => 0,
-                    'updated' => 0,
-                    'errors' => 0,
-                    'percentage' => 0,
-                ];
-
-                // Sum totals first
-                $combinedProgress['total'] = ($progressNotes['total'] ?? 0) + ($progressDetails['total'] ?? 0);
-                $combinedProgress['processed'] = ($progressNotes['processed'] ?? 0) + ($progressDetails['processed'] ?? 0);
-                $combinedProgress['created'] = ($progressNotes['created'] ?? 0) + ($progressDetails['created'] ?? 0);
-                $combinedProgress['updated'] = ($progressNotes['updated'] ?? 0) + ($progressDetails['updated'] ?? 0);
-                $combinedProgress['errors'] = ($progressNotes['errors'] ?? 0) + ($progressDetails['errors'] ?? 0);
-
-                // Determine overall status
-                $notesStatus = $progressNotes['status'] ?? null;
-                $detailsStatus = $progressDetails['status'] ?? null;
-
-                // If both are null, status is running (jobs might be starting)
-                if ($notesStatus === null && $detailsStatus === null) {
-                    $combinedProgress['status'] = 'running';
-                } else if ($notesStatus === 'running' || $detailsStatus === 'running') {
-                    $combinedProgress['status'] = 'running';
-                } else if ($notesStatus === 'failed' || $detailsStatus === 'failed') {
-                    $combinedProgress['status'] = 'failed';
-                } else {
-                    // Both are completed or at least not running/failed
-                    // If both jobs have status 'completed', mark as completed
-                    if (($notesStatus === 'completed' || $notesStatus === null) &&
-                        ($detailsStatus === 'completed' || $detailsStatus === null)
-                    ) {
-                        $combinedProgress['status'] = 'completed';
-                        // Use the latest completed_at
-                        $notesCompletedAt = $progressNotes['completed_at'] ?? null;
-                        $detailsCompletedAt = $progressDetails['completed_at'] ?? null;
-                        if ($notesCompletedAt && $detailsCompletedAt) {
-                            $combinedProgress['completed_at'] = $notesCompletedAt > $detailsCompletedAt ? $notesCompletedAt : $detailsCompletedAt;
-                        } else {
-                            $combinedProgress['completed_at'] = $notesCompletedAt ?? $detailsCompletedAt;
-                        }
-                    } else {
-                        $combinedProgress['status'] = 'running';
-                    }
-                }
-
-                // Calculate percentage
-                // When completed, ensure processed includes errors (errors are also processed records)
-                if ($combinedProgress['status'] === 'completed' && $combinedProgress['total'] > 0) {
-                    // When completed, all records have been processed (including errors)
-                    // So processed + errors should equal total, or we set processed = total
-                    $actualProcessed = $combinedProgress['processed'] + $combinedProgress['errors'];
-                    if ($actualProcessed >= $combinedProgress['total']) {
-                        $combinedProgress['processed'] = $combinedProgress['total'];
-                    } else {
-                        // If somehow processed + errors < total, use total as processed
-                        $combinedProgress['processed'] = $combinedProgress['total'];
-                    }
-                    $combinedProgress['percentage'] = 100;
-                } else if ($combinedProgress['total'] > 0) {
-                    // While running, calculate percentage based on processed + errors
-                    $actualProcessed = $combinedProgress['processed'] + $combinedProgress['errors'];
-                    $combinedProgress['percentage'] = round(($actualProcessed / $combinedProgress['total']) * 100, 2);
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'progress' => $combinedProgress,
-                ]);
-            }
-
-            // No progress data yet
             return response()->json([
                 'success' => true,
-                'progress' => null,
+                'progress' => $state['progress'],
+            ]);
+        }
+
+        if ($type === 'receive_notes') {
+            $state = $this->combinedMasterDetailSyncState(
+                'sync_receive_book_notes_progress',
+                'sync_receive_book_note_details_progress'
+            );
+
+            return response()->json([
+                'success' => true,
+                'progress' => $state['progress'],
+            ]);
+        }
+
+        if ($type === 'stock_mutations') {
+            $state = $this->combinedMasterDetailSyncState(
+                'sync_stock_mutations_progress',
+                'sync_stock_mutation_items_progress'
+            );
+            return response()->json([
+                'success'  => true,
+                'progress' => $state['progress'],
             ]);
         }
 
@@ -617,13 +673,15 @@ class StagingController extends Controller
     private function getCacheKey($type)
     {
         $cacheKeys = [
-            'product' => 'sync_products_progress',
-            'branch' => 'sync_branches_progress',
-            'central_stock' => 'sync_central_stocks_progress',
-            'target' => 'sync_targets_progress',
-            'period' => 'sync_periodes_progress',
-            'sp_branch' => 'sync_sp_branches_progress',
-            'delivery_notes' => 'sync_delivery_notes_progress',
+            'product'         => 'sync_products_progress',
+            'branch'          => 'sync_branches_progress',
+            'central_stock'   => 'sync_central_stocks_progress',
+            'target'          => 'sync_targets_progress',
+            'period'          => 'sync_periodes_progress',
+            'sp_branch'       => 'sync_sp_branches_progress',
+            'delivery_notes'  => 'sync_delivery_notes_progress',
+            'receive_notes'   => 'sync_receive_book_notes_progress',
+            'stock_mutations' => 'sync_stock_mutations_progress',
         ];
 
         return $cacheKeys[$type] ?? '';
@@ -635,13 +693,15 @@ class StagingController extends Controller
     private function getTypeName($type)
     {
         $names = [
-            'product' => 'Product',
-            'branch' => 'Branch',
-            'central_stock' => 'Central Stock',
-            'target' => 'Target',
-            'period' => 'Periode',
-            'sp_branch' => 'Pesanan (Sp Branch)',
-            'delivery_notes' => 'Delivery Notes',
+            'product'         => 'Product',
+            'branch'          => 'Branch',
+            'central_stock'   => 'Central Stock',
+            'target'          => 'Target',
+            'period'          => 'Periode',
+            'sp_branch'       => 'Pesanan (Sp Branch)',
+            'delivery_notes'  => 'Delivery Notes',
+            'receive_notes'   => 'Nota Terima',
+            'stock_mutations' => 'Mutasi Buku',
         ];
 
         return $names[$type] ?? $type;

@@ -28,7 +28,8 @@
                 <input type="hidden" name="per_page" value="{{ request('per_page', 20) }}" />
                 <div class="col-md-5">
                     <input type="text" class="form-control" name="search"
-                        placeholder="Cari nomor, pengirim, tujuan, ekspedisi, supir..." value="{{ request('search') }}" />
+                        placeholder="Cari nomor, pengirim, tujuan, ekspedisi, supir..."
+                        value="{{ request('search') }}" />
                 </div>
                 <div class="col-md-4 d-flex gap-2">
                     <button type="submit" class="btn btn-outline-secondary btn-sm">
@@ -41,9 +42,11 @@
                 <div class="col-md-3 text-end">
                     <select name="per_page" class="form-select form-select-sm" style="width:auto;display:inline-block"
                         onchange="this.form.submit()">
-                        <option value="20" {{ request('per_page', 20) == 20 ? 'selected' : '' }}>20 per halaman</option>
+                        <option value="20" {{ request('per_page', 20) == 20 ? 'selected' : '' }}>20 per halaman
+                        </option>
                         <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 per halaman</option>
-                        <option value="100" {{ request('per_page') == 100 ? 'selected' : '' }}>100 per halaman</option>
+                        <option value="100" {{ request('per_page') == 100 ? 'selected' : '' }}>100 per halaman
+                        </option>
                     </select>
                 </div>
             </form>
@@ -69,7 +72,8 @@
                                 <td>{{ $item->recipientBranch->branch_name ?? $item->recipient_code }}</td>
                                 <td>{{ $item->date ? $item->date->format('d/m/Y') : '-' }}</td>
                                 <td>{{ $item->expedition ?? '-' }}</td>
-                                <td>{{ is_array($item->drivers) ? implode(', ', array_filter($item->drivers)) : ($item->drivers ?? '-') }}</td>
+                                <td>{{ is_array($item->drivers) ? implode(', ', array_filter($item->drivers)) : $item->drivers ?? '-' }}
+                                </td>
                                 <td class="text-center">
                                     <a href="{{ route('delivery-orders.show', $item->id) }}"
                                         class="btn btn-sm btn-outline-primary">
@@ -80,7 +84,7 @@
                                         <i class="bi bi-pencil me-1"></i>Edit
                                     </a>
                                     <form action="{{ route('delivery-orders.destroy', $item->id) }}" method="POST"
-                                        class="d-inline"
+                                        class="d-inline d-none"
                                         onsubmit="return confirm('Yakin hapus Surat Jalan ini?');">
                                         @csrf
                                         @method('DELETE')
@@ -101,7 +105,7 @@
                 </table>
             </div>
 
-            @if(isset($items) && $items->hasPages())
+            @if (isset($items) && $items->hasPages())
                 <div class="mt-3">
                     {{ $items->links('pagination::bootstrap-5') }}
                 </div>

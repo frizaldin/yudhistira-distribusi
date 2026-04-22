@@ -71,10 +71,6 @@
                                         class="btn btn-sm btn-outline-secondary">
                                         <i class="bi bi-printer me-1"></i>Print
                                     </a>
-                                    <a href="{{ route('nkb.edit', ['number' => $item->number]) }}"
-                                        class="btn btn-sm btn-outline-secondary ms-1">
-                                        <i class="bi bi-pencil me-1"></i>Edit
-                                    </a>
                                     <form method="POST" action="{{ route('nkb.destroy', ['number' => $item->number]) }}"
                                         class="d-inline form-batalkan-nkb" data-nkb="{{ $item->number }}">
                                         @csrf

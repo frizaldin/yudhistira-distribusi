@@ -105,6 +105,12 @@ class DeliveryOrderController extends Controller
             'note' => ['nullable', 'string'],
             'creator_name' => ['required', 'string', 'max:255'],
             'known_name' => ['required', 'string', 'max:255'],
+            'recipient_name' => ['nullable', 'string', 'max:255'],
+            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_address' => ['nullable', 'string'],
+            'koli' => ['nullable', 'integer', 'min:0'],
+            'pack' => ['nullable', 'integer', 'min:0'],
+            'terbilang' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.nkb_id' => [
                 'required',
@@ -128,6 +134,12 @@ class DeliveryOrderController extends Controller
         $do->note = $validated['note'] ?? '';
         $do->creator_name = $validated['creator_name'] ?? '';
         $do->known_name = $validated['known_name'] ?? '';
+        $do->recipient_name = $validated['recipient_name'] ?? null;
+        $do->recipient_phone = $validated['recipient_phone'] ?? null;
+        $do->recipient_address = $validated['recipient_address'] ?? null;
+        $do->koli = $validated['koli'] ?? null;
+        $do->pack = $validated['pack'] ?? null;
+        $do->terbilang = $validated['terbilang'] ?? null;
         $do->created_by = Auth::id();
         $do->save();
 
@@ -235,6 +247,12 @@ class DeliveryOrderController extends Controller
             'note' => ['nullable', 'string'],
             'creator_name' => ['required', 'string', 'max:255'],
             'known_name' => ['required', 'string', 'max:255'],
+            'recipient_name' => ['nullable', 'string', 'max:255'],
+            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_address' => ['nullable', 'string'],
+            'koli' => ['nullable', 'integer', 'min:0'],
+            'pack' => ['nullable', 'integer', 'min:0'],
+            'terbilang' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.nkb_id' => [
                 'required',
@@ -257,6 +275,12 @@ class DeliveryOrderController extends Controller
         $do->note = $validated['note'] ?? '';
         $do->creator_name = $validated['creator_name'] ?? '';
         $do->known_name = $validated['known_name'] ?? '';
+        $do->recipient_name = $validated['recipient_name'] ?? null;
+        $do->recipient_phone = $validated['recipient_phone'] ?? null;
+        $do->recipient_address = $validated['recipient_address'] ?? null;
+        $do->koli = $validated['koli'] ?? null;
+        $do->pack = $validated['pack'] ?? null;
+        $do->terbilang = $validated['terbilang'] ?? null;
         $do->save();
 
         $do->items()->delete();

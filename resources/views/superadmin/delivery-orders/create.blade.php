@@ -90,9 +90,45 @@
                         @error('creator_name')<div class="text-danger small">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">Nama Dikenal <span class="text-danger">*</span></label>
+                        <label class="form-label small">Diketahui Oleh <span class="text-danger">*</span></label>
                         <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255" value="{{ old('known_name') }}" required />
                         @error('known_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Nama Penerima</label>
+                        <input type="text" name="recipient_name" class="form-control form-control-sm" maxlength="255" value="{{ old('recipient_name') }}" />
+                        @error('recipient_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">No Telepon Penerima</label>
+                        <input type="text" name="recipient_phone" class="form-control form-control-sm" maxlength="50" value="{{ old('recipient_phone') }}" placeholder="08xxxxxxxxxx" />
+                        @error('recipient_phone')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Alamat Penerima</label>
+                        <input type="text" name="recipient_address" class="form-control form-control-sm" value="{{ old('recipient_address') }}" />
+                        @error('recipient_address')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-md-3">
+                        <label class="form-label small">Koli</label>
+                        <input type="number" id="input_koli" name="koli" class="form-control form-control-sm" min="0" value="{{ old('koli') }}" />
+                        @error('koli')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Pack</label>
+                        <input type="number" id="input_pack" name="pack" class="form-control form-control-sm" min="0" value="{{ old('pack') }}" />
+                        @error('pack')<div class="text-danger small">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small">Terbilang</label>
+                        <input type="text" id="input_terbilang" name="terbilang" class="form-control form-control-sm" maxlength="500" value="{{ old('terbilang') }}" placeholder="Otomatis terisi..." />
+                        @error('terbilang')<div class="text-danger small">{{ $message }}</div>@enderror
                     </div>
                 </div>
 
@@ -172,7 +208,41 @@
     <script>
         var nkbsList = @json($nkbs->map(fn($n) => ['id' => $n->id, 'number' => $n->number, 'recipient_code' => $n->recipient_code ?? '']));
         $(function() {
-            var rowIndex = $('#items-tbody .item-row').length;
+            // ── Terbilang ─────────────────────────────────────────────────────
+            var satuanTb = ['','Satu','Dua','Tiga','Empat','Lima','Enam','Tujuh','Delapan','Sembilan',
+                            'Sepuluh','Sebelas','Dua Belas','Tiga Belas','Empat Belas','Lima Belas',
+                            'Enam Belas','Tujuh Belas','Delapan Belas','Sembilan Belas'];
+            var puluhanTb = ['','Sepuluh','Dua Puluh','Tiga Puluh','Empat Puluh','Lima Puluh',
+                             'Enam Puluh','Tujuh Puluh','Delapan Puluh','Sembilan Puluh'];
+            function terbilangAngka(n) {
+                n = Math.abs(parseInt(n)) || 0;
+                if (n === 0) return 'Nol';
+                if (n < 20) return satuanTb[n];
+                if (n < 100) {
+                    var p = Math.floor(n / 10), s = n % 10;
+                    return puluhanTb[p] + (s ? ' ' + satuanTb[s] : '');
+                }
+                if (n < 1000) {
+                    var r = Math.floor(n / 100);
+                    return (r === 1 ? 'Seratus' : satuanTb[r] + ' Ratus') + (n % 100 ? ' ' + terbilangAngka(n % 100) : '');
+                }
+                if (n < 1000000) {
+                    var r2 = Math.floor(n / 1000);
+                    return (r2 === 1 ? 'Seribu' : terbilangAngka(r2) + ' Ribu') + (n % 1000 ? ' ' + terbilangAngka(n % 1000) : '');
+                }
+                return n.toString();
+            }
+            function updateTerbilang() {
+                var koli = parseInt($('#input_koli').val()) || 0;
+                var pack = parseInt($('#input_pack').val()) || 0;
+                var parts = [];
+                if (koli > 0) parts.push(terbilangAngka(koli) + ' Koli');
+                if (pack > 0) parts.push(terbilangAngka(pack) + ' Pack');
+                $('#input_terbilang').val(parts.join(' '));
+            }
+            $('#input_koli, #input_pack').on('input change', updateTerbilang);
+            // ─────────────────────────────────────────────────────────────────
+
             var nkbDetailUrlTemplate = '{{ route("api.nkb.detail", ["id" => ":id"]) }}';
 
             function fillRowFromNkb($row, nkbId) {

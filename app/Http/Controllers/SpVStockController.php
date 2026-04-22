@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\CentralStock;
 use App\Models\CentralStockDeduction;
 use App\Models\StockMutation;
+use App\Models\StockMutationItem;
 use App\Models\SpBranch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -67,7 +68,7 @@ class SpVStockController extends Controller
         }
         $centralStocks = $centralStocksQuery->get()->keyBy('book_code');
 
-        $stockMutationsByBook = StockMutation::select([
+        $stockMutationsByBook = StockMutationItem::select([
             'book_code',
             DB::raw('SUM(total_eksemplar) as total_mutasi'),
         ])

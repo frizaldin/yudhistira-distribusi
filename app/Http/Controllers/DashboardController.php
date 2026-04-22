@@ -193,7 +193,7 @@ class DashboardController extends Controller
         $totalStockPusat = (float) CentralStock::query()
             ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
             ->sum('exemplar');
-        $totalStockPusat += (float) StockMutation::query()->sum('total_eksemplar');
+        $totalStockPusat += (float) \App\Models\StockMutationItem::sum('total_eksemplar');
         
         // Total calculation - hanya dari cabang yang memiliki data (untuk akurasi)
         $totalTargetForCalculationQuery = Target::select([
@@ -730,7 +730,7 @@ class DashboardController extends Controller
             ->when($userBranchCode, fn ($q) => $q->where('branch_code', $userBranchCode))
             ->when($filteredBranchCodes !== null, fn ($q) => $q->whereIn('branch_code', $filteredBranchCodes))
             ->first();
-        $totalStokPusatAllValue = (float) ($totalStokPusatAll->total_stok_pusat ?? 0) + (float) StockMutation::query()->sum('total_eksemplar');
+        $totalStokPusatAllValue = (float) ($totalStokPusatAll->total_stok_pusat ?? 0) + (float) \App\Models\StockMutationItem::sum('total_eksemplar');
         $yearlyStokPusatData = [];
         foreach ($yearsRange as $y) {
             $yearlyStokPusatData[$y] = $totalStokPusatAllValue;

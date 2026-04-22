@@ -82,7 +82,7 @@
                         @error('creator_name')<div class="text-danger small">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small">Nama Dikenal <span class="text-danger">*</span></label>
+                        <label class="form-label small">Diketahui Oleh <span class="text-danger">*</span></label>
                         <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255" value="{{ old('known_name', $document->known_name ?? '') }}" required />
                         <small class="text-muted">Diambil dari NPPB, bisa diedit</small>
                         @error('known_name')<div class="text-danger small">{{ $message }}</div>@enderror

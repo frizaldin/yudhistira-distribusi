@@ -58,14 +58,16 @@ class Nkb extends Model
     }
 
     /**
-     * Generate nomor NKB berikutnya per sender_code.
-     * Format: {sender_code}-{abjad}{nomor_urut}
-     * Contoh: PS00-A000001. Jika nomor urut mencapai 999999, abjad naik (A→B→…→Z→A) dan urut reset 1.
+     * Generate nomor NKB berikutnya.
+     * Format: {YY}-{NNNNNN}
+     * Contoh: 26-000001 (tahun 2026, nomor urut ke-1).
+     * Nomor urut reset ke 1 setiap ganti tahun.
      */
-    public static function generateNextNumber(string $senderCode): string
+    public static function generateNextNumber(string $senderCode = ''): string
     {
-        $prefix = $senderCode . '-';
-        $pattern = '/^' . preg_quote($prefix, '/') . '([A-Z])(\d{6})$/';
+        $yy      = date('y');          // 2-digit tahun, misal '26'
+        $prefix  = $yy . '-';
+        $pattern = '/^' . preg_quote($prefix, '/') . '(\d{6})$/';
 
         $last = DB::table('nkbs')
             ->where('number', 'like', $prefix . '%')
@@ -74,18 +76,11 @@ class Nkb extends Model
             ->value('number');
 
         if (!$last || !preg_match($pattern, $last, $m)) {
-            return $prefix . 'A' . str_pad('1', 6, '0', STR_PAD_LEFT);
+            return $prefix . str_pad('1', 6, '0', STR_PAD_LEFT);
         }
 
-        $letter = $m[1];
-        $seq = (int) $m[2] + 1;
-        $maxSeq = 999999;
+        $seq = (int) $m[1] + 1;
 
-        if ($seq > $maxSeq) {
-            $seq = 1;
-            $letter = ($letter === 'Z') ? 'A' : chr(ord($letter) + 1);
-        }
-
-        return $prefix . $letter . str_pad((string) $seq, 6, '0', STR_PAD_LEFT);
+        return $prefix . str_pad((string) $seq, 6, '0', STR_PAD_LEFT);
     }
 }

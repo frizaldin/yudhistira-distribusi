@@ -37,7 +37,7 @@
                         <form action="{{ route('product.import-warehouse') }}" method="POST" enctype="multipart/form-data">
                             @csrf
                             <div class="modal-body">
-                                <p class="text-muted small mb-2">Kolom <strong>B</strong> = kode buku, <strong>D</strong> = gudang (<code>books.warehouse</code>).</p>
+                                <p class="text-muted small mb-2">Kolom <strong>A</strong> = <code>urutan</code>, <strong>B</strong> = kode buku, <strong>D</strong> = gudang (<code>books.warehouse</code>).</p>
                                 <div class="mb-3">
                                     <label for="fileWarehouse" class="form-label">File (xlsx / xls / csv)</label>
                                     <input type="file" class="form-control" id="fileWarehouse" name="file" accept=".xlsx,.xls,.csv" required />

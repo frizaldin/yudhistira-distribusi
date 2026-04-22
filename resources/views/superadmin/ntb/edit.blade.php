@@ -13,70 +13,88 @@
         <div class="card-body">
             <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
                 <div>
-                    <strong>Tambah Mutasi</strong><br />
-                    <small class="text-muted">Header bersama + banyak buku (maks 25). Total eksemplar = (koli × isi koli) + eceran per buku.</small>
+                    <strong>Edit NTB (Nota Terima Barang)</strong><br />
+                    <small class="text-muted">Edit header & daftar buku.</small>
                 </div>
-                <a href="{{ route('mutasi.index') }}" class="btn btn-outline-secondary btn-sm">
+                <a href="{{ route('ntb.index') }}" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-arrow-left me-1"></i>Kembali
                 </a>
             </div>
 
-            <form action="{{ route('mutasi.store') }}" method="POST" id="formMutasi">
+            <form action="{{ route('ntb.update', $item->id) }}" method="POST" id="formNtb">
                 @csrf
+                @method('PUT')
 
-                {{-- ====== HEADER MUTASI ====== --}}
+                {{-- ====== HEADER ====== --}}
                 <div class="row g-3 mb-4">
-                    <div class="col-md-4">
-                        <label for="nama_pt_produksi" class="form-label">Nama PT produksi</label>
-                        <input type="text" name="nama_pt_produksi" id="nama_pt_produksi"
-                            class="form-control @error('nama_pt_produksi') is-invalid @enderror"
-                            value="{{ old('nama_pt_produksi') }}" />
-                        @error('nama_pt_produksi')
+                    <div class="col-md-3">
+                        <label for="receive_code" class="form-label">Kode Terima <span class="text-danger">*</span></label>
+                        <input type="text" name="receive_code" id="receive_code"
+                            class="form-control @error('receive_code') is-invalid @enderror"
+                            value="{{ old('receive_code', $item->receive_code) }}" required />
+                        @error('receive_code')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
-                    <div class="col-md-4">
-                        <label for="tanggal_penerimaan" class="form-label">Tanggal penerimaan</label>
-                        <input type="date" name="tanggal_penerimaan" id="tanggal_penerimaan"
-                            class="form-control @error('tanggal_penerimaan') is-invalid @enderror"
-                            value="{{ old('tanggal_penerimaan') }}" />
-                        @error('tanggal_penerimaan')
+                    <div class="col-md-3">
+                        <label for="nota_kirim_cab" class="form-label">Nomor Surat Jalan <span class="text-danger">*</span></label>
+                        <input type="text" name="nota_kirim_cab" id="nota_kirim_cab"
+                            class="form-control @error('nota_kirim_cab') is-invalid @enderror"
+                            value="{{ old('nota_kirim_cab', $item->nota_kirim_cab) }}" required />
+                        @error('nota_kirim_cab')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
-                    <div class="col-md-4">
-                        <label for="nama_penerima" class="form-label">Nama penerima</label>
-                        <input type="text" name="nama_penerima" id="nama_penerima"
-                            class="form-control @error('nama_penerima') is-invalid @enderror"
-                            value="{{ old('nama_penerima') }}" />
-                        @error('nama_penerima')
+                    <div class="col-md-3">
+                        <label for="branch_code" class="form-label">Cabang Penerima</label>
+                        <select name="branch_code" id="branch_code"
+                            class="form-select select2-ajax"
+                            data-url="{{ route('api.branches') }}" data-placeholder="Pilih Cabang Penerima">
+                            @if (old('branch_code', $item->branch_code))
+                                <option value="{{ old('branch_code', $item->branch_code) }}" selected>{{ old('branch_code', $item->branch_code) }}</option>
+                            @endif
+                        </select>
+                        @error('branch_code')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label for="branch_sender" class="form-label">Cabang Pengirim</label>
+                        <select name="branch_sender" id="branch_sender"
+                            class="form-select select2-ajax"
+                            data-url="{{ route('api.branches') }}" data-placeholder="Pilih Cabang Pengirim">
+                            @if (old('branch_sender', $item->branch_sender))
+                                <option value="{{ old('branch_sender', $item->branch_sender) }}" selected>{{ old('branch_sender', $item->branch_sender) }}</option>
+                            @endif
+                        </select>
+                        @error('branch_sender')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="col-md-3">
+                        <label for="send_date" class="form-label">Tanggal Kirim</label>
+                        <input type="date" name="send_date" id="send_date"
+                            class="form-control @error('send_date') is-invalid @enderror"
+                            value="{{ old('send_date', $item->send_date ? $item->send_date->format('Y-m-d') : '') }}" />
+                        @error('send_date')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
-                    <div class="col-md-4">
-                        <label for="nomor_surat_jalan" class="form-label">Nomor surat jalan</label>
-                        <input type="text" name="nomor_surat_jalan" id="nomor_surat_jalan"
-                            class="form-control @error('nomor_surat_jalan') is-invalid @enderror"
-                            value="{{ old('nomor_surat_jalan') }}" />
-                        @error('nomor_surat_jalan')
+                    <div class="col-md-3">
+                        <label for="retur_date" class="form-label">Tanggal Terima</label>
+                        <input type="date" name="retur_date" id="retur_date"
+                            class="form-control @error('retur_date') is-invalid @enderror"
+                            value="{{ old('retur_date', $item->retur_date ? $item->retur_date->format('Y-m-d') : '') }}" />
+                        @error('retur_date')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
-                    <div class="col-md-4">
-                        <label for="nomor_jo" class="form-label">Nomor JO (job order)</label>
-                        <input type="text" name="nomor_jo" id="nomor_jo"
-                            class="form-control @error('nomor_jo') is-invalid @enderror"
-                            value="{{ old('nomor_jo') }}" />
-                        @error('nomor_jo')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                        @enderror
-                    </div>
-                    <div class="col-md-4">
-                        <label for="keterangan" class="form-label">Keterangan</label>
-                        <input type="text" name="keterangan" id="keterangan"
-                            class="form-control @error('keterangan') is-invalid @enderror"
-                            value="{{ old('keterangan') }}" />
-                        @error('keterangan')
+                    <div class="col-md-6">
+                        <label for="info" class="form-label">Keterangan</label>
+                        <input type="text" name="info" id="info"
+                            class="form-control @error('info') is-invalid @enderror"
+                            value="{{ old('info', $item->info) }}" />
+                        @error('info')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
@@ -84,7 +102,7 @@
 
                 {{-- ====== TABEL BUKU ====== --}}
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>Detail Buku <span class="text-muted fw-normal fs-6">(maks 25 buku)</span></strong>
+                    <strong>Detail Buku</strong>
                     <button type="button" class="btn btn-outline-primary btn-sm" id="btnTambahBaris">
                         <i class="bi bi-plus-circle me-1"></i>Tambah Baris
                     </button>
@@ -108,9 +126,18 @@
                             </tr>
                         </thead>
                         <tbody id="bodyBuku">
-                            {{-- Template baris (index 0) --}}
-                            @php $oldItems = old('items', [[]]); @endphp
-                            @foreach ($oldItems as $idx => $oldItem)
+                            @php
+                                $existingItems = old('items')
+                                    ? collect(old('items'))->map(fn($r) => (object)[
+                                        'book_code'   => $r['book_code'] ?? '',
+                                        'koli'        => $r['koli'] ?? 0,
+                                        'volume'      => $r['volume'] ?? 0,
+                                        'exemplar'    => $r['exemplar'] ?? 0,
+                                        'product'     => null,
+                                      ])
+                                    : $item->items;
+                            @endphp
+                            @foreach ($existingItems as $idx => $baris)
                             <tr class="baris-buku">
                                 <td class="text-center text-muted nomor-baris">{{ $idx + 1 }}</td>
                                 <td>
@@ -118,25 +145,25 @@
                                         class="form-select form-select-sm select2-ajax-item"
                                         data-url="{{ route('api.products') }}"
                                         data-placeholder="Pilih buku" required>
-                                        @if (!empty($oldItem['book_code']))
-                                            <option value="{{ $oldItem['book_code'] }}" selected>{{ $oldItem['book_code'] }}</option>
-                                        @endif
+                                        <option value="{{ $baris->book_code }}" selected>
+                                            {{ $baris->book_code }}{{ ($baris->product->book_title ?? '') ? ' — ' . $baris->product->book_title : '' }}
+                                        </option>
                                     </select>
                                 </td>
                                 <td>
                                     <input type="number" name="items[{{ $idx }}][koli]"
                                         class="form-control form-control-sm text-end calc-koli"
-                                        min="0" step="1" value="{{ $oldItem['koli'] ?? 0 }}" required />
+                                        min="0" step="1" value="{{ $baris->koli }}" required />
                                 </td>
                                 <td>
-                                    <input type="number" name="items[{{ $idx }}][isi_koli]"
+                                    <input type="number" name="items[{{ $idx }}][volume]"
                                         class="form-control form-control-sm text-end calc-isi"
-                                        min="0" step="1" value="{{ $oldItem['isi_koli'] ?? 0 }}" required />
+                                        min="0" step="1" value="{{ $baris->volume }}" required />
                                 </td>
                                 <td>
-                                    <input type="number" name="items[{{ $idx }}][eceran]"
+                                    <input type="number" name="items[{{ $idx }}][exemplar]"
                                         class="form-control form-control-sm text-end calc-eceran"
-                                        min="0" step="1" value="{{ $oldItem['eceran'] ?? 0 }}" required />
+                                        min="0" step="1" value="{{ $baris->exemplar }}" required />
                                 </td>
                                 <td class="text-end fw-semibold total-baris text-primary">0</td>
                                 <td class="text-center">
@@ -160,7 +187,7 @@
 
                 <div class="mt-4">
                     <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save me-1"></i>Simpan
+                        <i class="bi bi-save me-1"></i>Simpan perubahan
                     </button>
                 </div>
             </form>
@@ -170,10 +197,6 @@
     @push('js')
     <script>
     $(document).ready(function () {
-        const MAX_BARIS = 25;
-        let barisCount = document.querySelectorAll('.baris-buku').length;
-
-        // ---- Hitung total satu baris ----
         function hitungBaris(row) {
             const k = parseInt(row.querySelector('.calc-koli').value, 10) || 0;
             const i = parseInt(row.querySelector('.calc-isi').value, 10) || 0;
@@ -183,7 +206,6 @@
             return t;
         }
 
-        // ---- Hitung total keseluruhan ----
         function hitungSemua() {
             let grand = 0;
             document.querySelectorAll('.baris-buku').forEach(function (row) {
@@ -192,12 +214,10 @@
             document.getElementById('totalKeseluruhan').textContent = grand.toLocaleString('id-ID');
         }
 
-        // ---- Nomor urut ----
         function renomor() {
             document.querySelectorAll('.nomor-baris').forEach(function (el, idx) {
                 el.textContent = idx + 1;
             });
-            // Update index di name attribute
             document.querySelectorAll('.baris-buku').forEach(function (row, idx) {
                 row.querySelectorAll('[name]').forEach(function (el) {
                     el.name = el.name.replace(/items\[\d+\]/, 'items[' + idx + ']');
@@ -205,7 +225,6 @@
             });
         }
 
-        // ---- Init Select2 pada satu baris ----
         function initSelect2Baris(row) {
             var sel = row.querySelector('.select2-ajax-item');
             if (!sel || typeof $ === 'undefined') return;
@@ -221,7 +240,7 @@
                     url: url,
                     dataType: 'json',
                     delay: 300,
-                    data: function (params) { return { q: params.term }; },
+                    data: function (params) { return { q: params.term, page: params.page || 1 }; },
                     processResults: function (data) {
                         return {
                             results: (data.results || []).map(function (item) {
@@ -233,14 +252,12 @@
             });
         }
 
-        // ---- Init semua baris yang sudah ada ----
         document.querySelectorAll('.baris-buku').forEach(function (row) {
             bindBaris(row);
             initSelect2Baris(row);
         });
         hitungSemua();
 
-        // ---- Bind event hitung + hapus pada satu baris ----
         function bindBaris(row) {
             row.querySelectorAll('.calc-koli, .calc-isi, .calc-eceran').forEach(function (inp) {
                 inp.addEventListener('input', hitungSemua);
@@ -251,22 +268,12 @@
                     return;
                 }
                 row.remove();
-                barisCount = document.querySelectorAll('.baris-buku').length;
                 renomor();
                 hitungSemua();
-                toggleTambah();
             });
         }
 
-        // ---- Tombol tambah baris ----
-        function toggleTambah() {
-            document.getElementById('btnTambahBaris').disabled =
-                document.querySelectorAll('.baris-buku').length >= MAX_BARIS;
-        }
-
         document.getElementById('btnTambahBaris').addEventListener('click', function () {
-            if (document.querySelectorAll('.baris-buku').length >= MAX_BARIS) return;
-
             const idx = document.querySelectorAll('.baris-buku').length;
             const tr = document.createElement('tr');
             tr.className = 'baris-buku';
@@ -279,19 +286,16 @@
                   ' data-placeholder="Pilih buku" required></select>' +
                 '</td>' +
                 '<td><input type="number" name="items[' + idx + '][koli]" class="form-control form-control-sm text-end calc-koli" min="0" step="1" value="0" required /></td>' +
-                '<td><input type="number" name="items[' + idx + '][isi_koli]" class="form-control form-control-sm text-end calc-isi" min="0" step="1" value="0" required /></td>' +
-                '<td><input type="number" name="items[' + idx + '][eceran]" class="form-control form-control-sm text-end calc-eceran" min="0" step="1" value="0" required /></td>' +
+                '<td><input type="number" name="items[' + idx + '][volume]" class="form-control form-control-sm text-end calc-isi" min="0" step="1" value="0" required /></td>' +
+                '<td><input type="number" name="items[' + idx + '][exemplar]" class="form-control form-control-sm text-end calc-eceran" min="0" step="1" value="0" required /></td>' +
                 '<td class="text-end fw-semibold total-baris text-primary">0</td>' +
                 '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-hapus-baris" title="Hapus baris ini"><i class="bi bi-trash"></i></button></td>';
 
             document.getElementById('bodyBuku').appendChild(tr);
             bindBaris(tr);
             initSelect2Baris(tr);
-            barisCount = document.querySelectorAll('.baris-buku').length;
-            toggleTambah();
+            renomor();
         });
-
-        toggleTambah();
     });
     </script>
     @endpush

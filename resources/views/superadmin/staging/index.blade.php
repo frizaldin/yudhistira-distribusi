@@ -44,7 +44,8 @@
                                 <div class="d-flex justify-content-between align-items-center mb-2">
                                     <span class="text-muted small">Terakhir Sinkron:</span>
                                     <small class="text-muted">
-                                        {{ \Carbon\Carbon::parse($item['last_sync'])->format('d/m/Y H:i:s') }}
+                                        {{ \Carbon\Carbon::parse($item['last_sync'])->setTimezone('Asia/Jakarta')->format('d/m/Y H:i:s') }}
+                                        WIB
                                     </small>
                                 </div>
                             @else
@@ -399,7 +400,7 @@
 
                     Swal.fire({
                         title: 'Sinkron Semua?',
-                        html: 'Semua data staging akan disinkronkan (Buku, Cabang, Periode, Stok Pusat, Target, Sp Cabang, Nota Kirim). Proses mungkin memakan waktu.',
+                        html: 'Semua data staging akan disinkronkan (Buku, Cabang, Periode, Stok Pusat, Target, Sp Cabang, Nota Kirim, Nota Terima). Proses mungkin memakan waktu.',
                         icon: 'question',
                         showCancelButton: true,
                         confirmButtonColor: '#0d6efd',

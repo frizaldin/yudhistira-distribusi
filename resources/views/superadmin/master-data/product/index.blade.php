@@ -106,9 +106,10 @@
                         <form action="{{ route('product.import-warehouse') }}" method="POST" enctype="multipart/form-data">
                             @csrf
                             <div class="modal-body">
-                                <p class="text-muted small mb-2">Upload Excel/CSV dengan format: <strong>Kolom B</strong> =
-                                    <code>book_code</code> (kode buku), <strong>Kolom D</strong> = nama gudang untuk field
-                                    <code>books.warehouse</code>. Kolom lain (mis. A, C) boleh diisi bebas. Baris tanpa kode di B dilewati.</p>
+                                <p class="text-muted small mb-2">Upload Excel/CSV dengan format: <strong>Kolom A</strong> =
+                                    <code>urutan</code>, <strong>Kolom B</strong> = <code>book_code</code> (kode buku),
+                                    <strong>Kolom D</strong> = nama gudang untuk field <code>books.warehouse</code>.
+                                    Baris tanpa kode di B dilewati.</p>
                                 <div class="mb-3">
                                     <label for="fileWarehouse" class="form-label">File (xlsx / xls / csv)</label>
                                     <input type="file" class="form-control" id="fileWarehouse" name="file" accept=".xlsx,.xls,.csv" required />

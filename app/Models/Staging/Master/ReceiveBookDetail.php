@@ -4,19 +4,20 @@ namespace App\Models\Staging\Master;
 
 use Illuminate\Database\Eloquent\Model;
 
-class ReceiveBook extends Model
+class ReceiveBookDetail extends Model
 {
     protected $connection = 'pgsql';
 
-    protected $table = 'm_terima_buku';
+    protected $table = 'd_terima_buku';
 
     protected $fillable = [
         'nota_kirim_cab',
-        'receive_code',
-        'branch_code',
-        'retur_date',
-        'send_date',
-        'info',
+        'book_code',
+        'book_price',
+        'koli',
+        'exemplar',
+        'total_exemplar',
+        'volume',
         'branch_sender',
     ];
 }

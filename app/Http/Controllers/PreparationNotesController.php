@@ -169,12 +169,18 @@ class PreparationNotesController extends Controller
         $hasDocument = $rows->isNotEmpty() && $rows->first()->document_id !== null;
 
         $existingNkb = null;
+        $nkbWasCancelled = false;
+        $document = null;
         if ($hasDocument && $rows->isNotEmpty()) {
             $document = NppbDocument::find($rows->first()->document_id);
             if ($document) {
                 $existingNkb = Nkb::where('nppb_code', $document->number)->first();
+                $nkbWasCancelled = $document->nkb_cancelled_at !== null;
             }
         }
+
+        // Data bisa diedit jika: belum ada dokumen NPPB (belum di-approve), atau NKB sudah dibatalkan
+        $canEdit = !$hasDocument || $nkbWasCancelled;
 
         $branches = Branch::query()
             ->when($filteredBranchCodes !== null, function ($q) use ($filteredBranchCodes) {
@@ -201,6 +207,9 @@ class PreparationNotesController extends Controller
             'total_exemplar' => $totalExemplar,
             'has_document' => $hasDocument,
             'existing_nkb' => $existingNkb,
+            'nkb_was_cancelled' => $nkbWasCancelled,
+            'can_edit' => $canEdit,
+            'document' => $document,
             'branches' => $branches,
             'default_sender_code' => $defaultSenderCode,
             'default_recipient_code' => $defaultRecipientCode,
@@ -279,15 +288,17 @@ class PreparationNotesController extends Controller
         $stack = $request->input('stack');
         $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
 
-        // Jika stack sudah punya dokumen (sudah approve), tidak boleh edit
-        $stackHasDocument = NppbCentral::where('stack', $stack)
-            ->when($filteredBranchCodes !== null, fn($q) => $q->whereIn('branch_code', $filteredBranchCodes))
-            ->whereNotNull('document_id')
-            ->where('document_id', '!=', 0)
-            ->exists();
-        if ($stackHasDocument) {
-            return redirect()->route('preparation_notes.detail', ['stack' => $stack])
-                ->with('error', 'Data rencana ini sudah disetujui. Perubahan tidak dapat disimpan.');
+        // Cek apakah edit diizinkan:
+        // - Belum ada dokumen NPPB (belum di-approve), ATAU
+        // - Sudah ada dokumen tapi NKB-nya dibatalkan (nkb_cancelled_at != null)
+        $sampleRow = NppbCentral::where('stack', $stack)->first();
+        if ($sampleRow && $sampleRow->document_id) {
+            $doc = NppbDocument::find($sampleRow->document_id);
+            if ($doc && $doc->nkb_cancelled_at === null) {
+                // Sudah ada dokumen NPPB dan NKB belum dibatalkan → tidak boleh edit
+                return redirect()->route('preparation_notes.detail', ['stack' => $stack])
+                    ->with('error', 'Data tidak dapat diedit karena sudah dijadikan NPPB dan NKB masih aktif.');
+            }
         }
 
         $updated = 0;
@@ -298,7 +309,7 @@ class PreparationNotesController extends Controller
                 $query->whereIn('branch_code', $filteredBranchCodes);
             }
             $row = $query->first();
-            if ($row && $row->document_id === null) {
+            if ($row) {
                 $row->volume = (float) ($item['volume'] ?? 0);
                 $row->koli = (float) ($item['koli'] ?? 0);
                 $row->pls = (float) ($item['pls'] ?? 0);

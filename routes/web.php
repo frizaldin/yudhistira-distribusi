@@ -18,11 +18,17 @@ use App\Http\Controllers\NppbCentralController;
 use App\Http\Controllers\NppbWarehouseController;
 use App\Http\Controllers\PreparationNotesController;
 use App\Http\Controllers\NkbController;
+use App\Http\Controllers\NkbPenyesuaianController;
 use App\Http\Controllers\NtbController;
+use App\Http\Controllers\NtbReturController;
 use App\Http\Controllers\RekonsiliasiController;
 use App\Http\Controllers\StockMutationController;
 use App\Http\Controllers\DeliveryOrderController;
+use App\Http\Controllers\MoveWarehouseController;
+use App\Http\Controllers\DeliveryPromoController;
+use App\Http\Controllers\EraseItemController;
 use App\Http\Controllers\LogisticsHistoryController;
+use App\Http\Controllers\KartuGudangBesarController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ApiController;
 use App\Models\Staging\Master\Book;
@@ -67,6 +73,8 @@ Route::middleware('auth')->group(function () {
     Route::controller(ApiController::class)->group(function () {
         Route::get('/api/branches', 'getBranches')->name('api.branches');
         Route::get('/api/branches-by-warehouse', 'getBranchesByWarehouse')->name('api.branches-by-warehouse');
+        Route::get('/api/branches-all-with-warehouse-info', 'getAllBranchesWithWarehouseInfo')->name('api.branches-all-with-warehouse-info');
+        Route::get('/api/sub-branches-by-warehouse', 'getSubBranchesByWarehouseCode')->name('api.sub-branches-by-warehouse');
         Route::get('/api/report/branches-by-area', 'getReportBranchesByArea')->name('api.report.branches-by-area');
         Route::get('/api/warehouse-codes', 'getWarehouseCodes')->name('api.warehouse-codes');
         Route::get('/api/products', 'getProducts')->name('api.products');
@@ -205,6 +213,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/nkb/{number}', 'show')->name('nkb.show');
     });
 
+    Route::controller(NkbPenyesuaianController::class)->group(function () {
+        Route::get('/nkb-penyesuaian', 'index')->name('nkb_penyesuaian.index');
+        Route::get('/nkb-penyesuaian/create', 'create')->name('nkb_penyesuaian.create');
+        Route::post('/nkb-penyesuaian', 'store')->name('nkb_penyesuaian.store');
+        Route::get('/nkb-penyesuaian/{nota_kirim_cab}', 'show')->name('nkb_penyesuaian.show');
+        Route::delete('/nkb-penyesuaian/{nota_kirim_cab}', 'destroy')->name('nkb_penyesuaian.destroy');
+    });
+
     Route::controller(NtbController::class)->group(function () {
         Route::get('/ntb', 'index')->name('ntb.index');
         Route::get('/ntb/create', 'create')->name('ntb.create');
@@ -214,9 +230,15 @@ Route::middleware('auth')->group(function () {
         Route::delete('/ntb/{ntb}', 'destroy')->name('ntb.destroy');
     });
 
+    Route::controller(NtbReturController::class)->group(function () {
+        Route::get('/ntb-retur', 'index')->name('ntb_retur.index');
+        Route::get('/ntb-retur/{receive_code}', 'show')->name('ntb_retur.show');
+    });
+
     Route::controller(RekonsiliasiController::class)->group(function () {
         Route::get('/rekonsiliasi-nkb-ntb', 'index')->name('rekonsiliasi.index');
         Route::get('/rekonsiliasi-nkb-ntb/{nota_kirim_cab}', 'show')->name('rekonsiliasi.show');
+        Route::post('/rekonsiliasi-nkb-ntb/import-ntb', 'importNtb')->name('rekonsiliasi.import-ntb');
     });
 
     Route::controller(StockMutationController::class)->group(function () {
@@ -230,6 +252,35 @@ Route::middleware('auth')->group(function () {
 
     Route::controller(LogisticsHistoryController::class)->group(function () {
         Route::get('/riwayat-pengiriman', 'index')->name('riwayat_pengiriman.index');
+    });
+
+    Route::controller(KartuGudangBesarController::class)->group(function () {
+        Route::get('/kartu-gudang-besar', 'index')->name('kartu_gudang_besar.index');
+        Route::get('/kartu-gudang-besar/{book_code}', 'show')->name('kartu_gudang_besar.show');
+    });
+
+    Route::controller(MoveWarehouseController::class)->group(function () {
+        Route::get('/gudang-isolasi', 'index')->name('move_warehouse.index');
+        Route::get('/gudang-isolasi/create', 'create')->name('move_warehouse.create');
+        Route::post('/gudang-isolasi', 'store')->name('move_warehouse.store');
+        Route::get('/gudang-isolasi/{move_code}', 'show')->name('move_warehouse.show');
+        Route::delete('/gudang-isolasi/{move_code}', 'destroy')->name('move_warehouse.destroy');
+    });
+
+    Route::controller(DeliveryPromoController::class)->group(function () {
+        Route::get('/nota-promosi', 'index')->name('delivery_promo.index');
+        Route::get('/nota-promosi/create', 'create')->name('delivery_promo.create');
+        Route::post('/nota-promosi', 'store')->name('delivery_promo.store');
+        Route::get('/nota-promosi/{nota_kirim_promo}', 'show')->name('delivery_promo.show');
+        Route::delete('/nota-promosi/{nota_kirim_promo}', 'destroy')->name('delivery_promo.destroy');
+    });
+
+    Route::controller(EraseItemController::class)->group(function () {
+        Route::get('/nota-penghapusan', 'index')->name('erase_item.index');
+        Route::get('/nota-penghapusan/create', 'create')->name('erase_item.create');
+        Route::post('/nota-penghapusan', 'store')->name('erase_item.store');
+        Route::get('/nota-penghapusan/{erase_code}', 'show')->name('erase_item.show');
+        Route::delete('/nota-penghapusan/{erase_code}', 'destroy')->name('erase_item.destroy');
     });
 
     Route::controller(DeliveryOrderController::class)->group(function () {

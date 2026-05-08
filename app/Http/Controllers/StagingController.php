@@ -14,6 +14,12 @@ use App\Jobs\SynchronizeReceiveBookNotesJob;
 use App\Jobs\SynchronizeReceiveBookNoteDetailsJob;
 use App\Jobs\SynchronizeStockMutationsJob;
 use App\Jobs\SynchronizeStockMutationItemsJob;
+use App\Jobs\SynchronizeMoveWarehousesJob;
+use App\Jobs\SynchronizeMoveWarehouseDetailsJob;
+use App\Jobs\SynchronizeDeliveryPromosJob;
+use App\Jobs\SynchronizeDeliveryPromoDetailsJob;
+use App\Jobs\SynchronizeEraseItemsJob;
+use App\Jobs\SynchronizeEraseItemDetailsJob;
 use App\Models\CutoffData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -133,6 +139,33 @@ class StagingController extends Controller
                 'icon'      => 'bi-arrow-left-right',
                 'color'     => 'warning',
             ],
+            [
+                'name'      => 'Staging Gudang Isolasi',
+                'key'       => 'move_warehouses',
+                'table'     => 'm_pindah_gudang, d_pindah_gudang',
+                'count'     => null,
+                'cache_key' => 'sync_m_pindah_gudang_progress',
+                'icon'      => 'bi-box',
+                'color'     => 'danger',
+            ],
+            [
+                'name'      => 'Staging Nota Promosi',
+                'key'       => 'delivery_promos',
+                'table'     => 'm_kirim_promosi, d_kirim_promosi',
+                'count'     => null,
+                'cache_key' => 'sync_m_kirim_promosi_progress',
+                'icon'      => 'bi-megaphone',
+                'color'     => 'info',
+            ],
+            [
+                'name'      => 'Staging Nota Penghapusan',
+                'key'       => 'erase_items',
+                'table'     => 'm_hapus_barang, d_hapus_barang',
+                'count'     => null,
+                'cache_key' => 'sync_m_hapus_barang_progress',
+                'icon'      => 'bi-trash',
+                'color'     => 'dark',
+            ],
         ];
 
         // Get sync progress and last sync time for each item
@@ -158,6 +191,21 @@ class StagingController extends Controller
                     'sync_stock_mutations_progress',
                     'sync_stock_mutation_items_progress'
                 );
+                $item['progress']   = $state['progress'];
+                $item['is_running'] = $state['is_running'];
+                $item['last_sync']  = $state['last_sync'];
+            } elseif ($item['key'] === 'move_warehouses') {
+                $state = $this->combinedMasterDetailSyncState('sync_m_pindah_gudang_progress', 'sync_d_pindah_gudang_progress');
+                $item['progress']   = $state['progress'];
+                $item['is_running'] = $state['is_running'];
+                $item['last_sync']  = $state['last_sync'];
+            } elseif ($item['key'] === 'delivery_promos') {
+                $state = $this->combinedMasterDetailSyncState('sync_m_kirim_promosi_progress', 'sync_d_kirim_promosi_progress');
+                $item['progress']   = $state['progress'];
+                $item['is_running'] = $state['is_running'];
+                $item['last_sync']  = $state['last_sync'];
+            } elseif ($item['key'] === 'erase_items') {
+                $state = $this->combinedMasterDetailSyncState('sync_m_hapus_barang_progress', 'sync_d_hapus_barang_progress');
                 $item['progress']   = $state['progress'];
                 $item['is_running'] = $state['is_running'];
                 $item['last_sync']  = $state['last_sync'];
@@ -202,6 +250,9 @@ class StagingController extends Controller
             'delivery_notes'  => $this->getStagingCount('m_kirim_cabang') + $this->getStagingCount('d_kirim_cabang'),
             'receive_notes'   => $this->getStagingCount('m_terima_buku')  + $this->getStagingCount('d_terima_buku'),
             'stock_mutations' => $this->getStagingCount('m_mutasi_buku')  + $this->getStagingCount('d_mutasi_buku'),
+            'move_warehouses' => $this->getStagingCount('m_pindah_gudang') + $this->getStagingCount('d_pindah_gudang'),
+            'delivery_promos' => $this->getStagingCount('m_kirim_promosi') + $this->getStagingCount('d_kirim_promosi'),
+            'erase_items'     => $this->getStagingCount('m_hapus_barang') + $this->getStagingCount('d_hapus_barang'),
         ];
         return response()->json($counts);
     }
@@ -324,6 +375,9 @@ class StagingController extends Controller
             'delivery_notes' => ['m_kirim_cabang', 'd_kirim_cabang'],
             'receive_notes' => ['m_terima_buku', 'd_terima_buku'],
             'stock_mutations' => ['m_mutasi_buku', 'd_mutasi_buku'],
+            'move_warehouses' => ['m_pindah_gudang', 'd_pindah_gudang'],
+            'delivery_promos' => ['m_kirim_promosi', 'd_kirim_promosi'],
+            'erase_items'     => ['m_hapus_barang', 'd_hapus_barang'],
             default           => [],
         };
         foreach ($tables as $table) {
@@ -337,7 +391,7 @@ class StagingController extends Controller
     public function synchronizeAll(Request $request)
     {
         try {
-            $types = ['product', 'branch', 'period', 'central_stock', 'target', 'sp_branch', 'delivery_notes', 'receive_notes', 'stock_mutations'];
+            $types = ['product', 'branch', 'period', 'central_stock', 'target', 'sp_branch', 'delivery_notes', 'receive_notes', 'stock_mutations', 'move_warehouses', 'delivery_promos', 'erase_items'];
             foreach ($types as $type) {
                 $this->clearStagingCountCache($type);
                 switch ($type) {
@@ -398,6 +452,36 @@ class StagingController extends Controller
                             SynchronizeStockMutationItemsJob::dispatch();
                         }
                         break;
+                    case 'move_warehouses':
+                        $this->clearStaleSyncLock('sync_m_pindah_gudang_lock', 'sync_m_pindah_gudang_progress');
+                        $this->clearStaleSyncLock('sync_d_pindah_gudang_lock', 'sync_d_pindah_gudang_progress');
+                        if (Cache::add('sync_m_pindah_gudang_lock', true, now()->addHours(2))) {
+                            SynchronizeMoveWarehousesJob::dispatch();
+                        }
+                        if (Cache::add('sync_d_pindah_gudang_lock', true, now()->addHours(2))) {
+                            SynchronizeMoveWarehouseDetailsJob::dispatch();
+                        }
+                        break;
+                    case 'delivery_promos':
+                        $this->clearStaleSyncLock('sync_m_kirim_promosi_lock', 'sync_m_kirim_promosi_progress');
+                        $this->clearStaleSyncLock('sync_d_kirim_promosi_lock', 'sync_d_kirim_promosi_progress');
+                        if (Cache::add('sync_m_kirim_promosi_lock', true, now()->addHours(2))) {
+                            SynchronizeDeliveryPromosJob::dispatch();
+                        }
+                        if (Cache::add('sync_d_kirim_promosi_lock', true, now()->addHours(2))) {
+                            SynchronizeDeliveryPromoDetailsJob::dispatch();
+                        }
+                        break;
+                    case 'erase_items':
+                        $this->clearStaleSyncLock('sync_m_hapus_barang_lock', 'sync_m_hapus_barang_progress');
+                        $this->clearStaleSyncLock('sync_d_hapus_barang_lock', 'sync_d_hapus_barang_progress');
+                        if (Cache::add('sync_m_hapus_barang_lock', true, now()->addHours(2))) {
+                            SynchronizeEraseItemsJob::dispatch();
+                        }
+                        if (Cache::add('sync_d_hapus_barang_lock', true, now()->addHours(2))) {
+                            SynchronizeEraseItemDetailsJob::dispatch();
+                        }
+                        break;
                 }
             }
 
@@ -419,7 +503,7 @@ class StagingController extends Controller
     public function synchronize(Request $request)
     {
         $request->validate([
-            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes,receive_notes,stock_mutations',
+            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes,receive_notes,stock_mutations,move_warehouses,delivery_promos,erase_items',
         ]);
 
         $type = $request->input('type');
@@ -525,6 +609,63 @@ class StagingController extends Controller
                     SynchronizeStockMutationsJob::dispatch();
                     SynchronizeStockMutationItemsJob::dispatch();
                     break;
+                case 'move_warehouses':
+                    $this->clearStaleSyncLock('sync_m_pindah_gudang_lock', 'sync_m_pindah_gudang_progress');
+                    $this->clearStaleSyncLock('sync_d_pindah_gudang_lock', 'sync_d_pindah_gudang_progress');
+                    if (!Cache::add('sync_m_pindah_gudang_lock', true, now()->addHours(2))) {
+                        return $this->syncConflictResponse(
+                            'Job sinkron gudang isolasi (m_pindah_gudang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_m_pindah_gudang_progress'
+                        );
+                    }
+                    if (!Cache::add('sync_d_pindah_gudang_lock', true, now()->addHours(2))) {
+                        Cache::forget('sync_m_pindah_gudang_lock');
+                        return $this->syncConflictResponse(
+                            'Job sinkron detail gudang isolasi (d_pindah_gudang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_d_pindah_gudang_progress'
+                        );
+                    }
+                    SynchronizeMoveWarehousesJob::dispatch();
+                    SynchronizeMoveWarehouseDetailsJob::dispatch();
+                    break;
+                case 'delivery_promos':
+                    $this->clearStaleSyncLock('sync_m_kirim_promosi_lock', 'sync_m_kirim_promosi_progress');
+                    $this->clearStaleSyncLock('sync_d_kirim_promosi_lock', 'sync_d_kirim_promosi_progress');
+                    if (!Cache::add('sync_m_kirim_promosi_lock', true, now()->addHours(2))) {
+                        return $this->syncConflictResponse(
+                            'Job sinkron nota promosi (m_kirim_promosi) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_m_kirim_promosi_progress'
+                        );
+                    }
+                    if (!Cache::add('sync_d_kirim_promosi_lock', true, now()->addHours(2))) {
+                        Cache::forget('sync_m_kirim_promosi_lock');
+                        return $this->syncConflictResponse(
+                            'Job sinkron detail nota promosi (d_kirim_promosi) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_d_kirim_promosi_progress'
+                        );
+                    }
+                    SynchronizeDeliveryPromosJob::dispatch();
+                    SynchronizeDeliveryPromoDetailsJob::dispatch();
+                    break;
+                case 'erase_items':
+                    $this->clearStaleSyncLock('sync_m_hapus_barang_lock', 'sync_m_hapus_barang_progress');
+                    $this->clearStaleSyncLock('sync_d_hapus_barang_lock', 'sync_d_hapus_barang_progress');
+                    if (!Cache::add('sync_m_hapus_barang_lock', true, now()->addHours(2))) {
+                        return $this->syncConflictResponse(
+                            'Job sinkron nota penghapusan (m_hapus_barang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_m_hapus_barang_progress'
+                        );
+                    }
+                    if (!Cache::add('sync_d_hapus_barang_lock', true, now()->addHours(2))) {
+                        Cache::forget('sync_m_hapus_barang_lock');
+                        return $this->syncConflictResponse(
+                            'Job sinkron detail nota penghapusan (d_hapus_barang) masih berjalan. Tunggu sampai selesai sebelum menjalankan lagi.',
+                            'sync_d_hapus_barang_progress'
+                        );
+                    }
+                    SynchronizeEraseItemsJob::dispatch();
+                    SynchronizeEraseItemDetailsJob::dispatch();
+                    break;
             }
 
             return response()->json([
@@ -545,7 +686,7 @@ class StagingController extends Controller
     public function getProgress(Request $request)
     {
         $request->validate([
-            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes,receive_notes,stock_mutations',
+            'type' => 'required|string|in:product,branch,central_stock,target,period,sp_branch,delivery_notes,receive_notes,stock_mutations,move_warehouses,delivery_promos,erase_items',
         ]);
 
         $type = $request->input('type');
@@ -583,6 +724,21 @@ class StagingController extends Controller
                 'success'  => true,
                 'progress' => $state['progress'],
             ]);
+        }
+
+        if ($type === 'move_warehouses') {
+            $state = $this->combinedMasterDetailSyncState('sync_m_pindah_gudang_progress', 'sync_d_pindah_gudang_progress');
+            return response()->json(['success' => true, 'progress' => $state['progress']]);
+        }
+
+        if ($type === 'delivery_promos') {
+            $state = $this->combinedMasterDetailSyncState('sync_m_kirim_promosi_progress', 'sync_d_kirim_promosi_progress');
+            return response()->json(['success' => true, 'progress' => $state['progress']]);
+        }
+
+        if ($type === 'erase_items') {
+            $state = $this->combinedMasterDetailSyncState('sync_m_hapus_barang_progress', 'sync_d_hapus_barang_progress');
+            return response()->json(['success' => true, 'progress' => $state['progress']]);
         }
 
         // For other types, use normal progress
@@ -682,6 +838,9 @@ class StagingController extends Controller
             'delivery_notes'  => 'sync_delivery_notes_progress',
             'receive_notes'   => 'sync_receive_book_notes_progress',
             'stock_mutations' => 'sync_stock_mutations_progress',
+            'move_warehouses' => 'sync_m_pindah_gudang_progress',
+            'delivery_promos' => 'sync_m_kirim_promosi_progress',
+            'erase_items'     => 'sync_m_hapus_barang_progress',
         ];
 
         return $cacheKeys[$type] ?? '';
@@ -702,6 +861,9 @@ class StagingController extends Controller
             'delivery_notes'  => 'Delivery Notes',
             'receive_notes'   => 'Nota Terima',
             'stock_mutations' => 'Mutasi Buku',
+            'move_warehouses' => 'Gudang Isolasi',
+            'delivery_promos' => 'Nota Promosi',
+            'erase_items'     => 'Nota Penghapusan',
         ];
 
         return $names[$type] ?? $type;

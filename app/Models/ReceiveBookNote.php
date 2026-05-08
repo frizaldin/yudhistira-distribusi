@@ -19,6 +19,7 @@ class ReceiveBookNote extends Model
         'send_date',
         'info',
         'branch_sender',
+        'receive_type',
     ];
 
     protected $casts = [

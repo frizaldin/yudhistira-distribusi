@@ -20,7 +20,7 @@
 
         <x-nav.sidebar.menu url="{{ url('dashboard') }}" key="dashboard" icon="bi bi-speedometer" :authority="$authority" />
 
-        @if ((auth()->user()->authority_id ?? null) == 1 || (auth()->user()->authority_id ?? null) == 4)
+        @if (in_array(auth()->user()->authority_id ?? null, [1, 4, 5]))
             <div class="sidebar-title">Data Master</div>
         @endif
         <x-nav.sidebar.menu url="{{ url('product') }}" key="product" icon="bi bi-journals" :authority="$authority" />
@@ -38,13 +38,25 @@
             :authority="$authority" /> --}}
 
         <div class="sidebar-title">Distribusi</div>
+        <x-nav.sidebar.menu url="{{ url('kartu-gudang-besar') }}" key="kartu_gudang_besar" icon="bi bi-box-seam"
+            :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('preparation-notes') }}" key="preparation_notes" icon="bi bi-card-list"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('mutasi') }}" key="mutasi" icon="bi bi-arrow-left-right"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nkb') }}" key="nkb" icon="bi bi-file-earmark-text"
             :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('nkb-penyesuaian') }}" key="nkb_penyesuaian" icon="bi bi-file-earmark-ruled"
+            :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('ntb') }}" key="ntb" icon="bi bi-box-arrow-in-down"
+            :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('ntb-retur') }}" key="ntb_retur" icon="bi bi-arrow-return-left"
+            :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('gudang-isolasi') }}" key="gudang_isolasi" icon="bi bi-box"
+            :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('nota-promosi') }}" key="nota_promosi" icon="bi bi-megaphone"
+            :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('nota-penghapusan') }}" key="nota_penghapusan" icon="bi bi-trash"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('delivery-orders') }}" key="delivery_orders" icon="bi bi-truck"
             :authority="$authority" />

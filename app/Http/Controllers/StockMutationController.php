@@ -124,6 +124,25 @@ class StockMutationController extends Controller
             'items.*.eceran'     => ['required', 'integer', 'min:0'],
         ]);
 
+        $new_book_codes = collect($request->items)->pluck('book_code')->toArray();
+        $deleted_items = $stock_mutation->items->whereNotIn('book_code', $new_book_codes);
+
+        foreach ($deleted_items as $item) {
+            $book_code = $item->book_code;
+            $qty_mutasi = $item->total_eksemplar;
+
+            $cs = \App\Models\CentralStock::where('book_code', $book_code)->sum('exemplar');
+            $mut = \App\Models\StockMutationItem::where('book_code', $book_code)->sum('total_eksemplar');
+            $rawStockPusat = (float) $cs + (float) $mut;
+            
+            $deducted = \App\Models\CentralStockDeduction::where('book_code', $book_code)->sum('quantity');
+            $stockPusat = $rawStockPusat - $deducted;
+
+            if ($stockPusat < $qty_mutasi) {
+                return redirect()->back()->with('error', "Penghapusan baris gagal! Stock Pusat untuk buku {$book_code} tidak mencukupi (Tersedia: {$stockPusat}, Yang akan ditarik/hapus: {$qty_mutasi}).");
+            }
+        }
+
         DB::transaction(function () use ($request, $stock_mutation) {
             $stock_mutation->update([
                 'nama_pt_produksi'   => $request->nama_pt_produksi,
@@ -155,6 +174,23 @@ class StockMutationController extends Controller
 
     public function destroy(StockMutation $stock_mutation)
     {
+        // Validasi: jumlah stock pusat harus sama atau lebih dengan mutasi yang akan dihapus
+        foreach ($stock_mutation->items as $item) {
+            $book_code = $item->book_code;
+            $qty_mutasi = $item->total_eksemplar;
+
+            $cs = \App\Models\CentralStock::where('book_code', $book_code)->sum('exemplar');
+            $mut = \App\Models\StockMutationItem::where('book_code', $book_code)->sum('total_eksemplar');
+            $rawStockPusat = (float) $cs + (float) $mut;
+            
+            $deducted = \App\Models\CentralStockDeduction::where('book_code', $book_code)->sum('quantity');
+            $stockPusat = $rawStockPusat - $deducted;
+
+            if ($stockPusat < $qty_mutasi) {
+                return redirect()->back()->with('error', "Pembatalan gagal! Stock Pusat untuk buku {$book_code} tidak mencukupi (Tersedia: {$stockPusat}, Yang akan ditarik/hapus: {$qty_mutasi}).");
+            }
+        }
+
         // items akan ikut terhapus karena ON DELETE CASCADE di DB
         $stock_mutation->delete();
 

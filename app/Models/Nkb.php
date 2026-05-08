@@ -46,10 +46,14 @@ class Nkb extends Model
         return $this->belongsTo(Branch::class, 'recipient_code', 'branch_code');
     }
 
-    /** Dokumen NPPB asal (jika NKB dibuat dari preparation notes). */
     public function document()
     {
         return $this->belongsTo(NppbDocument::class, 'nppb_code', 'number');
+    }
+
+    public function receiveNote()
+    {
+        return $this->hasOne(ReceiveBookNote::class, 'nota_kirim_cab', 'number');
     }
 
     public function items()

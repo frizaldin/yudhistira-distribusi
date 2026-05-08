@@ -3,28 +3,40 @@
         <div class="card-body">
             <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
                 <h5 class="card-title mb-0">Detail Rekonsiliasi NKB & NTB</h5>
-                <a href="{{ route('rekonsiliasi.index') }}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i>Kembali
-                </a>
+                <div>
+                    @if($item->source === 'new')
+                        <a href="{{ route('nkb.show', $item->number) }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                            <i class="bi bi-box-seam me-1"></i>Detail NKB
+                        </a>
+                    @endif
+                    @if(optional($item->receiveNote)->id)
+                        <a href="{{ route('ntb.edit', $item->receiveNote->id) }}" class="btn btn-outline-success btn-sm" target="_blank">
+                            <i class="bi bi-box-arrow-in-down me-1"></i>Detail NTB
+                        </a>
+                    @endif
+                    <a href="{{ route('rekonsiliasi.index') }}" class="btn btn-outline-secondary btn-sm ms-1">
+                        <i class="bi bi-arrow-left me-1"></i>Kembali
+                    </a>
+                </div>
             </div>
 
             <div class="row mb-4">
                 <div class="col-md-6">
                     <table class="table table-sm table-borderless mb-0">
                         <tr>
-                            <td style="width: 150px" class="text-muted">Nomor Surat Jalan</td>
+                            <td style="width: 150px" class="text-muted">Nomor NKB/Surat Jalan</td>
                             <td style="width: 10px">:</td>
-                            <td class="fw-bold">{{ $item->nota_kirim_cab }}</td>
+                            <td class="fw-bold">{{ $item->number }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted">Cabang Pengirim</td>
                             <td>:</td>
-                            <td>{{ $item->branch_sender ?: '-' }}</td>
+                            <td>{{ $item->sender_code ?: '-' }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted">Cabang Penerima</td>
                             <td>:</td>
-                            <td>{{ $item->branch_code ?: '-' }}</td>
+                            <td>{{ $item->recipient_code ?: '-' }}</td>
                         </tr>
                     </table>
                 </div>
@@ -161,11 +173,11 @@
                 </table>
             </div>
 
-            @if(optional($item->receiveNote)->nota_kirim_cab == null)
+            @if(optional($item->receiveNote)->receive_code == null)
             <div class="alert alert-warning mt-3 mb-0 pointer-events-none d-flex align-items-center">
                 <i class="bi bi-info-circle-fill me-2 fs-5"></i>
                 <div>
-                    <strong>Perhatian:</strong> Data Surat Jalan ini belum mempunyai konfirmasi Penerimaan Barang (NTB). Seluruh selisih saat ini menampilkan minus sesuai dengan jumlah yang belum diterima.
+                    <strong>Perhatian:</strong> Data NKB ini belum mempunyai konfirmasi Penerimaan Barang (NTB). Seluruh selisih saat ini menampilkan minus sesuai dengan jumlah yang belum diterima.
                 </div>
             </div>
             @endif

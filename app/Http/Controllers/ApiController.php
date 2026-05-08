@@ -61,6 +61,82 @@ class ApiController extends Controller
     }
 
     /**
+     * Get all branches (semua cabang, termasuk warehouse) dengan flag is_warehouse.
+     * Dipakai untuk Select2 di NPPB Central (satu select, tanpa select warehouse terpisah).
+     */
+    public function getAllBranchesWithWarehouseInfo(Request $request): JsonResponse
+    {
+        $search = $request->get('q', '');
+        $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
+
+        // Kumpulkan semua warehouse_code yang ada (untuk menentukan branch mana yang merupakan warehouse)
+        $warehouseCodes = Branch::whereNotNull('warehouse_code')
+            ->where('warehouse_code', '!=', '')
+            ->pluck('warehouse_code')
+            ->unique()
+            ->values()
+            ->all();
+
+        $branches = Branch::query()
+            ->when($filteredBranchCodes !== null, function ($query) use ($filteredBranchCodes) {
+                return $query->whereIn('branch_code', $filteredBranchCodes);
+            })
+            ->when($search, function ($query, $search) {
+                return $query->where(function ($q) use ($search) {
+                    $q->where('branch_name', 'like', '%' . $search . '%')
+                        ->orWhere('branch_code', 'like', '%' . $search . '%');
+                });
+            })
+            ->orderBy('branch_code')
+            ->limit(200)
+            ->get();
+
+        $results = $branches->map(function ($branch) use ($warehouseCodes) {
+            $isWarehouse = in_array($branch->branch_code, $warehouseCodes);
+            $label = $branch->branch_code . ' - ' . $branch->branch_name;
+            if ($isWarehouse) {
+                $label .= ' [Warehouse]';
+            }
+            return [
+                'id' => $branch->branch_code,
+                'text' => $label,
+                'branch_name' => $branch->branch_name,
+                'is_warehouse' => $isWarehouse,
+            ];
+        });
+
+        return response()->json(['results' => $results]);
+    }
+
+    /**
+     * Get sub-branches by warehouse branch_code.
+     * Jika branch_code tersebut adalah warehouse, kembalikan semua branch yang warehouse_code-nya = branch_code tsb.
+     */
+    public function getSubBranchesByWarehouseCode(Request $request): JsonResponse
+    {
+        $branchCode = $request->get('branch_code', '');
+        if (!$branchCode) {
+            return response()->json(['is_warehouse' => false, 'sub_branches' => [], 'branch_codes' => []]);
+        }
+
+        // Cari semua sub-cabang yang warehouse_code-nya = branch_code ini
+        $subBranches = Branch::where('warehouse_code', $branchCode)
+            ->orderBy('branch_code')
+            ->get(['branch_code', 'branch_name']);
+
+        $isWarehouse = $subBranches->isNotEmpty();
+
+        return response()->json([
+            'is_warehouse' => $isWarehouse,
+            'sub_branches' => $subBranches->map(fn($b) => [
+                'branch_code' => $b->branch_code,
+                'branch_name' => $b->branch_name,
+            ])->values(),
+            'branch_codes' => $subBranches->pluck('branch_code')->values(),
+        ]);
+    }
+
+    /**
      * Get distinct warehouse_code from branches (untuk NPPB Warehouse / Rencana Kirim Cabang Area)
      */
     public function getWarehouseCodes(Request $request): JsonResponse
@@ -219,6 +295,18 @@ class ApiController extends Controller
     public function getNppbProducts(Request $request): JsonResponse
     {
         $branchCode = $request->get('branch_code');
+        // Mode warehouse: branch_codes[] berisi daftar sub-cabang
+        $branchCodesRaw = $request->get('branch_codes', []);
+        $branchCodes = is_array($branchCodesRaw)
+            ? array_filter(array_map('strval', $branchCodesRaw))
+            : (is_string($branchCodesRaw) ? array_filter(explode(',', $branchCodesRaw)) : []);
+        $branchCodes = array_values($branchCodes);
+        $isWarehouseMode = !empty($branchCodes);
+
+        // Jika mode warehouse, gunakan branch_codes ditambah branch_code utama (warehouse-nya)
+        // untuk membaca draft/rencana yang tersimpan atas nama warehouse tersebut
+        $effectiveBranchCodes = $isWarehouseMode ? array_unique(array_merge($branchCodes, [$branchCode])) : ($branchCode ? [$branchCode] : []);
+
         $currentYear = date('Y');
         $page = (int)$request->get('page', 1);
         $perPageRaw = (int)$request->get('per_page', 100);
@@ -235,7 +323,7 @@ class ApiController extends Controller
         $skipTotals = $request->boolean('skip_totals');
         $totalsOnly = $request->boolean('totals_only');
 
-        if (!$branchCode) {
+        if (empty($effectiveBranchCodes)) {
             return response()->json([
                 'results' => [],
                 'current_page' => 1,
@@ -243,6 +331,11 @@ class ApiController extends Controller
                 'total' => 0,
                 'per_page' => $perPage
             ]);
+        }
+
+        // Untuk backward compatibility: branchCode tetap dipakai sebagai representasi utama
+        if (!$branchCode && !empty($effectiveBranchCodes)) {
+            $branchCode = $effectiveBranchCodes[0];
         }
 
         // User ADP (authority_id 3): akses global; filter branch hanya untuk role cabang (authority_id 2)
@@ -262,7 +355,7 @@ class ApiController extends Controller
             $activeCutoff = CutoffData::where('status', 'active')->first();
             $totalFull = Product::count();
             // Fast path: totals_only tidak perlu load daftar semua book_code ke memory
-            $totals = $this->getNppbCentralTotalsFast($branchCode, $activeCutoff, $currentYear, $percentage);
+            $totals = $this->getNppbCentralTotalsFast($branchCode, $activeCutoff, $currentYear, $percentage, $effectiveBranchCodes);
             return response()->json([
                 'results' => [],
                 'totals' => $totals,
@@ -347,7 +440,7 @@ class ApiController extends Controller
 
         $lastSpBranchSync = Cache::get('sync_sp_branches_progress_last_sync');
 
-        // Get existing NPPB data for this branch and year - hanya untuk book di halaman ini
+        // Get existing NPPB data for this branch/branches and year - hanya untuk book di halaman ini
         $existingNppbQuery = NppbCentral::select([
             'book_code',
             DB::raw('SUM(koli) as koli'),
@@ -355,7 +448,7 @@ class ApiController extends Controller
             DB::raw('SUM(pls) as pls'),
             DB::raw('MAX(updated_at) as nppb_updated_at'),
         ])
-            ->where('branch_code', $branchCode)
+            ->whereIn('branch_code', $effectiveBranchCodes)
             ->whereIn('book_code', $bookCodesPage);
 
         if ($activeCutoff) {
@@ -374,7 +467,7 @@ class ApiController extends Controller
             ->keyBy('book_code');
 
         // Get SP, Faktur, and Stock Cabang from sp_branches - hanya book di halaman ini
-        // Use the same $activeCutoff variable from above
+        // Mode warehouse: aggregate dari semua sub-cabang (effectiveBranchCodes)
         $spBranchQuery = SpBranch::select([
             'book_code',
             DB::raw('SUM(ex_sp) as sp'),
@@ -382,7 +475,7 @@ class ApiController extends Controller
             DB::raw('SUM(ex_stock) as stock_cabang'),
         ])
             ->where('active_data', 'yes')
-            ->where('branch_code', $branchCode)
+            ->whereIn('branch_code', $effectiveBranchCodes)
             ->whereIn('book_code', $bookCodesPage);
 
         // Filter by trans_date if there's an active cutoff_data
@@ -400,11 +493,12 @@ class ApiController extends Controller
             ->keyBy('book_code');
 
         // Eksemplar NPPB yang sudah diapprove (punya document_id) per cabang+book
+        // Mode warehouse: aggregate dari semua sub-cabang
         $nppbApprovedExpByBook = NppbCentral::select([
             'book_code',
             DB::raw('SUM(COALESCE(exp, 0)) as nppb_approved_exp'),
         ])
-            ->where('branch_code', $branchCode)
+            ->whereIn('branch_code', $effectiveBranchCodes)
             ->whereIn('book_code', $bookCodesPage)
             ->whereNotNull('document_id')
             ->where('document_id', '!=', 0)
@@ -534,10 +628,10 @@ class ApiController extends Controller
             });
 
         // Get intransit data: sum exemplar from delivery_note_details
-        // Filter by delivery_notes where send_date matches active cutoff_datas and branch_code matches
+        // Mode warehouse: aggregate dari semua sub-cabang (effectiveBranchCodes)
         $intransitData = collect();
         if ($activeCutoff) {
-            $deliveryNotesQuery = DeliveryNote::where('branch_code', $branchCode);
+            $deliveryNotesQuery = DeliveryNote::whereIn('branch_code', $effectiveBranchCodes);
             if ($activeCutoff->start_date !== null) {
                 $deliveryNotesQuery->whereBetween('send_date', [$activeCutoff->start_date, $activeCutoff->end_date]);
             } else {
@@ -876,9 +970,9 @@ class ApiController extends Controller
     /**
      * Totals untuk endpoint totals_only: hitung penuh dengan subquery + cursor (tanpa pluck besar / IN literal).
      */
-    protected function getNppbCentralTotalsFast(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage): array
+    protected function getNppbCentralTotalsFast(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage, array $effectiveBranchCodes = []): array
     {
-        return $this->getNppbCentralTotals($branchCode, $activeCutoff, $currentYear, $percentage, null, true);
+        return $this->getNppbCentralTotals($branchCode, $activeCutoff, $currentYear, $percentage, null, true, $effectiveBranchCodes);
     }
 
     /**
@@ -887,7 +981,7 @@ class ApiController extends Controller
      * @param  mixed  $productsQuery  Clone query produk (dengan filter); null jika $allBooksViaSubquery true
      * @param  bool  $allBooksViaSubquery  true = seluruh baris di tabel books (path totals_only cepat)
      */
-    protected function getNppbCentralTotals(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage, $productsQuery, bool $allBooksViaSubquery = false): array
+    protected function getNppbCentralTotals(string $branchCode, ?object $activeCutoff, string $currentYear, int $percentage, $productsQuery, bool $allBooksViaSubquery = false, array $effectiveBranchCodes = []): array
     {
         $emptyTotals = [
             'stock_pusat' => 0,
@@ -927,12 +1021,15 @@ class ApiController extends Controller
             $booksIn = fn() => $allBookCodes;
         }
 
+        // Jika array effectiveBranchCodes kosong, gunakan branchCode
+        $branchesToQuery = empty($effectiveBranchCodes) ? [$branchCode] : $effectiveBranchCodes;
+
         $totalStockPusat = CentralStock::whereIn('book_code', $booksIn())->sum('exemplar')
             + StockMutationItem::whereIn('book_code', $booksIn())->sum('total_eksemplar');
         $totalDeducted = CentralStockDeduction::whereIn('book_code', $booksIn())->sum('quantity');
         $stockPusatTotal = max(0, $totalStockPusat - $totalDeducted);
 
-        $spBranchBase = SpBranch::where('active_data', 'yes')->where('branch_code', $branchCode)->whereIn('book_code', $booksIn());
+        $spBranchBase = SpBranch::where('active_data', 'yes')->whereIn('branch_code', $branchesToQuery)->whereIn('book_code', $booksIn());
         if ($activeCutoff) {
             $activeCutoff->start_date !== null
                 ? $spBranchBase->whereBetween('trans_date', [$activeCutoff->start_date, $activeCutoff->end_date])
@@ -975,7 +1072,7 @@ class ApiController extends Controller
             ->get()
             ->keyBy('book_code');
 
-        $nppbCentralBranchQ = NppbCentral::where('branch_code', $branchCode)->whereIn('book_code', $booksIn());
+        $nppbCentralBranchQ = NppbCentral::whereIn('branch_code', $branchesToQuery)->whereIn('book_code', $booksIn());
         if ($activeCutoff) {
             $activeCutoff->start_date !== null
                 ? $nppbCentralBranchQ->whereBetween('date', [$activeCutoff->start_date, $activeCutoff->end_date])

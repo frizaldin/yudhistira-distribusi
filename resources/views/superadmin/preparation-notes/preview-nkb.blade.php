@@ -53,16 +53,16 @@
                 </div>
             </div>
             <div class="row g-2 mb-3">
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label small">NPPB</label>
                     <input type="text" class="form-control form-control-sm" value="{{ $document->number ?? '' }}"
                         readonly />
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4 d-none">
                     <label class="form-label small">Keterangan (Note)</label>
                     <textarea class="form-control form-control-sm" rows="2" readonly>{{ $document->note ?? '' }}</textarea>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label small">Keterangan Lanjutan (Note More)</label>
                     <textarea class="form-control form-control-sm" rows="2" readonly>{{ $document->note_more ?? '' }}</textarea>
                 </div>
@@ -77,15 +77,21 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-6">
                         <label class="form-label small">Nama Pembuat <span class="text-danger">*</span></label>
-                        <input type="text" name="creator_name" class="form-control form-control-sm" maxlength="255" value="{{ old('creator_name', $document->creator_name ?? '') }}" required />
+                        <input type="text" name="creator_name" class="form-control form-control-sm" maxlength="255"
+                            value="{{ old('creator_name', $document->creator_name ?? '') }}" required />
                         <small class="text-muted">Diambil dari NPPB, bisa diedit</small>
-                        @error('creator_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                        @error('creator_name')
+                            <div class="text-danger small">{{ $message }}</div>
+                        @enderror
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small">Diketahui Oleh <span class="text-danger">*</span></label>
-                        <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255" value="{{ old('known_name', $document->known_name ?? '') }}" required />
+                        <input type="text" name="known_name" class="form-control form-control-sm" maxlength="255"
+                            value="{{ old('known_name', $document->known_name ?? '') }}" required />
                         <small class="text-muted">Diambil dari NPPB, bisa diedit</small>
-                        @error('known_name')<div class="text-danger small">{{ $message }}</div>@enderror
+                        @error('known_name')
+                            <div class="text-danger small">{{ $message }}</div>
+                        @enderror
                     </div>
                 </div>
                 <div class="table-responsive mb-3">
@@ -106,29 +112,39 @@
                         <tbody>
                             @foreach ($items ?? [] as $it)
                                 @php
-                                    $oldKoli = old('items.'.$it->id.'.koli', $it->koli);
-                                    $oldVolume = old('items.'.$it->id.'.volume', $it->volume);
-                                    $oldExp = old('items.'.$it->id.'.exp', $it->exp);
+                                    $oldKoli = old('items.' . $it->id . '.koli', $it->koli);
+                                    $oldVolume = old('items.' . $it->id . '.volume', $it->volume);
+                                    $oldExp = old('items.' . $it->id . '.exp', $it->exp);
                                     $subtotal = $it->harga_buku ? $oldExp * $it->harga_buku : 0;
                                 @endphp
                                 <tr class="preview-item-row" data-harga="{{ $it->harga_buku ?? 0 }}">
                                     <td class="text-center">
-                                        <input type="checkbox" class="form-check-input item-nkb-check" name="row_ids[]"
-                                            value="{{ $it->id }}" checked />
+                                        <input type="checkbox" class="form-check-input item-nkb-check"
+                                            name="row_ids[]" value="{{ $it->id }}" checked />
                                     </td>
                                     <td class="text-start">{{ $it->book_code }} — {{ $it->book_name }}</td>
                                     <td class="text-center">
-                                        <input type="number" name="items[{{ $it->id }}][koli]" class="form-control form-control-sm text-center input-koli-preview" min="0" step="1" value="{{ $oldKoli }}" style="width:60px" />
+                                        <input type="number" name="items[{{ $it->id }}][koli]"
+                                            class="form-control form-control-sm text-center input-koli-preview"
+                                            min="0" step="1" value="{{ $oldKoli }}"
+                                            style="width:60px" />
                                     </td>
                                     <td class="text-center">
-                                        <input type="number" name="items[{{ $it->id }}][volume]" class="form-control form-control-sm text-center input-volume-preview" min="0" step="1" value="{{ $oldVolume }}" style="width:60px" />
+                                        <input type="number" name="items[{{ $it->id }}][volume]"
+                                            class="form-control form-control-sm text-center input-volume-preview"
+                                            min="0" step="1" value="{{ $oldVolume }}"
+                                            style="width:60px" />
                                     </td>
                                     <td class="text-center">
-                                        <input type="number" name="items[{{ $it->id }}][exp]" class="form-control form-control-sm text-center input-exp-preview" min="0" step="1" value="{{ $oldExp }}" style="width:70px" />
+                                        <input type="number" name="items[{{ $it->id }}][exp]"
+                                            class="form-control form-control-sm text-center input-exp-preview"
+                                            min="0" step="1" value="{{ $oldExp }}"
+                                            style="width:70px" />
                                     </td>
                                     <td class="text-end">
                                         {{ $it->harga_buku ? number_format($it->harga_buku, 0, ',', '.') : '-' }}</td>
-                                    <td class="text-end preview-subtotal">{{ $subtotal ? number_format($subtotal, 0, ',', '.') : '-' }}</td>
+                                    <td class="text-end preview-subtotal">
+                                        {{ $subtotal ? number_format($subtotal, 0, ',', '.') : '-' }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -163,15 +179,17 @@
                         return false;
                     }
                 });
+
                 function updateSubtotal($row) {
                     var harga = parseFloat($row.data('harga')) || 0;
                     var exp = parseFloat($row.find('.input-exp-preview').val()) || 0;
                     var subtotal = exp * harga;
                     $row.find('.preview-subtotal').text(subtotal ? subtotal.toLocaleString('id-ID') : '-');
                 }
-                $(document).on('change input', '.input-koli-preview, .input-volume-preview, .input-exp-preview', function() {
-                    updateSubtotal($(this).closest('tr'));
-                });
+                $(document).on('change input', '.input-koli-preview, .input-volume-preview, .input-exp-preview',
+                    function() {
+                        updateSubtotal($(this).closest('tr'));
+                    });
             });
         </script>
     @endpush

@@ -52,6 +52,44 @@
                 </div>
             </div>
 
+            <!-- Modal Info Buku -->
+            <div class="modal fade" id="modalInfoBuku" tabindex="-1" aria-labelledby="modalInfoBukuLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modalInfoBukuLabel">Info Detail Buku</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-sm table-bordered mb-0">
+                                <tbody>
+                                    <tr><th style="width: 30%" class="bg-light">Kode Buku</th><td id="info_book_code"></td></tr>
+                                    <tr><th class="bg-light">Judul Buku</th><td id="info_book_title"></td></tr>
+                                    <tr><th class="bg-light">Harga Jual</th><td id="info_sale_price"></td></tr>
+                                    <tr><th class="bg-light">Penulis</th><td id="info_writer"></td></tr>
+                                    <tr><th class="bg-light">Halaman</th><td id="info_pages"></td></tr>
+                                    <tr><th class="bg-light">ISBN</th><td id="info_isbn"></td></tr>
+                                    <tr><th class="bg-light">Tipe Buku</th><td id="info_book_tipe"></td></tr>
+                                    <tr><th class="bg-light">Ukuran Kertas</th><td id="info_paper_size"></td></tr>
+                                    <tr><th class="bg-light">Kode Kertas</th><td id="info_paper_code"></td></tr>
+                                    <tr><th class="bg-light">Kode Warna</th><td id="info_c_color_code"></td></tr>
+                                    <tr><th class="bg-light">Jenjang</th><td id="info_jenjang"></td></tr>
+                                    <tr><th class="bg-light">Kategori</th><td id="info_category"></td></tr>
+                                    <tr><th class="bg-light">Kategori Manual</th><td id="info_category_manual"></td></tr>
+                                    <tr><th class="bg-light">Serial</th><td id="info_serial"></td></tr>
+                                    <tr><th class="bg-light">Gudang</th><td id="info_warehouse"></td></tr>
+                                    <tr><th class="bg-light">Mulok</th><td id="info_mulok"></td></tr>
+                                    <tr><th class="bg-light">Aktif</th><td id="info_aktif"></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <form class="row g-2 mb-3" method="GET" action="{{ route('product.index') }}">
                 <div class="col-md-2">
                     <input type="text" class="form-control" name="search_book_code" placeholder="Kode buku"
@@ -122,8 +160,12 @@
                                 <td>{{ $product->warehouse ?? '-' }}</td>
                                 <td class="text-end">
                                     <a href="{{ route('product.detail', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-primary" title="Detail stok & SP per cabang">
-                                        <i class="bi bi-eye me-1"></i>Detail
+                                        <i class="bi bi-eye me-1"></i>Detail Stok
                                     </a>
+                                    <button type="button" class="btn btn-sm btn-outline-info btn-detail-buku"
+                                        data-book="{{ json_encode($product) }}" title="Info Buku">
+                                        <i class="bi bi-info-circle me-1"></i>Info Buku
+                                    </button>
                                     <a href="{{ route('product.nkb-history', ['book_code' => $product->book_code]) }}" class="btn btn-sm btn-outline-secondary" title="History NKB untuk buku ini">
                                         <i class="bi bi-journal-text me-1"></i>History NKB
                                     </a>

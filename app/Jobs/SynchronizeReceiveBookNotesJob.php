@@ -87,6 +87,7 @@ class SynchronizeReceiveBookNotesJob implements ShouldQueue
                             'send_date' => isset($row['send_date']) && !empty($row['send_date']) ? $row['send_date'] : null,
                             'info' => isset($row['info']) ? $removeQuotes($row['info']) : null,
                             'branch_sender' => isset($row['branch_sender']) ? $removeQuotes($row['branch_sender']) : null,
+                            'receive_type' => isset($row['receive_type']) ? $row['receive_type'] : null,
                         ];
 
                         if ($existing) {

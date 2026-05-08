@@ -31,7 +31,7 @@
                         <select name="sender_code" class="form-select form-select-sm select2-static" required>
                             <option value="">-- Pilih --</option>
                             @foreach($branches as $b)
-                                <option value="{{ $b->branch_code }}" {{ old('sender_code') == $b->branch_code ? 'selected' : '' }}>{{ $b->branch_code }} — {{ $b->branch_name }}</option>
+                                <option value="{{ $b->branch_code }}" {{ old('sender_code', 'PS00') == $b->branch_code ? 'selected' : '' }}>{{ $b->branch_code }} — {{ $b->branch_name }}</option>
                             @endforeach
                         </select>
                         @error('sender_code')<div class="text-danger small">{{ $message }}</div>@enderror

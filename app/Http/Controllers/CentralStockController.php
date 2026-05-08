@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
 class CentralStockController extends Controller
@@ -40,6 +41,30 @@ class CentralStockController extends Controller
      */
     public function index(Request $request)
     {
+        if ($this->role == 5) {
+            $stocks = CentralStock::query()
+                ->select('central_stocks.book_code', DB::raw('SUM(central_stocks.exemplar) as exemplar'))
+                ->leftJoin('books', 'central_stocks.book_code', '=', 'books.book_code')
+                ->when($request->search, function ($query, $search) {
+                    return $query->where(function ($q) use ($search) {
+                        $q->where('central_stocks.book_code', 'like', '%' . $search . '%')
+                            ->orWhere('books.book_title', 'like', '%' . $search . '%');
+                    });
+                })
+                ->groupBy('central_stocks.book_code')
+                ->orderBy('central_stocks.book_code')
+                ->with(['product'])
+                ->paginate(15);
+
+            $data = [
+                'title' => 'Posisi Stok (Stok Real)',
+                'base_url' => $this->base_url,
+                'stocks' => $stocks,
+            ];
+
+            return view($this->callbackfolder . '.master-data.central-stock.index-distribusi', $data);
+        }
+
         $stocks = CentralStock::query()
             ->select('central_stocks.*')
             ->distinct()

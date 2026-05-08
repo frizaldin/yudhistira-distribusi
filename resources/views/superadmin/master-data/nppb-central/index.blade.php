@@ -191,19 +191,25 @@
                 </div> --}}
             </div>
 
-            <!-- Select Warehouse/Area -->
-            <div class="mb-3">
-                <label for="select_warehouse_code" class="form-label">Pilih Warehouse Code</label>
-                <select id="select_warehouse_code" class="form-select select2-ajax" data-url="{{ route('api.warehouse-codes') }}"
-                    data-placeholder="Pilih Warehouse Code (Semua)">
-                </select>
-            </div>
-
-            <!-- Select Branch -->
+            <!-- Select Cabang (termasuk Warehouse) -->
             <div class="mb-3">
                 <label for="select_branch_code" class="form-label">Pilih Cabang</label>
                 <select id="select_branch_code" class="form-select" data-placeholder="Pilih Cabang">
                 </select>
+            </div>
+
+            <!-- Panel info warehouse: tampil jika cabang yang dipilih adalah warehouse -->
+            <div id="warehouse-info-panel" class="alert alert-info py-2 mb-3 d-none" style="max-width: 720px;">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-building-fill-check fs-5 mt-1"></i>
+                    <div>
+                        <strong id="warehouse-info-title">Mode Warehouse</strong><br>
+                        <small class="text-muted">Data yang ditampilkan merupakan agregat dari semua cabang di bawah warehouse ini:</small>
+                        <div id="warehouse-sub-branches" class="d-flex flex-wrap gap-1 mt-1">
+                            <!-- Diisi oleh JS -->
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Tabel Pembatasan (Persentase Rencana Kirim, Persentase Target, Buffer Stock) -->
@@ -933,19 +939,18 @@
                 // Wait for Select2 to be initialized by layouts.blade.php
                 // Then add change event handler
                 setTimeout(function() {
-                    // Initialize Branch Select2 with Warehouse Code filter
+                    // Initialize Branch Select2 - memuat semua cabang (termasuk warehouse)
                     $('#select_branch_code').select2({
                         theme: 'bootstrap-5',
                         placeholder: 'Pilih Cabang',
                         allowClear: true,
                         ajax: {
-                            url: "{{ route('api.branches-by-warehouse') }}",
+                            url: "{{ route('api.branches-all-with-warehouse-info') }}",
                             dataType: 'json',
                             delay: 250,
                             data: function(params) {
                                 return {
                                     q: params.term || '',
-                                    warehouse_code: $('#select_warehouse_code').val() || '',
                                     page: params.page || 1
                                 };
                             },
@@ -956,7 +961,14 @@
                             },
                             cache: true
                         },
-                        minimumInputLength: 0
+                        minimumInputLength: 0,
+                        templateResult: function(item) {
+                            if (!item.id) return item.text;
+                            if (item.is_warehouse) {
+                                return $('<span><i class="bi bi-building-fill-check text-primary me-1"></i>' + item.text + '</span>');
+                            }
+                            return item.text;
+                        }
                     }).on('select2:open', function() {
                         var $select = $(this);
                         var select2Data = $select.data('select2');
@@ -982,24 +994,14 @@
                         });
                     }, 200);
 
-                    // When Warehouse Code changes, clear Branch selection
-                    $('#select_warehouse_code').on('change', function() {
-                        $('#select_branch_code').val(null).trigger('change');
-                    });
+                    // Variabel state untuk warehouse mode
+                    let currentWarehouseSubBranches = []; // array of branch_codes saat mode warehouse aktif
 
-                    $('#select_branch_code').on('change', function() {
-                        const branchCode = $(this).val();
-                        if (branchCode) {
-                            currentBranchCode = branchCode;
-                            allProductsData = restoreDraft(branchCode) || {};
-                            currentPage = 1;
-                            currentSearchBookCode = '';
-                            currentSearchBookName = '';
-                            currentSort = $('#filter-sort').val() || '';
-                            $('#filter-book-code').val('');
-                            $('#filter-book-name').val('');
-                            loadProducts(branchCode, 1, '', '', currentSort);
-                        } else {
+                    function onBranchSelected(branchCode) {
+                        if (!branchCode) {
+                            // Reset warehouse mode
+                            currentWarehouseSubBranches = [];
+                            $('#warehouse-info-panel').addClass('d-none');
                             $('#products-table-container').hide();
                             $('#products-table-body').empty();
                             $('#pagination-container').hide();
@@ -1011,8 +1013,70 @@
                             $('#filter-book-code').val('');
                             $('#filter-book-name').val('');
                             $('#filter-sort').val('');
+                            return;
                         }
+
+                        // Cek apakah cabang ini warehouse (ada sub-cabang di bawahnya)
+                        $.ajax({
+                            url: "{{ route('api.sub-branches-by-warehouse') }}",
+                            method: 'GET',
+                            data: { branch_code: branchCode },
+                            success: function(res) {
+                                const isWarehouse = res.is_warehouse || false;
+                                const subBranches = res.sub_branches || [];
+                                const branchCodes = res.branch_codes || [];
+
+                                if (isWarehouse && branchCodes.length > 0) {
+                                    // Mode warehouse: simpan sub-cabang
+                                    currentWarehouseSubBranches = branchCodes;
+
+                                    // Tampilkan panel info
+                                    const selectedText = $('#select_branch_code option:selected').text() || branchCode;
+                                    $('#warehouse-info-title').text('Mode Warehouse: ' + branchCode);
+                                    let badgesHtml = subBranches.map(function(b) {
+                                        return '<span class="badge bg-info text-dark">' + b.branch_code + ' - ' + b.branch_name + '</span>';
+                                    }).join('');
+                                    $('#warehouse-sub-branches').html(badgesHtml);
+                                    $('#warehouse-info-panel').removeClass('d-none');
+                                } else {
+                                    // Mode normal: cabang biasa
+                                    currentWarehouseSubBranches = [];
+                                    $('#warehouse-info-panel').addClass('d-none');
+                                }
+
+                                // Load data
+                                currentBranchCode = branchCode;
+                                allProductsData = restoreDraft(branchCode) || {};
+                                currentPage = 1;
+                                currentSearchBookCode = '';
+                                currentSearchBookName = '';
+                                currentSort = $('#filter-sort').val() || '';
+                                $('#filter-book-code').val('');
+                                $('#filter-book-name').val('');
+                                totalsLoadedForBranch = '';
+                                loadProducts(branchCode, 1, '', '', currentSort);
+                            },
+                            error: function() {
+                                // Fallback ke mode normal jika API error
+                                currentWarehouseSubBranches = [];
+                                $('#warehouse-info-panel').addClass('d-none');
+                                currentBranchCode = branchCode;
+                                allProductsData = restoreDraft(branchCode) || {};
+                                currentPage = 1;
+                                loadProducts(branchCode, 1, '', '', currentSort);
+                            }
+                        });
+                    }
+
+                    $('#select_branch_code').on('change', function() {
+                        const branchCode = $(this).val();
+                        onBranchSelected(branchCode);
                     });
+
+                    // Expose currentWarehouseSubBranches ke scope luar agar loadProducts bisa menggunakannya
+                    window._getNppbWarehouseSubBranches = function() {
+                        return currentWarehouseSubBranches;
+                    };
 
                     // Pas balik ke halaman: pilih cabang terakhir (dari localStorage) supaya draft ke-restore
                     var lastBranch = null;
@@ -1429,22 +1493,34 @@
                 );
 
                 // Fetch products via AJAX
+                // Mode warehouse: kirim branch_codes[] jika ada sub-cabang
+                const warehouseSubBranches = (typeof window._getNppbWarehouseSubBranches === 'function')
+                    ? window._getNppbWarehouseSubBranches() : [];
+                const isWarehouseMode = warehouseSubBranches && warehouseSubBranches.length > 0;
+
+                const ajaxData = {
+                    branch_code: branchCode,
+                    page: page,
+                    search_book_code: searchBookCode,
+                    search_book_name: searchBookName,
+                    marketing_list_only: $('#filter-marketing-list').val() === 'Y' ? 1 : 0,
+                    sort: currentSort,
+                    per_page: currentPerPage,
+                    percentage: pct,
+                    apply_target_cap: usePercentageTarget ? 1 : 0,
+                    percentage_target: pctTarget,
+                    skip_totals: 1
+                };
+
+                // Tambahkan branch_codes jika mode warehouse
+                if (isWarehouseMode) {
+                    ajaxData['branch_codes[]'] = warehouseSubBranches;
+                }
+
                 $.ajax({
                     url: '{{ route('api.nppb-products') }}',
                     method: 'GET',
-                    data: {
-                        branch_code: branchCode,
-                        page: page,
-                        search_book_code: searchBookCode,
-                        search_book_name: searchBookName,
-                        marketing_list_only: $('#filter-marketing-list').val() === 'Y' ? 1 : 0,
-                        sort: currentSort,
-                        per_page: currentPerPage,
-                        percentage: pct,
-                        apply_target_cap: usePercentageTarget ? 1 : 0,
-                        percentage_target: pctTarget,
-                        skip_totals: 1
-                    },
+                    data: ajaxData,
                     success: function(response) {
                         const products = response.results || [];
                         lastPage = response.last_page || 1;
@@ -1833,11 +1909,18 @@
             }
 
             function loadTotals(branchCode, percentage) {
-                $.get('{{ route('api.nppb-products') }}', {
+                // Mode warehouse: kirim branch_codes[] jika ada
+                const warehouseSubBranchesForTotals = (typeof window._getNppbWarehouseSubBranches === 'function')
+                    ? window._getNppbWarehouseSubBranches() : [];
+                const totalsData = {
                     branch_code: branchCode,
                     totals_only: 1,
                     percentage: percentage || 100
-                }).done(function(response) {
+                };
+                if (warehouseSubBranchesForTotals && warehouseSubBranchesForTotals.length > 0) {
+                    totalsData['branch_codes[]'] = warehouseSubBranchesForTotals;
+                }
+                $.get('{{ route('api.nppb-products') }}', totalsData).done(function(response) {
                     totalsLoadedForBranch = branchCode;
                     applyTotalsToRow(response.totals || null);
                     refreshDraftRencanaTotals();

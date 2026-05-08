@@ -85,10 +85,7 @@
 
                 {{-- ====== TABEL BUKU ====== --}}
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>Detail Buku <span class="text-muted fw-normal fs-6">(maks 25 buku)</span></strong>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="btnTambahBaris">
-                        <i class="bi bi-plus-circle me-1"></i>Tambah Baris
-                    </button>
+                    <strong>Detail Buku <span class="text-muted fw-normal fs-6">(Hanya bisa menghapus baris)</span></strong>
                 </div>
 
                 @error('items')
@@ -125,31 +122,20 @@
                             <tr class="baris-buku">
                                 <td class="text-center text-muted nomor-baris">{{ $idx + 1 }}</td>
                                 <td>
-                                    <select name="items[{{ $idx }}][book_code]"
-                                        class="form-select form-select-sm select2-ajax-item"
-                                        data-url="{{ route('api.products') }}"
-                                        data-placeholder="Pilih buku" required
-                                        data-selected-code="{{ $baris->book_code }}"
-                                        data-selected-title="{{ $baris->product->book_title ?? '' }}">
-                                        <option value="{{ $baris->book_code }}" selected>
-                                            {{ $baris->book_code }}{{ ($baris->product->book_title ?? '') ? ' — ' . $baris->product->book_title : '' }}
-                                        </option>
-                                    </select>
+                                    <input type="hidden" name="items[{{ $idx }}][book_code]" value="{{ $baris->book_code }}" />
+                                    <div class="px-2">{{ $baris->book_code }}{{ ($baris->product->book_title ?? '') ? ' — ' . $baris->product->book_title : '' }}</div>
                                 </td>
                                 <td>
-                                    <input type="number" name="items[{{ $idx }}][koli]"
-                                        class="form-control form-control-sm text-end calc-koli"
-                                        min="0" step="1" value="{{ $baris->koli }}" required />
+                                    <input type="hidden" name="items[{{ $idx }}][koli]" class="calc-koli" value="{{ $baris->koli }}" />
+                                    <div class="px-2 text-end">{{ number_format($baris->koli, 0, ',', '.') }}</div>
                                 </td>
                                 <td>
-                                    <input type="number" name="items[{{ $idx }}][isi_koli]"
-                                        class="form-control form-control-sm text-end calc-isi"
-                                        min="0" step="1" value="{{ $baris->isi_koli }}" required />
+                                    <input type="hidden" name="items[{{ $idx }}][isi_koli]" class="calc-isi" value="{{ $baris->isi_koli }}" />
+                                    <div class="px-2 text-end">{{ number_format($baris->isi_koli, 0, ',', '.') }}</div>
                                 </td>
                                 <td>
-                                    <input type="number" name="items[{{ $idx }}][eceran]"
-                                        class="form-control form-control-sm text-end calc-eceran"
-                                        min="0" step="1" value="{{ $baris->eceran }}" required />
+                                    <input type="hidden" name="items[{{ $idx }}][eceran]" class="calc-eceran" value="{{ $baris->eceran }}" />
+                                    <div class="px-2 text-end">{{ number_format($baris->eceran, 0, ',', '.') }}</div>
                                 </td>
                                 <td class="text-end fw-semibold total-baris text-primary">
                                     {{ number_format($baris->total_eksemplar) }}
@@ -213,37 +199,7 @@
             });
         }
 
-        function initSelect2Baris(row) {
-            var sel = row.querySelector('.select2-ajax-item');
-            if (!sel || typeof $ === 'undefined') return;
-            var url = sel.dataset.url;
-            var placeholder = sel.dataset.placeholder || 'Pilih buku';
-            $(sel).select2({
-                theme: 'bootstrap-5',
-                width: '100%',
-                placeholder: placeholder,
-                allowClear: true,
-                minimumInputLength: 0,
-                ajax: {
-                    url: url,
-                    dataType: 'json',
-                    delay: 300,
-                    data: function (params) { return { q: params.term }; },
-                    processResults: function (data) {
-                        return {
-                            results: (data.results || []).map(function (item) {
-                                return { id: item.id, text: item.text };
-                            })
-                        };
-                    }
-                }
-            });
-        }
-
         function bindBaris(row) {
-            row.querySelectorAll('.calc-koli, .calc-isi, .calc-eceran').forEach(function (inp) {
-                inp.addEventListener('input', hitungSemua);
-            });
             row.querySelector('.btn-hapus-baris').addEventListener('click', function () {
                 if (document.querySelectorAll('.baris-buku').length <= 1) {
                     alert('Minimal harus ada 1 baris buku.');
@@ -252,47 +208,13 @@
                 row.remove();
                 renomor();
                 hitungSemua();
-                toggleTambah();
             });
-        }
-
-        function toggleTambah() {
-            document.getElementById('btnTambahBaris').disabled =
-                document.querySelectorAll('.baris-buku').length >= MAX_BARIS;
         }
 
         document.querySelectorAll('.baris-buku').forEach(function (row) {
             bindBaris(row);
-            initSelect2Baris(row);
         });
         hitungSemua();
-        toggleTambah();
-
-        document.getElementById('btnTambahBaris').addEventListener('click', function () {
-            if (document.querySelectorAll('.baris-buku').length >= MAX_BARIS) return;
-
-            const idx = document.querySelectorAll('.baris-buku').length;
-            const tr = document.createElement('tr');
-            tr.className = 'baris-buku';
-            tr.innerHTML =
-                '<td class="text-center text-muted nomor-baris">' + (idx + 1) + '</td>' +
-                '<td>' +
-                  '<select name="items[' + idx + '][book_code]"' +
-                  ' class="form-select form-select-sm select2-ajax-item"' +
-                  ' data-url="{{ route('api.products') }}"' +
-                  ' data-placeholder="Pilih buku" required></select>' +
-                '</td>' +
-                '<td><input type="number" name="items[' + idx + '][koli]" class="form-control form-control-sm text-end calc-koli" min="0" step="1" value="0" required /></td>' +
-                '<td><input type="number" name="items[' + idx + '][isi_koli]" class="form-control form-control-sm text-end calc-isi" min="0" step="1" value="0" required /></td>' +
-                '<td><input type="number" name="items[' + idx + '][eceran]" class="form-control form-control-sm text-end calc-eceran" min="0" step="1" value="0" required /></td>' +
-                '<td class="text-end fw-semibold total-baris text-primary">0</td>' +
-                '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-hapus-baris" title="Hapus baris ini"><i class="bi bi-trash"></i></button></td>';
-
-            document.getElementById('bodyBuku').appendChild(tr);
-            bindBaris(tr);
-            initSelect2Baris(tr);
-            toggleTambah();
-        });
     });
     </script>
     @endpush

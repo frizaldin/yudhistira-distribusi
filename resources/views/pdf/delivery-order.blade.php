@@ -269,7 +269,9 @@
             <td class="colon">:</td>
             <td class="value">
                 <div class="row-split">
-                    <div class="row-split-left">{{ is_array($do->drivers) ? implode(', ', array_filter($do->drivers)) : ($do->drivers ?? '-') }}</div>
+                    <div class="row-split-left">
+                        {{ is_array($do->drivers) ? implode(', ', array_filter($do->drivers)) : $do->drivers ?? '-' }}
+                    </div>
                     <div class="row-split-right"><strong>Telp/HP:</strong> {{ $do->driver_phone ?? '' }}</div>
                 </div>
             </td>
@@ -300,7 +302,7 @@
                 <span class="sig-line">&nbsp;</span>
             </td>
             <td>
-                <strong>Petugas Gudang.</strong><br>
+                <strong>Pengirim.</strong><br>
                 <span class="sig-line">&nbsp;</span>
                 {{-- @if ($do->creator)
                     <div class="sig-name">{{ strtoupper($do->creator->name) }}</div>

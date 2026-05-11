@@ -2485,22 +2485,27 @@
                 $all.prop('indeterminate', checked > 0 && checked < total);
             }
 
-            $(document).on('change', '#checklist-all', function() {
-                const $all = $(this);
-                const wantChecked = $all.is(':checked');
-                const $items = $('.input-check-save');
+            $(document).on('click', '#checklist-all', function(e) {
+                // Toggle manual agar klik ke-2 pada Checklist All selalu bisa meng-uncheck semua.
+                e.preventDefault();
 
-                if (!wantChecked) {
+                const $all = $(this);
+                const $items = $('.input-check-save');
+                const hasAnyChecked = $items.filter(':checked').length > 0;
+
+                if (hasAnyChecked) {
                     $items.each(function() {
                         const $cb = $(this);
                         if ($cb.is(':checked')) $cb.prop('checked', false).trigger('change');
                     });
+                    $all.prop('checked', false);
+                    $all.prop('indeterminate', false);
                     updateChecklistAllState();
                     return;
                 }
 
-                // Centang maksimal MAX_CHECKLIST_ROWS (per halaman/DOM saat ini)
-                let alreadyChecked = $items.filter(':checked').length;
+                // Jika belum ada yang dicentang, centang maksimal MAX_CHECKLIST_ROWS.
+                let alreadyChecked = 0;
                 let changedAny = false;
 
                 $items.each(function() {
@@ -2512,7 +2517,6 @@
                     changedAny = true;
                 });
 
-                // Jika masih ada item yang tidak bisa dicentang karena limit, balikin state header jadi indeterminate
                 const total = $items.length;
                 const checked = $items.filter(':checked').length;
                 if (total > checked && checked >= MAX_CHECKLIST_ROWS) {

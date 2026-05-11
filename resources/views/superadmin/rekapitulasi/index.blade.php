@@ -180,11 +180,7 @@
                             <!-- SP (% STOCK THD) -->
                             <!-- % sudah rowspan 3, tidak perlu di row 3 -->
                         </tr>
-                    </thead>
-                    <tbody id="rekapTableBody">
-                        @if (isset($use_ajax) && $use_ajax)
-                            {{-- Mode AJAX: baris NASIONAL + tiap cabang, data diisi via JS --}}
-                            <tr class="table-primary text-white fw-bold" data-recap-row="nasional">
+                        <tr class="table-primary text-white fw-bold" data-recap-row="nasional">
                                 <td class="text-center">1</td>
                                 <td class="fw-bold">NASIONAL</td>
                                 <td class="text-end" data-recap-col="target"><span class="recap-loading">...</span></td>
@@ -204,6 +200,11 @@
                                 <td class="text-end" data-recap-col="pct_target">...</td>
                                 <td class="text-end" data-recap-col="pct_sp">...</td>
                             </tr>
+                    </thead>
+                    <tbody id="rekapTableBody">
+                        @if (isset($use_ajax) && $use_ajax)
+                            {{-- Mode AJAX: baris NASIONAL + tiap cabang, data diisi via JS --}}
+                            
                             @foreach (isset($branches) ? $branches : [] as $idx => $branch)
                                 <tr data-recap-row="{{ $branch->branch_code }}">
                                     <td class="text-center">{{ $idx + 2 }}</td>

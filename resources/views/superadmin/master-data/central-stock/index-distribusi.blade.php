@@ -46,6 +46,7 @@
                             <th>Kode Buku</th>
                             <th>Judul Buku</th>
                             <th class="text-end">Total Exemplar (Stok Real)</th>
+                            <th class="text-end">Total Exemplar Isolasi</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -55,10 +56,11 @@
                                 <td><code>{{ $stock->book_code }}</code></td>
                                 <td>{{ $stock->product->book_title ?? '-' }}</td>
                                 <td class="text-end fw-bold">{{ number_format($stock->exemplar ?? 0, 0, ',', '.') }}</td>
+                                <td class="text-end fw-bold">{{ number_format($stock->isolation_exemplar ?? 0, 0, ',', '.') }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="text-center py-4">
+                                <td colspan="5" class="text-center py-4">
                                     <p class="text-muted mb-0">Belum ada data stok pusat.</p>
                                 </td>
                             </tr>

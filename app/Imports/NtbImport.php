@@ -91,6 +91,7 @@ class NtbImport implements ToCollection, WithHeadingRow
                     'total_exemplar' => (int) ($row['total_exem'] ?? $row['total_exemplar'] ?? 0),
                     'volume'         => (int) ($row['volume'] ?? 0),
                     'branch_sender'  => $branchSender,
+                    'skip_central_stock_deduction' => false,
                 ]);
 
                 $this->inserted++;

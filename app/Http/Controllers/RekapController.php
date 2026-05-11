@@ -117,8 +117,7 @@ class RekapController extends Controller
                 'filterBookTitle' => $filterBookTitle,
                 'filterBranchCode' => $filterBranchCode,
             ]);
-
-            } catch (\Throwable $e) {
+        } catch (\Throwable $e) {
             Log::error('RekapController@index: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
                 'file' => $e->getFile(),
@@ -341,6 +340,25 @@ class RekapController extends Controller
                     'total_stok_cabang' => (float) $row->total_stok_cabang,
                 ];
             }
+            // PS00 (PUSAT): stock dari central_stocks, data lain = akumulasi seluruh cabang
+            $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
+                && ($filteredBranchCodes === null || in_array('PS00', $filteredBranchCodes));
+            if ($ps00ShouldShow) {
+                $ps00StockQuery = CentralStock::select(DB::raw('COALESCE(SUM(exemplar), 0) as total_stock'))
+                    ->where('branch_code', 'PS00');
+                if ($filterBookCode !== '') {
+                    $ps00StockQuery->where('book_code', $filterBookCode);
+                }
+                $ps00Stock = (float) ($ps00StockQuery->first()->total_stock ?? 0);
+                $branches['PS00'] = [
+                    'target'            => $nasional['target'],
+                    'total_sp'          => $nasional['total_sp'],
+                    'total_faktur'      => $nasional['total_faktur'],
+                    'sisa_sp'           => $nasional['sisa_sp'],
+                    'total_nkb'         => $nasional['total_nkb'],
+                    'total_stok_cabang' => $ps00Stock,
+                ];
+            }
             return response()->json(['nasional' => $nasional, 'branches' => $branches]);
         } catch (\Throwable $e) {
             Log::error('RekapController@apiSummary: ' . $e->getMessage());
@@ -389,13 +407,13 @@ class RekapController extends Controller
 
             $rows = DB::select(
                 "SELECT s.branch_code, " .
-                "SUM(GREATEST(0, s.stok - s.sp)) AS thd_sp_lebih, " .
-                "SUM(GREATEST(0, s.sp - s.stok)) AS thd_sp_kurang, " .
-                "SUM(GREATEST(0, s.stok - IFNULL(t.target, 0))) AS thd_target_lebih, " .
-                "SUM(GREATEST(0, IFNULL(t.target, 0) - s.stok)) AS thd_target_kurang " .
-                "FROM ({$spSql}) s " .
-                "LEFT JOIN ({$targetSql}) t ON s.branch_code = t.branch_code AND s.book_code = t.book_code " .
-                "GROUP BY s.branch_code",
+                    "SUM(GREATEST(0, s.stok - s.sp)) AS thd_sp_lebih, " .
+                    "SUM(GREATEST(0, s.sp - s.stok)) AS thd_sp_kurang, " .
+                    "SUM(GREATEST(0, s.stok - IFNULL(t.target, 0))) AS thd_target_lebih, " .
+                    "SUM(GREATEST(0, IFNULL(t.target, 0) - s.stok)) AS thd_target_kurang " .
+                    "FROM ({$spSql}) s " .
+                    "LEFT JOIN ({$targetSql}) t ON s.branch_code = t.branch_code AND s.book_code = t.book_code " .
+                    "GROUP BY s.branch_code",
                 $bindings
             );
 
@@ -415,6 +433,17 @@ class RekapController extends Controller
                 $nasional['thd_sp_kurang'] += $thdByBranch[$bc]['thd_sp_kurang'];
             }
 
+            // PS00 (PUSAT): data THD = akumulasi seluruh cabang
+            $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
+                && ($filteredBranchCodes === null || in_array('PS00', $filteredBranchCodes));
+            if ($ps00ShouldShow) {
+                $thdByBranch['PS00'] = [
+                    'thd_target_lebih'  => $nasional['thd_target_lebih'],
+                    'thd_target_kurang' => $nasional['thd_target_kurang'],
+                    'thd_sp_lebih'      => $nasional['thd_sp_lebih'],
+                    'thd_sp_kurang'     => $nasional['thd_sp_kurang'],
+                ];
+            }
             $payload = ['nasional' => $nasional, 'branches' => $thdByBranch];
             Cache::put($cacheKey, $payload, now()->addMinutes(3));
 
@@ -453,6 +482,16 @@ class RekapController extends Controller
                 $nasional['total_nppb_pls'] += (float) $row->total_pls;
                 $nasional['total_nppb_exp'] += (float) $row->total_exp;
                 $branches[$row->branch_code] = ['nppb_koli' => (float) $row->total_koli, 'nppb_pls' => (float) $row->total_pls, 'nppb_exp' => (float) $row->total_exp];
+            }
+            // PS00 (PUSAT): data NPPB = akumulasi seluruh cabang
+            $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
+                && ($filteredBranchCodes === null || in_array('PS00', $filteredBranchCodes));
+            if ($ps00ShouldShow) {
+                $branches['PS00'] = [
+                    'nppb_koli' => $nasional['total_nppb_koli'],
+                    'nppb_pls'  => $nasional['total_nppb_pls'],
+                    'nppb_exp'  => $nasional['total_nppb_exp'],
+                ];
             }
             return response()->json(['nasional' => $nasional, 'branches' => $branches]);
         } catch (\Throwable $e) {
@@ -695,6 +734,50 @@ class RekapController extends Controller
             'thd_sp_lebih' => $spBranches->sum('thd_sp_lebih'),
             'thd_sp_kurang' => $spBranches->sum('thd_sp_kurang'),
         ];
+
+        // PS00 (PUSAT): stock dari central_stocks, data lain = akumulasi seluruh cabang
+        $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
+            && ($filteredBranchCodes === null || in_array('PS00', $filteredBranchCodes));
+        if ($ps00ShouldShow) {
+            $ps00StockQuery = CentralStock::select(DB::raw('COALESCE(SUM(exemplar), 0) as total_stock'))
+                ->where('branch_code', 'PS00');
+            if ($filterBookCode !== '') {
+                $ps00StockQuery->where('book_code', $filterBookCode);
+            }
+            $ps00Stock = (float) ($ps00StockQuery->first()->total_stock ?? 0);
+            $ps00BranchEntry = $branches->firstWhere('branch_code', 'PS00');
+            $ps00BranchName = $ps00BranchEntry?->branch_name ?? 'PUSAT';
+            $ps00Synthetic = (object) [
+                'branch_code'       => 'PS00',
+                'branch_name'       => $ps00BranchName,
+                'target'            => $nasional['target'],
+                'total_sp'          => $nasional['total_sp'],
+                'total_faktur'      => $nasional['total_faktur'],
+                'total_ret'         => $nasional['total_ret'],
+                'netto'             => $nasional['netto'],
+                'sisa_sp'           => $nasional['sisa_sp'],
+                'total_nk'          => $nasional['total_nk'],
+                'total_nt'          => $nasional['total_nt'],
+                'total_nkb'         => $nasional['total_nkb'],
+                'total_stok_cabang' => $ps00Stock,
+                'total_sp_1'        => $nasional['total_sp_1'],
+                'total_faktur_1'    => $nasional['total_faktur_1'],
+                'total_ret_1'       => $nasional['total_ret_1'],
+                'total_nt_1'        => $nasional['total_nt_1'],
+                'total_nkb_1'       => $nasional['total_nkb_1'],
+                'total_ntb_1'       => $nasional['total_ntb_1'],
+                'nppb_koli'         => $nasional['total_nppb_koli'],
+                'nppb_pls'          => $nasional['total_nppb_pls'],
+                'nppb_exp'          => $nasional['total_nppb_exp'],
+                'thd_target_lebih'  => $nasional['thd_target_lebih'],
+                'thd_target_kurang' => $nasional['thd_target_kurang'],
+                'thd_sp_lebih'      => $nasional['thd_sp_lebih'],
+                'thd_sp_kurang'     => $nasional['thd_sp_kurang'],
+            ];
+            // Remove PS00 from existing spBranches then add synthetic entry
+            $spBranches = $spBranches->filter(fn($b) => ($b->branch_code ?? '') !== 'PS00');
+            $spBranches->push($ps00Synthetic);
+        }
 
         $areas = [];
         foreach ($spBranches as $branch) {
@@ -1046,9 +1129,22 @@ class RekapController extends Controller
                 $out = fopen('php://output', 'w');
                 fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF)); // UTF-8 BOM
                 fputcsv($out, [
-                    'Kode Buku', 'Nama Buku', 'TARGET', 'SP', 'FAKTUR', 'SISA SP', 'STOCK CABANG',
-                    'THD TARGET LEBIH', 'THD TARGET KURANG', 'THD SP LEBIH', 'THD SP KURANG',
-                    'KOLI', 'PLS', 'EXP', '% THD TARGET', '% THD SP',
+                    'Kode Buku',
+                    'Nama Buku',
+                    'TARGET',
+                    'SP',
+                    'FAKTUR',
+                    'SISA SP',
+                    'STOCK CABANG',
+                    'THD TARGET LEBIH',
+                    'THD TARGET KURANG',
+                    'THD SP LEBIH',
+                    'THD SP KURANG',
+                    'KOLI',
+                    'PLS',
+                    'EXP',
+                    '% THD TARGET',
+                    '% THD SP',
                 ]);
                 foreach ($rows as $r) {
                     fputcsv($out, $r);

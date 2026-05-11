@@ -20,6 +20,9 @@
                     <strong>NTB Retur</strong><br />
                     <small class="text-muted">Daftar Nota Terima Buku (Retur)</small>
                 </div>
+                <a href="{{ route('ntb.index', ['type' => 'retur']) }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Ke daftar NTB (Retur)
+                </a>
             </div>
 
             <form class="row g-2 mb-3" method="GET" action="{{ route('ntb_retur.index') }}">

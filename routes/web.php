@@ -30,6 +30,7 @@ use App\Http\Controllers\EraseItemController;
 use App\Http\Controllers\LogisticsHistoryController;
 use App\Http\Controllers\KartuGudangBesarController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\LaporanDistribusiController;
 use App\Http\Controllers\ApiController;
 use App\Models\Staging\Master\Book;
 use App\Models\Staging\Master\Periode;
@@ -69,6 +70,8 @@ Route::get('cek-staging', function () {
 
 
 Route::middleware('auth')->group(function () {
+    Route::get('/ntb-menu', fn() => redirect()->route('ntb.index'));
+
     // API Routes for Select2 AJAX
     Route::controller(ApiController::class)->group(function () {
         Route::get('/api/branches', 'getBranches')->name('api.branches');
@@ -327,6 +330,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/user-adp/{id}/edit', 'editAdp')->name('user-adp.edit');
         Route::put('/user-adp/{id}', 'updateAdp')->name('user-adp.update');
         Route::delete('/user-adp/{id}', 'destroyAdp')->name('user-adp.destroy');
+
+        // User Distribusi routes (authority_id = 5)
+        Route::get('/user-distribusi', 'indexDistribusi')->name('user-distribusi.index');
+        Route::get('/user-distribusi/create', 'createDistribusi')->name('user-distribusi.create');
+        Route::post('/user-distribusi', 'storeDistribusi')->name('user-distribusi.store');
+        Route::get('/user-distribusi/{id}/edit', 'editDistribusi')->name('user-distribusi.edit');
+        Route::put('/user-distribusi/{id}', 'updateDistribusi')->name('user-distribusi.update');
+        Route::delete('/user-distribusi/{id}', 'destroyDistribusi')->name('user-distribusi.destroy');
+    });
+
+    Route::controller(LaporanDistribusiController::class)->group(function () {
+        Route::get('/laporan-distribusi', 'index')->name('laporan-distribusi.index');
     });
 
     // Artisan: clear queue (flush failed + clear pending)
@@ -356,12 +371,12 @@ Route::middleware('auth')->group(function () {
         ]);
     })->name('version.project');
 
-    Route::get('rows-data', function(){
+    Route::get('rows-data', function () {
         $spBranches = DB::table('sp_branches')
             ->count();
         $centralStocks = DB::table('central_stocks')
             ->count();
-            $target = DB::table('targets')
+        $target = DB::table('targets')
             ->count();
         return response()->json([
             'sp_branches' => number_format($spBranches),

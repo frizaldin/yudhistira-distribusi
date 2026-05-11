@@ -25,28 +25,14 @@ class NtbReturController extends Controller
     }
 
     /**
-     * Daftar NTB Retur
+     * Daftar NTB Retur — dialihkan ke halaman NTB bersatu dengan filter retur.
      */
     public function index(Request $request)
     {
-        $query = ReceiveBookNote::query()
-            ->where('receive_type', 1)
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $s = $request->search;
-                return $q->where(function ($q2) use ($s) {
-                    $q2->where('nota_kirim_cab', 'like', '%' . $s . '%')
-                        ->orWhere('receive_code', 'like', '%' . $s . '%');
-                });
-            })
-            ->orderBy('retur_date', 'desc');
-
-        $perPage = 20;
-        $items = $query->paginate($perPage)->withQueryString();
-
-        return view($this->callbackfolder . '.ntb-retur.index', [
-            'items' => $items,
-            'queryString' => $request->query(),
-        ]);
+        return redirect()->route('ntb.index', array_filter([
+            'search' => $request->get('search'),
+            'type' => 'retur',
+        ], fn ($v) => $v !== null && $v !== ''));
     }
 
     /**

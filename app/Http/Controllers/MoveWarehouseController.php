@@ -95,6 +95,20 @@ class MoveWarehouseController extends Controller
                     'exemplar' => $exemplar,
                     'total_exemplar' => $total_exemplar,
                 ]);
+
+                $centralStock = \App\Models\CentralStock::where('branch_code', $request->branch_code)
+                    ->where('book_code', $item['book_code'])
+                    ->first();
+                
+                if ($centralStock) {
+                    $centralStock->decrement('exemplar', $total_exemplar);
+                } else {
+                    \App\Models\CentralStock::create([
+                        'branch_code' => $request->branch_code,
+                        'book_code' => $item['book_code'],
+                        'exemplar' => -$total_exemplar,
+                    ]);
+                }
             }
         });
 
@@ -117,6 +131,22 @@ class MoveWarehouseController extends Controller
         $data = MoveWarehouse::where('move_code', $move_code)->firstOrFail();
         
         \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+            foreach ($data->items as $item) {
+                $centralStock = \App\Models\CentralStock::where('branch_code', $item->branch_code)
+                    ->where('book_code', $item->book_code)
+                    ->first();
+                
+                if ($centralStock) {
+                    $centralStock->increment('exemplar', $item->total_exemplar);
+                } else {
+                    \App\Models\CentralStock::create([
+                        'branch_code' => $item->branch_code,
+                        'book_code' => $item->book_code,
+                        'exemplar' => $item->total_exemplar,
+                    ]);
+                }
+            }
+
             $data->items()->delete();
             $data->delete();
         });

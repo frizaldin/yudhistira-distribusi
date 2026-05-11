@@ -27,6 +27,20 @@
 
                 {{-- ====== HEADER ====== --}}
                 <div class="row g-3 mb-4">
+                    @php
+                        $receiveTypeOld = old('receive_type', (string) (int) ($item->receive_type ?? 0));
+                    @endphp
+                    <div class="col-md-3">
+                        <label for="receive_type" class="form-label">Jenis NTB <span class="text-danger">*</span></label>
+                        <select name="receive_type" id="receive_type"
+                            class="form-select @error('receive_type') is-invalid @enderror" required>
+                            <option value="0" {{ $receiveTypeOld === '1' ? '' : 'selected' }}>Non retur</option>
+                            <option value="1" {{ $receiveTypeOld === '1' ? 'selected' : '' }}>Retur</option>
+                        </select>
+                        @error('receive_type')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
                     <div class="col-md-3">
                         <label for="receive_code" class="form-label">Kode Terima <span class="text-danger">*</span></label>
                         <input type="text" name="receive_code" id="receive_code"
@@ -121,6 +135,9 @@
                                 <th style="width:100px" class="text-end">Koli <span class="text-danger">*</span></th>
                                 <th style="width:110px" class="text-end">Isi Koli <span class="text-danger">*</span></th>
                                 <th style="width:100px" class="text-end">Eceran <span class="text-danger">*</span></th>
+                                <th class="text-center" style="width:110px" title="Jika dicentang, baris ini tidak mengurangi stock pusat">
+                                    <span class="small">Tanpa kurangi<br>stok pusat</span>
+                                </th>
                                 <th style="width:130px" class="text-end">Total Eks.</th>
                                 <th style="width:50px"></th>
                             </tr>
@@ -133,11 +150,16 @@
                                         'koli'        => $r['koli'] ?? 0,
                                         'volume'      => $r['volume'] ?? 0,
                                         'exemplar'    => $r['exemplar'] ?? 0,
+                                        'skip_central_stock_deduction' => !empty($r['skip_central_stock_deduction'])
+                                            && (string) $r['skip_central_stock_deduction'] === '1',
                                         'product'     => null,
                                       ])
                                     : $item->items;
                             @endphp
                             @foreach ($existingItems as $idx => $baris)
+                            @php
+                                $skipStockRow = $baris->skip_central_stock_deduction ?? false;
+                            @endphp
                             <tr class="baris-buku">
                                 <td class="text-center text-muted nomor-baris">{{ $idx + 1 }}</td>
                                 <td>
@@ -165,6 +187,12 @@
                                         class="form-control form-control-sm text-end calc-eceran"
                                         min="0" step="1" value="{{ $baris->exemplar }}" required />
                                 </td>
+                                <td class="text-center align-middle">
+                                    <input type="hidden" name="items[{{ $idx }}][skip_central_stock_deduction]" value="0">
+                                    <input type="checkbox" name="items[{{ $idx }}][skip_central_stock_deduction]" value="1"
+                                        class="form-check-input mt-0" title="Centang jika baris ini tidak mengurangi stock pusat"
+                                        {{ $skipStockRow ? 'checked' : '' }}>
+                                </td>
                                 <td class="text-end fw-semibold total-baris text-primary">0</td>
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-outline-danger btn-hapus-baris"
@@ -177,7 +205,7 @@
                         </tbody>
                         <tfoot>
                             <tr class="table-light">
-                                <td colspan="5" class="text-end fw-semibold">Total Keseluruhan</td>
+                                <td colspan="6" class="text-end fw-semibold">Total Keseluruhan</td>
                                 <td class="text-end fw-bold text-success" id="totalKeseluruhan">0</td>
                                 <td></td>
                             </tr>
@@ -288,6 +316,10 @@
                 '<td><input type="number" name="items[' + idx + '][koli]" class="form-control form-control-sm text-end calc-koli" min="0" step="1" value="0" required /></td>' +
                 '<td><input type="number" name="items[' + idx + '][volume]" class="form-control form-control-sm text-end calc-isi" min="0" step="1" value="0" required /></td>' +
                 '<td><input type="number" name="items[' + idx + '][exemplar]" class="form-control form-control-sm text-end calc-eceran" min="0" step="1" value="0" required /></td>' +
+                '<td class="text-center align-middle">' +
+                '<input type="hidden" name="items[' + idx + '][skip_central_stock_deduction]" value="0">' +
+                '<input type="checkbox" name="items[' + idx + '][skip_central_stock_deduction]" value="1" class="form-check-input mt-0" title="Centang jika baris ini tidak mengurangi stock pusat">' +
+                '</td>' +
                 '<td class="text-end fw-semibold total-baris text-primary">0</td>' +
                 '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-hapus-baris" title="Hapus baris ini"><i class="bi bi-trash"></i></button></td>';
 

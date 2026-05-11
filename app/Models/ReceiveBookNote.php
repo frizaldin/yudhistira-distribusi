@@ -23,6 +23,7 @@ class ReceiveBookNote extends Model
     ];
 
     protected $casts = [
+        'receive_type' => 'integer',
         'retur_date' => 'date',
         'send_date' => 'date',
     ];

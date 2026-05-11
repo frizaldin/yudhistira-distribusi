@@ -204,7 +204,7 @@ class UserController extends Controller
         $this->userType = 'pusat';
 
         $user = User::findOrFail($id);
-        
+
         // Ensure this is a pusat user
         if ($user->authority_id != 1) {
             return redirect()->route('user-pusat.index')
@@ -234,7 +234,7 @@ class UserController extends Controller
         $this->userType = 'cabang';
 
         $user = User::findOrFail($id);
-        
+
         // Ensure this is a cabang user
         if ($user->authority_id != 2) {
             return redirect()->route('user-cabang.index')
@@ -262,7 +262,7 @@ class UserController extends Controller
     public function updatePusat(Request $request, $id)
     {
         $user = User::findOrFail($id);
-        
+
         // Ensure this is a pusat user
         if ($user->authority_id != 1) {
             return redirect()->route('user-pusat.index')
@@ -299,7 +299,7 @@ class UserController extends Controller
     public function updateCabang(Request $request, $id)
     {
         $user = User::findOrFail($id);
-        
+
         // Ensure this is a cabang user
         if ($user->authority_id != 2) {
             return redirect()->route('user-cabang.index')
@@ -337,7 +337,7 @@ class UserController extends Controller
     public function destroyPusat($id)
     {
         $user = User::findOrFail($id);
-        
+
         // Ensure this is a pusat user
         if ($user->authority_id != 1) {
             return redirect()->route('user-pusat.index')
@@ -356,7 +356,7 @@ class UserController extends Controller
     public function destroyCabang($id)
     {
         $user = User::findOrFail($id);
-        
+
         // Ensure this is a cabang user
         if ($user->authority_id != 2) {
             return redirect()->route('user-cabang.index')
@@ -548,5 +548,162 @@ class UserController extends Controller
 
         return redirect()->route('user-adp.index')
             ->with('success', 'User ADP berhasil dihapus.');
+    }
+
+    /**
+     * Display a listing of User Distribusi (authority_id = 5)
+     */
+    public function indexDistribusi(Request $request)
+    {
+        $this->base_url = url('/user-distribusi');
+        $this->title = 'User Distribusi';
+        $this->userType = 'distribusi';
+
+        $users = User::query()
+            ->where('authority_id', 5)
+            ->when($request->search, function ($query, $search) {
+                return $query->where('name', 'like', '%' . $search . '%')
+                    ->orWhere('email', 'like', '%' . $search . '%');
+            })
+            ->orderBy('name')
+            ->paginate(15);
+
+        $authorities = Authority::all();
+
+        $data = [
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+            'users' => $users,
+            'authorities' => $authorities,
+            'userType' => $this->userType,
+        ];
+
+        return view($this->callbackfolder . '.master-data.user-distribusi.index', $data);
+    }
+
+    /**
+     * Show the form for creating a new User Distribusi
+     */
+    public function createDistribusi()
+    {
+        $this->base_url = url('/user-distribusi');
+        $this->title = 'Tambah User Distribusi';
+        $this->userType = 'distribusi';
+
+        $authorities = Authority::where('id', 5)->get();
+
+        $data = [
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+            'authorities' => $authorities,
+            'userType' => $this->userType,
+        ];
+
+        return view($this->callbackfolder . '.master-data.user-distribusi.create', $data);
+    }
+
+    /**
+     * Store a newly created User Distribusi
+     */
+    public function storeDistribusi(Request $request)
+    {
+        $request->validate([
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8',
+        ]);
+
+        User::create([
+            'name'         => $request->name,
+            'email'        => $request->email,
+            'password'     => Hash::make($request->password),
+            'authority_id' => 5,
+            'branch_code'  => null,
+        ]);
+
+        return redirect()->route('user-distribusi.index')
+            ->with('success', 'User Distribusi berhasil ditambahkan.');
+    }
+
+    /**
+     * Show the form for editing User Distribusi
+     */
+    public function editDistribusi($id)
+    {
+        $this->base_url = url('/user-distribusi');
+        $this->title = 'Edit User Distribusi';
+        $this->userType = 'distribusi';
+
+        $user = User::findOrFail($id);
+
+        if ($user->authority_id != 5) {
+            return redirect()->route('user-distribusi.index')
+                ->with('error', 'User ini bukan User Distribusi.');
+        }
+
+        $authorities = Authority::where('id', 5)->get();
+
+        $data = [
+            'title' => $this->title,
+            'base_url' => $this->base_url,
+            'user' => $user,
+            'authorities' => $authorities,
+            'userType' => $this->userType,
+        ];
+
+        return view($this->callbackfolder . '.master-data.user-distribusi.edit', $data);
+    }
+
+    /**
+     * Update User Distribusi
+     */
+    public function updateDistribusi(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        if ($user->authority_id != 5) {
+            return redirect()->route('user-distribusi.index')
+                ->with('error', 'User ini bukan User Distribusi.');
+        }
+
+        $request->validate([
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|string|email|max:255|unique:users,email,' . $id,
+            'password' => 'nullable|string|min:8',
+        ]);
+
+        $updateData = [
+            'name'         => $request->name,
+            'email'        => $request->email,
+            'authority_id' => 5,
+            'branch_code'  => null,
+        ];
+
+        if ($request->filled('password')) {
+            $updateData['password'] = Hash::make($request->password);
+        }
+
+        $user->update($updateData);
+
+        return redirect()->route('user-distribusi.index')
+            ->with('success', 'User Distribusi berhasil diperbarui.');
+    }
+
+    /**
+     * Remove User Distribusi
+     */
+    public function destroyDistribusi($id)
+    {
+        $user = User::findOrFail($id);
+
+        if ($user->authority_id != 5) {
+            return redirect()->route('user-distribusi.index')
+                ->with('error', 'User ini bukan User Distribusi.');
+        }
+
+        $user->delete();
+
+        return redirect()->route('user-distribusi.index')
+            ->with('success', 'User Distribusi berhasil dihapus.');
     }
 }

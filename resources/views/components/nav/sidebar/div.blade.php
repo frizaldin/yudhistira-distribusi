@@ -48,10 +48,24 @@
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nkb-penyesuaian') }}" key="nkb_penyesuaian" icon="bi bi-file-earmark-ruled"
             :authority="$authority" />
-        <x-nav.sidebar.menu url="{{ url('ntb') }}" key="ntb" icon="bi bi-box-arrow-in-down"
-            :authority="$authority" />
-        <x-nav.sidebar.menu url="{{ url('ntb-retur') }}" key="ntb_retur" icon="bi bi-arrow-return-left"
-            :authority="$authority" />
+        @php
+            // Selaras dengan components/nav/sidebar/menu.blade.php: in_array tanpa strict
+            // agar id fitur (string/int) cocok dengan JSON authority.code.
+            $ntbHubAuthIds = json_decode($authority?->code ?? '[]', true) ?? [];
+            $featNtb = \App\Models\Feature::where('code', 'ntb')->get();
+            $featNtbRetur = \App\Models\Feature::where('code', 'ntb_retur')->get();
+            $showNtbHub =
+                $authority &&
+                ($featNtb->contains(fn($e) => in_array($e->id, $ntbHubAuthIds)) ||
+                    $featNtbRetur->contains(fn($e) => in_array($e->id, $ntbHubAuthIds)));
+        @endphp
+        @if ($showNtbHub)
+            <a href="{{ url('ntb') }}"
+                class="nav-link {{ request()->routeIs('ntb.*', 'ntb_retur.*') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-in-down menu-icon"></i>
+                <span><small>NTB</small></span>
+            </a>
+        @endif
         <x-nav.sidebar.menu url="{{ url('gudang-isolasi') }}" key="gudang_isolasi" icon="bi bi-box"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('nota-promosi') }}" key="nota_promosi" icon="bi bi-megaphone"
@@ -73,6 +87,8 @@
         <x-nav.sidebar.menu url="{{ url('report') }}" key="report" icon="bi bi-journal" :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('rekonsiliasi-nkb-ntb') }}" key="rekonsiliasi_nkb_ntb"
             icon="bi bi-arrow-left-right" :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('laporan-distribusi') }}" key="laporan-distribusi" icon="bi bi-bar-chart-line"
+            :authority="$authority" />
 
         @if ((auth()->user()->authority_id ?? null) == 1 || (auth()->user()->authority_id ?? null) == 4)
             <div class="sidebar-title">Manajemen User</div>
@@ -80,7 +96,10 @@
         <x-nav.sidebar.menu url="{{ url('user-pusat') }}" key="user-pusat" icon="bi bi-person-badge"
             :authority="$authority" />
         <x-nav.sidebar.menu url="{{ url('user-cabang') }}" key="user-cabang" icon="bi bi-people" :authority="$authority" />
-        <x-nav.sidebar.menu url="{{ url('user-adp') }}" key="user-adp" icon="bi bi-person-badge" :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('user-adp') }}" key="user-adp" icon="bi bi-person-badge"
+            :authority="$authority" />
+        <x-nav.sidebar.menu url="{{ url('user-distribusi') }}" key="user-distribusi" icon="bi bi-person-gear"
+            :authority="$authority" />
     </div>
     <div class="sidebar-footer d-none">
         <div class="d-flex align-items-center justify-content-between mb-1">

@@ -67,6 +67,7 @@
                             <th>Nama Cabang</th>
                             <th>Kode Buku / Judul Buku</th>
                             <th>Exemplar</th>
+                            <th>Exemplar Isolasi</th>
                             {{-- <th class="text-end">Aksi</th> --}}
                         </tr>
                     </thead>
@@ -84,6 +85,7 @@
                                     @endif
                                 </td>
                                 <td>{{ number_format($stock->exemplar ?? 0, 0, ',', '.') }}</td>
+                                <td>{{ number_format($stock->isolation_exemplar ?? 0, 0, ',', '.') }}</td>
                                 {{-- <td class="text-end">
                                     <button class="btn btn-sm btn-outline-secondary">
                                         <i class="bi bi-eye"></i>
@@ -99,7 +101,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="text-center py-4">
+                                <td colspan="5" class="text-center py-4">
                                     <p class="text-muted mb-0">Belum ada data stok pusat. Silakan lakukan synchronize
                                         dari
                                         PostgreSQL.</p>

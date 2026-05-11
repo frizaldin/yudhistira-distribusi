@@ -20,6 +20,7 @@ class ReceiveBookNoteDetail extends Model
         'total_exemplar',
         'volume',
         'branch_sender',
+        'skip_central_stock_deduction',
     ];
 
     protected $casts = [
@@ -27,6 +28,7 @@ class ReceiveBookNoteDetail extends Model
         'exemplar' => 'decimal:0',
         'total_exemplar' => 'decimal:0',
         'volume' => 'decimal:0',
+        'skip_central_stock_deduction' => 'boolean',
     ];
 
     public $timestamps = false;

@@ -91,8 +91,11 @@ class ApiController extends Controller
             ->limit(200)
             ->get();
 
-        $results = $branches->map(function ($branch) use ($warehouseCodes) {
-            $isWarehouse = in_array($branch->branch_code, $warehouseCodes);
+        $warehouseLabelAllowedCodes = ['DY00', 'JT00', 'WS00', 'KT00', 'SM00', 'PS00','SU00','TB00','UM00'];
+
+        $results = $branches->map(function ($branch) use ($warehouseCodes, $warehouseLabelAllowedCodes) {
+            $isWarehouse = in_array($branch->branch_code, $warehouseCodes, true)
+                && in_array(strtoupper((string) $branch->branch_code), $warehouseLabelAllowedCodes, true);
             $label = $branch->branch_code . ' - ' . $branch->branch_name;
             if ($isWarehouse) {
                 $label .= ' [Warehouse]';

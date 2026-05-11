@@ -6,8 +6,8 @@
                     <strong>Detail NTB Retur</strong><br />
                     <small class="text-muted">Rincian Buku pada NTB Retur</small>
                 </div>
-                <a href="{{ route('ntb_retur.index') }}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i>Kembali
+                <a href="{{ route('ntb.index', ['type' => 'retur']) }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Kembali ke daftar NTB
                 </a>
             </div>
 

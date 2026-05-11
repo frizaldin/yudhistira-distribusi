@@ -21,6 +21,7 @@ class CentralStockDeduction extends Model
 
     const SOURCE_NKB = 'nkb';
     const SOURCE_DELIVERY_ORDER = 'delivery_order';
+    const SOURCE_NTB = 'ntb';
 
     public function product()
     {

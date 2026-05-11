@@ -43,7 +43,11 @@ class CentralStockController extends Controller
     {
         if ($this->role == 5) {
             $stocks = CentralStock::query()
-                ->select('central_stocks.book_code', DB::raw('SUM(central_stocks.exemplar) as exemplar'))
+                ->select(
+                    'central_stocks.book_code', 
+                    DB::raw('SUM(central_stocks.exemplar) as exemplar'),
+                    DB::raw('(SELECT SUM(exemplar) FROM d_pindah_gudang WHERE book_code = central_stocks.book_code) as isolation_exemplar')
+                )
                 ->leftJoin('books', 'central_stocks.book_code', '=', 'books.book_code')
                 ->when($request->search, function ($query, $search) {
                     return $query->where(function ($q) use ($search) {
@@ -66,7 +70,10 @@ class CentralStockController extends Controller
         }
 
         $stocks = CentralStock::query()
-            ->select('central_stocks.*')
+            ->select(
+                'central_stocks.*',
+                DB::raw('(SELECT SUM(exemplar) FROM d_pindah_gudang WHERE branch_code = central_stocks.branch_code AND book_code = central_stocks.book_code) as isolation_exemplar')
+            )
             ->distinct()
             ->leftJoin('branches', 'central_stocks.branch_code', '=', 'branches.branch_code')
             ->leftJoin('books', 'central_stocks.book_code', '=', 'books.book_code')

@@ -81,18 +81,32 @@
                     </div>
                     <div class="col-md-4">
                         <label for="approve_by" class="form-label">Disetujui Oleh</label>
-                        <input type="text" name="approve_by" id="approve_by"
-                            class="form-control @error('approve_by') is-invalid @enderror"
-                            value="{{ old('approve_by') }}" />
+                        <select name="approve_by" id="approve_by"
+                            class="form-select select2-static @error('approve_by') is-invalid @enderror">
+                            <option value="">-- Pilih Disetujui Oleh --</option>
+                            @foreach ($employees as $emp)
+                                <option value="{{ $emp->empl_name }}"
+                                    {{ old('approve_by') == $emp->empl_name ? 'selected' : '' }}>
+                                    {{ $emp->empl_code }} - {{ $emp->empl_name }}
+                                </option>
+                            @endforeach
+                        </select>
                         @error('approve_by')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
                     <div class="col-md-4">
                         <label for="whouse_head" class="form-label">Kepala Gudang</label>
-                        <input type="text" name="whouse_head" id="whouse_head"
-                            class="form-control @error('whouse_head') is-invalid @enderror"
-                            value="{{ old('whouse_head') }}" />
+                        <select name="whouse_head" id="whouse_head"
+                            class="form-select select2-static @error('whouse_head') is-invalid @enderror">
+                            <option value="">-- Pilih Kepala Gudang --</option>
+                            @foreach ($employees as $emp)
+                                <option value="{{ $emp->empl_name }}"
+                                    {{ old('whouse_head') == $emp->empl_name ? 'selected' : '' }}>
+                                    {{ $emp->empl_code }} - {{ $emp->empl_name }}
+                                </option>
+                            @endforeach
+                        </select>
                         @error('whouse_head')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror

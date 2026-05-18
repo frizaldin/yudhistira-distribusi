@@ -4,7 +4,6 @@
             <img src="{{ asset('image/logo.png') }}" alt="Logo" />
         </div>
     </div>
-
     <div class="sidebar-nav">
         <div class="sidebar-title">Main</div>
         {{-- <x-nav.sidebar.menudropdown icon="iconoir-group" :menu="[

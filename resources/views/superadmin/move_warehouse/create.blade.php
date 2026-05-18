@@ -63,17 +63,32 @@
                     </div>
                     <div class="col-md-4">
                         <label for="officer" class="form-label">Petugas</label>
-                        <input type="text" name="officer" id="officer"
-                            class="form-control @error('officer') is-invalid @enderror" value="{{ old('officer') }}" />
+                        <select name="officer" id="officer"
+                            class="form-select select2-static @error('officer') is-invalid @enderror">
+                            <option value="">-- Pilih Petugas --</option>
+                            @foreach ($employees as $emp)
+                                <option value="{{ $emp->empl_name }}"
+                                    {{ old('officer') == $emp->empl_name ? 'selected' : '' }}>
+                                    {{ $emp->empl_code }} - {{ $emp->empl_name }}
+                                </option>
+                            @endforeach
+                        </select>
                         @error('officer')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
                     <div class="col-md-4">
                         <label for="whouse_head" class="form-label">Kepala Gudang</label>
-                        <input type="text" name="whouse_head" id="whouse_head"
-                            class="form-control @error('whouse_head') is-invalid @enderror"
-                            value="{{ old('whouse_head') }}" />
+                        <select name="whouse_head" id="whouse_head"
+                            class="form-select select2-static @error('whouse_head') is-invalid @enderror">
+                            <option value="">-- Pilih Kepala Gudang --</option>
+                            @foreach ($employees as $emp)
+                                <option value="{{ $emp->empl_name }}"
+                                    {{ old('whouse_head') == $emp->empl_name ? 'selected' : '' }}>
+                                    {{ $emp->empl_code }} - {{ $emp->empl_name }}
+                                </option>
+                            @endforeach
+                        </select>
                         @error('whouse_head')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror

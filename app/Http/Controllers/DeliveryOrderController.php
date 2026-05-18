@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\DeliveryOrder;
 use App\Models\DeliveryOrderItem;
+use App\Models\Employee;
 use App\Models\Nkb;
 use App\Models\Branch;
 use Illuminate\Http\Request;
@@ -69,7 +70,7 @@ class DeliveryOrderController extends Controller
     {
         $filteredBranchCodes = $this->getBranchFilterForCurrentUser();
 
-        $branches = Branch::orderBy('branch_code')->get(['branch_code', 'branch_name']);
+        $branches = Branch::orderBy('branch_code')->get(['branch_code', 'branch_name', 'address']);
         if ($filteredBranchCodes !== null) {
             $branches = $branches->whereIn('branch_code', $filteredBranchCodes);
         }
@@ -83,10 +84,13 @@ class DeliveryOrderController extends Controller
             })
             ->get(['id', 'number', 'recipient_code']);
 
+        $employees = Employee::orderBy('empl_name')->get(['empl_code', 'empl_name', 'phone_no', 'address']);
+
         return view($this->callbackfolder . '.delivery-orders.create', [
-            'branches' => $branches,
-            'nkbs' => $nkbs,
+            'branches'  => $branches,
+            'nkbs'      => $nkbs,
             'nextNumber' => DeliveryOrder::generateNextNumber(),
+            'employees' => $employees,
         ]);
     }
 

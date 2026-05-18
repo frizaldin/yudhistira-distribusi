@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\Employee;
 use App\Models\MoveWarehouse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -45,10 +46,13 @@ class MoveWarehouseController extends Controller
 
     public function create()
     {
-        $branches = Branch::orderBy('branch_name')->get(['branch_code', 'branch_name']);
+        $branches  = Branch::orderBy('branch_name')->get(['branch_code', 'branch_name']);
+        $employees = Employee::orderBy('empl_name')
+            ->get(['empl_code', 'empl_name']);
 
         return view($this->callbackfolder . '.move_warehouse.create', [
-            'branches' => $branches,
+            'branches'  => $branches,
+            'employees' => $employees,
         ]);
     }
 
@@ -99,7 +103,7 @@ class MoveWarehouseController extends Controller
                 $centralStock = \App\Models\CentralStock::where('branch_code', $request->branch_code)
                     ->where('book_code', $item['book_code'])
                     ->first();
-                
+
                 if ($centralStock) {
                     $centralStock->decrement('exemplar', $total_exemplar);
                 } else {
@@ -129,13 +133,13 @@ class MoveWarehouseController extends Controller
     public function destroy($move_code)
     {
         $data = MoveWarehouse::where('move_code', $move_code)->firstOrFail();
-        
+
         \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
             foreach ($data->items as $item) {
                 $centralStock = \App\Models\CentralStock::where('branch_code', $item->branch_code)
                     ->where('book_code', $item->book_code)
                     ->first();
-                
+
                 if ($centralStock) {
                     $centralStock->increment('exemplar', $item->total_exemplar);
                 } else {

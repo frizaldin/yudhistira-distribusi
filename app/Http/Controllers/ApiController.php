@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
-use App\Models\Product;
+use App\Models\Book;
 use App\Models\NppbCentral;
 use App\Models\CentralStock;
 use App\Models\CentralStockDeduction;
@@ -91,7 +91,7 @@ class ApiController extends Controller
             ->limit(200)
             ->get();
 
-        $warehouseLabelAllowedCodes = ['DY00', 'JT00', 'WS00', 'KT00', 'SM00', 'PS00','SU00','TB00','UM00'];
+        $warehouseLabelAllowedCodes = ['DY00', 'JT00', 'WS00', 'KT00', 'SM00', 'PS00', 'SU00', 'TB00', 'UM00'];
 
         $results = $branches->map(function ($branch) use ($warehouseCodes, $warehouseLabelAllowedCodes) {
             $isWarehouse = in_array($branch->branch_code, $warehouseCodes, true)
@@ -269,7 +269,7 @@ class ApiController extends Controller
     {
         $search = $request->get('q', '');
 
-        $products = Product::query()
+        $products = Book::query()
             ->when($search, function ($query, $search) {
                 return $query->where('book_title', 'like', '%' . $search . '%')
                     ->orWhere('book_code', 'like', '%' . $search . '%');
@@ -325,6 +325,7 @@ class ApiController extends Controller
         $percentageTarget = max(1, min(100, $percentageTargetRaw));
         $skipTotals = $request->boolean('skip_totals');
         $totalsOnly = $request->boolean('totals_only');
+        $sort = $request->get('sort', '');
 
         if (empty($effectiveBranchCodes)) {
             return response()->json([
@@ -356,7 +357,7 @@ class ApiController extends Controller
         // Totals only: kembalikan hanya totals untuk seluruh data (tanpa filter) — dipanggil sesi ke-2
         if ($totalsOnly) {
             $activeCutoff = CutoffData::where('status', 'active')->first();
-            $totalFull = Product::count();
+            $totalFull = Book::count();
             // Fast path: totals_only tidak perlu load daftar semua book_code ke memory
             $totals = $this->getNppbCentralTotalsFast($branchCode, $activeCutoff, $currentYear, $percentage, $effectiveBranchCodes);
             return response()->json([
@@ -371,7 +372,7 @@ class ApiController extends Controller
 
         // Get all products; optional filter: hanya list marketing (is_marketing_list = Y)
         $marketingListOnly = $request->boolean('marketing_list_only');
-        $productsQuery = Product::select('book_code', 'book_title', 'urutan');
+        $productsQuery = Book::select('book_code', 'book_title', 'urutan');
         if ($marketingListOnly) {
             $productsQuery->where('is_marketing_list', 'Y');
         }
@@ -390,14 +391,39 @@ class ApiController extends Controller
         $totalProducts = $productsQuery->count();
         $lastPage = $totalProducts > 0 ? (int) ceil($totalProducts / $perPage) : 1;
         $page = max(1, min($page, $lastPage));
-        $products = $productsQuery
-            // Default urutan list mengikuti books.urutan; urutan kosong diletakkan di bawah.
-            ->orderByRaw("CASE WHEN urutan IS NULL OR urutan = '' THEN 1 ELSE 0 END ASC")
-            ->orderByRaw('CAST(urutan AS UNSIGNED) ASC')
-            ->orderBy('book_code')
-            ->skip(($page - 1) * $perPage)
-            ->take($perPage)
-            ->get();
+        // Untuk sort computed field (sisa_sp, sp): gunakan DB-level JOIN agar sorting berlaku lintas halaman
+        if (in_array($sort, ['sisa_sp_desc', 'sisa_sp_asc', 'sp_desc', 'sp_asc'])) {
+            $activeCutoffForSort = CutoffData::where('status', 'active')->first();
+            $spSortSubQ = SpBranch::select([
+                DB::raw('book_code as _sort_bc'),
+                DB::raw('GREATEST(0, COALESCE(SUM(ex_sp) - SUM(ex_ftr) - SUM(ex_stock), 0)) as _sisa_sp'),
+                DB::raw('COALESCE(SUM(ex_sp), 0) as _sp'),
+            ])->where('active_data', 'yes')
+                ->whereIn('branch_code', $effectiveBranchCodes);
+            if ($activeCutoffForSort) {
+                $activeCutoffForSort->start_date !== null
+                    ? $spSortSubQ->whereBetween('trans_date', [$activeCutoffForSort->start_date, $activeCutoffForSort->end_date])
+                    : $spSortSubQ->where('trans_date', '<=', $activeCutoffForSort->end_date);
+            }
+            $spSortSubQ->groupBy('book_code');
+            $productsQuery->leftJoinSub($spSortSubQ, '_sp_sort', '_sp_sort._sort_bc', '=', 'books.book_code');
+            $orderDir = in_array($sort, ['sisa_sp_desc', 'sp_desc']) ? 'DESC' : 'ASC';
+            $orderCol = in_array($sort, ['sisa_sp_desc', 'sisa_sp_asc']) ? '_sisa_sp' : '_sp';
+            $products = $productsQuery
+                ->orderByRaw('COALESCE(_sp_sort.' . $orderCol . ', 0) ' . $orderDir)
+                ->offset(($page - 1) * $perPage)
+                ->limit($perPage)
+                ->get();
+        } else {
+            $products = $productsQuery
+                // Default urutan list mengikuti books.urutan; urutan kosong diletakkan di bawah.
+                ->orderByRaw("CASE WHEN urutan IS NULL OR urutan = '' THEN 1 ELSE 0 END ASC")
+                ->orderByRaw('CAST(urutan AS UNSIGNED) ASC')
+                ->orderBy('book_code')
+                ->offset(($page - 1) * $perPage)
+                ->limit($perPage)
+                ->get();
+        }
 
         // Check if there's an active cutoff_data (perlu sebelum empty return)
         $activeCutoff = CutoffData::where('status', 'active')->first();
@@ -749,7 +775,7 @@ class ApiController extends Controller
             // Tanpa isi koli di DB (0 / kosong): tetap bagi koli/eceran pakai isi minimal 1 agar angka generate
             $volumeForSplit = $volumeUsedRaw > 0 ? $volumeUsedRaw : 1.0;
             if ($volumeOptions === []) {
-                $volumeOptions = [['value' => 1.0, 'label' => '1']];
+                $volumeOptions = [['value' => 0, 'label' => '0']];
             }
 
             // Isi dari rumus Kurang SP bila belum ada rencana tersimpan yang berisi angka
@@ -838,7 +864,7 @@ class ApiController extends Controller
                 'pct_faktur_stock_total_vs_sp' => $pctFakturStockTotalVsSp,
                 'pct_faktur_stock_total_vs_target' => $pctFakturStockTotalVsTarget,
                 'intransit' => $totalIntransit,
-                'volume_used' => $volumeUsedRaw > 0 ? $volumeUsedRaw : $volumeForSplit,
+                'volume_used' => $volumeUsedRaw > 0 ? $volumeUsedRaw : 0,
                 'volume_options' => $volumeOptions,
                 'maksimal_total_eksemplar_nasional' => $maksimalTotalEksemplarNasional,
                 'sisa_kuota_eksemplar' => $sisaKuotaEksemplar,
@@ -847,7 +873,6 @@ class ApiController extends Controller
         });
 
         // Urutkan berdasarkan parameter sort (pakai numerik agar string dari DB tidak salah urut)
-        $sort = $request->get('sort', '');
         if ($sort !== '') {
             switch ($sort) {
                 case 'sp_desc':
@@ -967,7 +992,7 @@ class ApiController extends Controller
      */
     protected function booksBookCodeSubquery()
     {
-        return Product::query()->select('book_code');
+        return Book::query()->select('book_code');
     }
 
     /**
@@ -1010,12 +1035,12 @@ class ApiController extends Controller
         ];
 
         if ($allBooksViaSubquery) {
-            if (! Product::query()->exists()) {
+            if (! Book::query()->exists()) {
                 return $emptyTotals;
             }
             $allBookCodes = null;
             // Subquery baru per pemakaian agar builder tidak terkontaminasi antar-query
-            $booksIn = fn() => Product::query()->select('book_code');
+            $booksIn = fn() => Book::query()->select('book_code');
         } else {
             $allBookCodes = (clone $productsQuery)->orderBy('book_code')->pluck('book_code');
             if ($allBookCodes->isEmpty()) {
@@ -1104,7 +1129,7 @@ class ApiController extends Controller
             DB::raw('SUM(ex_ftr) as faktur'),
             DB::raw('SUM(ex_stock) as stock_cabang'),
         ])->where('active_data', 'yes')
-            ->where('branch_code', $branchCode)
+            ->whereIn('branch_code', $branchesToQuery)
             ->whereIn('book_code', $booksIn());
         if ($activeCutoff) {
             $activeCutoff->start_date !== null
@@ -1118,7 +1143,7 @@ class ApiController extends Controller
             'delivery_note_details.book_code',
             DB::raw('SUM(exemplar) as total_intransit'),
         ])->join('delivery_notes', 'delivery_notes.nota_kirim_cab', '=', 'delivery_note_details.nota_kirim_cab')
-            ->where('delivery_notes.branch_code', $branchCode)
+            ->whereIn('delivery_notes.branch_code', $branchesToQuery)
             ->whereIn('delivery_note_details.book_code', $booksIn());
         if ($activeCutoff) {
             $activeCutoff->start_date !== null
@@ -1133,7 +1158,7 @@ class ApiController extends Controller
         $nppbApprovedPerBook = NppbCentral::select([
             'book_code',
             DB::raw('SUM(COALESCE(exp, 0)) as nppb_approved_exp'),
-        ])->where('branch_code', $branchCode)
+        ])->whereIn('branch_code', $branchesToQuery)
             ->whereIn('book_code', $booksIn())
             ->whereNotNull('document_id')
             ->where('document_id', '!=', 0);
@@ -1238,7 +1263,7 @@ class ApiController extends Controller
         $pctFtrTargetVals = [];
 
         $bookIterator = $allBooksViaSubquery
-            ? Product::query()->select('book_code')->orderBy('book_code')->cursor()
+            ? Book::query()->select('book_code')->orderBy('book_code')->cursor()
             : $allBookCodes;
 
         foreach ($bookIterator as $bookRowOrCode) {
@@ -1364,7 +1389,7 @@ class ApiController extends Controller
         }
 
         $marketingListOnly = $request->boolean('marketing_list_only');
-        $productsQuery = Product::select('book_code', 'book_title');
+        $productsQuery = Book::select('book_code', 'book_title');
         if ($marketingListOnly) {
             $productsQuery->where('is_marketing_list', 'Y');
         }
@@ -1910,7 +1935,7 @@ class ApiController extends Controller
 
                     // Get book name if not provided
                     if (!$bookName) {
-                        $book = Product::where('book_code', $bookCode)->first();
+                        $book = Book::where('book_code', $bookCode)->first();
                         $bookName = $book->book_title ?? $bookCode;
                     }
 

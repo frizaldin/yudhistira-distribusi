@@ -340,6 +340,24 @@ class RekapController extends Controller
                     'total_stok_cabang' => (float) $row->total_stok_cabang,
                 ];
             }
+            // Warehouse ("00") branches: aggregate data from sub-branches
+            foreach ($this->getWarehouseSubBranchMap() as $warehouseCode => $subCodes) {
+                if ($filteredBranchCodes !== null && !in_array($warehouseCode, $filteredBranchCodes)) {
+                    continue;
+                }
+                $agg = ['target' => 0, 'total_sp' => 0, 'total_faktur' => 0, 'sisa_sp' => 0, 'total_nkb' => 0, 'total_stok_cabang' => 0];
+                foreach ($subCodes as $code) {
+                    $agg['target'] += (float) ($targets->get($code)?->total_target ?? 0);
+                    if (isset($branches[$code])) {
+                        $agg['total_sp']          += $branches[$code]['total_sp'];
+                        $agg['total_faktur']       += $branches[$code]['total_faktur'];
+                        $agg['total_nkb']          += $branches[$code]['total_nkb'];
+                        $agg['total_stok_cabang']  += $branches[$code]['total_stok_cabang'];
+                    }
+                }
+                $agg['sisa_sp'] = $agg['total_sp'] - $agg['total_faktur'];
+                $branches[$warehouseCode] = $agg;
+            }
             // PS00 (PUSAT): stock dari central_stocks, data lain = akumulasi seluruh cabang
             $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
                 && ($filteredBranchCodes === null || in_array('PS00', $filteredBranchCodes));
@@ -432,6 +450,22 @@ class RekapController extends Controller
                 $nasional['thd_sp_lebih'] += $thdByBranch[$bc]['thd_sp_lebih'];
                 $nasional['thd_sp_kurang'] += $thdByBranch[$bc]['thd_sp_kurang'];
             }
+            // Warehouse ("00") branches: aggregate THD data from sub-branches
+            foreach ($this->getWarehouseSubBranchMap() as $warehouseCode => $subCodes) {
+                if ($filteredBranchCodes !== null && !in_array($warehouseCode, $filteredBranchCodes)) {
+                    continue;
+                }
+                $agg = ['thd_target_lebih' => 0, 'thd_target_kurang' => 0, 'thd_sp_lebih' => 0, 'thd_sp_kurang' => 0];
+                foreach ($subCodes as $code) {
+                    if (isset($thdByBranch[$code])) {
+                        $agg['thd_target_lebih']  += $thdByBranch[$code]['thd_target_lebih'];
+                        $agg['thd_target_kurang'] += $thdByBranch[$code]['thd_target_kurang'];
+                        $agg['thd_sp_lebih']      += $thdByBranch[$code]['thd_sp_lebih'];
+                        $agg['thd_sp_kurang']     += $thdByBranch[$code]['thd_sp_kurang'];
+                    }
+                }
+                $thdByBranch[$warehouseCode] = $agg;
+            }
 
             // PS00 (PUSAT): data THD = akumulasi seluruh cabang
             $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
@@ -482,6 +516,21 @@ class RekapController extends Controller
                 $nasional['total_nppb_pls'] += (float) $row->total_pls;
                 $nasional['total_nppb_exp'] += (float) $row->total_exp;
                 $branches[$row->branch_code] = ['nppb_koli' => (float) $row->total_koli, 'nppb_pls' => (float) $row->total_pls, 'nppb_exp' => (float) $row->total_exp];
+            }
+            // Warehouse ("00") branches: aggregate NPPB data from sub-branches
+            foreach ($this->getWarehouseSubBranchMap() as $warehouseCode => $subCodes) {
+                if ($filteredBranchCodes !== null && !in_array($warehouseCode, $filteredBranchCodes)) {
+                    continue;
+                }
+                $agg = ['nppb_koli' => 0, 'nppb_pls' => 0, 'nppb_exp' => 0];
+                foreach ($subCodes as $code) {
+                    if (isset($branches[$code])) {
+                        $agg['nppb_koli'] += $branches[$code]['nppb_koli'];
+                        $agg['nppb_pls']  += $branches[$code]['nppb_pls'];
+                        $agg['nppb_exp']  += $branches[$code]['nppb_exp'];
+                    }
+                }
+                $branches[$warehouseCode] = $agg;
             }
             // PS00 (PUSAT): data NPPB = akumulasi seluruh cabang
             $ps00ShouldShow = ($userBranchCode === null || $userBranchCode === 'PS00')
@@ -1160,6 +1209,29 @@ class RekapController extends Controller
             ]);
             return redirect()->route('recap.index')->with('error', 'Gagal mengekspor data.');
         }
+    }
+
+    /**
+     * Get mapping: warehouse_code => [sub-branch codes].
+     * Ambil distinct warehouse_code dari branches, lalu cari branch_code yang warehouse_code-nya = nilai tersebut.
+     */
+    private function getWarehouseSubBranchMap(): array
+    {
+        $warehouseCodes = Branch::whereNotNull('warehouse_code')
+            ->where('warehouse_code', '!=', '')
+            ->distinct()
+            ->pluck('warehouse_code');
+
+        $map = [];
+        foreach ($warehouseCodes as $whCode) {
+            $subCodes = Branch::where('warehouse_code', $whCode)
+                ->pluck('branch_code')
+                ->toArray();
+            if (!empty($subCodes)) {
+                $map[$whCode] = $subCodes;
+            }
+        }
+        return $map;
     }
 
     /**

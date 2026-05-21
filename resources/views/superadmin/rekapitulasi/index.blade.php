@@ -400,7 +400,7 @@
                 }
 
                 function setCell(rowKey, col, value, isPct, isKurang) {
-                    var row = document.querySelector('#rekapTableBody tr[data-recap-row="' + rowKey + '"]');
+                    var row = document.querySelector('#rekapTable tr[data-recap-row="' + rowKey + '"]');
                     if (!row) return;
                     var cell = row.querySelector('td[data-recap-col="' + col + '"]');
                     if (!cell) return;
